@@ -1,0 +1,98 @@
+/* Sandbox-specific card and row layout. Shared list width, states, and
+ * progressive actions live in admin-list.css. */
+
+.novamira-sandbox-section {
+    overflow: hidden;
+    margin: 16px 0 20px;
+    border: 1px solid #c3c4c7;
+    border-radius: 6px;
+    background: #fff;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.03);
+}
+
+.novamira-sandbox-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    border-bottom: 1px solid #e4e4e7;
+    background: #e9eaec;
+}
+
+.novamira-sandbox-header h2 {
+    margin: 0;
+    color: #1d2327;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+.novamira-sandbox-header h2 .count {
+    margin-left: 8px;
+    color: #71717a;
+    font-size: 13px;
+    font-weight: 400;
+}
+
+.novamira-sandbox-rows {
+    display: block;
+}
+
+.novamira-sandbox-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    min-height: 44px;
+    padding: 4px 24px;
+    border-bottom: 1px solid #f4f4f5;
+    transition: background 0.1s;
+}
+
+.novamira-sandbox-row:last-child {
+    border-bottom: none;
+}
+
+.novamira-sandbox-row:nth-child(even) {
+    background: #fafafa;
+}
+
+.novamira-sandbox-row:hover {
+    background: #f0f0f1;
+}
+
+.novamira-sandbox-row:focus-visible {
+    outline: 2px solid #2271b1;
+    outline-offset: -2px;
+}
+
+.novamira-sandbox-row.is-suspended {
+    background: #fef2f2;
+}
+
+.novamira-sandbox-main {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    overflow: hidden;
+    min-width: 0;
+}
+
+.novamira-sandbox-main .slug {
+    overflow: hidden;
+    min-width: 0;
+    color: #1d2327;
+    font-family: ui-monospace, "DM Mono", "JetBrains Mono", Consolas, monospace;
+    font-size: 13px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.novamira-sandbox-empty {
+    padding: 32px 24px;
+    color: #71717a;
+    font-size: 13px;
+    text-align: center;
+}

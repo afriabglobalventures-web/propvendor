@@ -1,0 +1,518 @@
+<?php
+
+// SPDX-FileCopyrightText: 2026 Ovation S.r.l. <dev@novamira.ai>
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+declare(strict_types=1);
+
+use Novamira\Skills\Admin;
+use Novamira\Skills\Cpt;
+use Novamira\Skills\Sources;
+
+if (!defined('ABSPATH')) {
+    exit();
+}
+
+if (!Admin\current_user_can_manage()) {
+    wp_die(__('You do not have permission to view this page.', domain: 'novamira'));
+}
+
+$per_page = 50;
+$paged = max(1, (int) ($_GET['paged'] ?? 1));
+$user_query = new \WP_Query([
+    'post_type' => Cpt\POST_TYPE,
+    'post_status' => ['publish', 'draft'],
+    'posts_per_page' => $per_page,
+    'paged' => $paged,
+    'orderby' => 'title',
+    'order' => 'ASC',
+]);
+/** @var list<\WP_Post> $user_posts */
+$user_posts = $user_query->posts;
+$user_total = (int) $user_query->found_posts;
+$user_total_pages = (int) $user_query->max_num_pages;
+
+// One-shot list of post IDs to flash-highlight (set by handle_upload).
+$just_imported_key = 'novamira_skill_just_imported_' . get_current_user_id();
+/** @var list<int> $just_imported */
+$just_imported = [];
+/** @var mixed $just_imported_raw */
+$just_imported_raw = get_transient($just_imported_key);
+if (is_array($just_imported_raw)) {
+    /** @var mixed $post_id */
+    foreach ($just_imported_raw as $post_id) {
+        if (!is_scalar($post_id)) {
+            continue;
+        }
+        $just_imported[] = (int) $post_id;
+    }
+}
+if ($just_imported !== []) {
+    delete_transient($just_imported_key);
+}
+
+/** @var list<\WP_Post> $trashed_posts */
+$trashed_posts = get_posts([
+    'post_type' => Cpt\POST_TYPE,
+    'post_status' => 'trash',
+    'posts_per_page' => -1,
+    'orderby' => 'modified',
+    'order' => 'DESC',
+]);
+
+// Group skills from non-user-cpt sources by source_id so each contributor
+// gets its own table with its own dynamic heading (e.g. "Novamira Pro").
+$external_groups = [];
+foreach (Sources\registry() as $entry) {
+    if ($entry['id'] === 'user-cpt') {
+        continue;
+    }
+    $skills = $entry['loader']();
+    if ($skills === []) {
+        continue;
+    }
+    $external_groups[$entry['id']] = [
+        'label' => $entry['label'],
+        'skills' => $skills,
+    ];
+}
+
+$action_url = admin_url('admin-post.php');
+$new_url = add_query_arg(['page' => Admin\PAGE_SLUG, 'skill' => 'new'], admin_url('admin.php'));
+?>
+<?php novamira_render_admin_header(); ?>
+<div class="wrap novamira-skills novamira-list-layout">
+    <h1 class="wp-heading-inline"><?php esc_html_e('Skills', domain: 'novamira'); ?></h1>
+    <label for="novamira-skills-upload-file" class="page-title-action"><?php esc_html_e(
+        'Upload .md',
+        domain: 'novamira',
+    ); ?></label>
+    <a href="<?php echo esc_url($new_url); ?>" class="page-title-action"><?php esc_html_e(
+        'Add new',
+        domain: 'novamira',
+    ); ?></a>
+    <?php if ($user_total > 0): ?>
+        <a
+            href="<?php echo
+                esc_url(wp_nonce_url(add_query_arg([
+                    'action' => 'novamira_skill_download_all',
+                ], admin_url('admin-post.php')), action: 'novamira_skill_download_all'))
+            ; ?>"
+            class="page-title-action"
+        ><?php esc_html_e('Download all', domain: 'novamira'); ?></a>
+    <?php endif; ?>
+    <hr class="wp-header-end" />
+
+    <?php require __DIR__ . '/upload.php'; ?>
+
+    <details class="novamira-skills-trust-warning">
+        <summary>
+            <span class="dashicons dashicons-shield" aria-hidden="true"></span>
+            <span class="summary-text"><?php esc_html_e(
+                'Only upload skills from sources you trust.',
+                domain: 'novamira',
+            ); ?></span>
+            <span class="summary-toggle"><?php esc_html_e('Why?', domain: 'novamira'); ?></span>
+        </summary>
+        <div class="novamira-skills-trust-body">
+            <p><?php esc_html_e(
+                'A skill\'s description and body become part of the AI\'s context on this site. A malicious skill can:',
+                domain: 'novamira',
+            ); ?></p>
+            <ul>
+                <li><?php esc_html_e(
+                    'Override or hijack the AI\'s behaviour with hidden instructions (prompt injection).',
+                    domain: 'novamira',
+                ); ?></li>
+                <li><?php esc_html_e(
+                    'Trick the AI into reading sensitive files (config, credentials, customer data) and sending them outside.',
+                    domain: 'novamira',
+                ); ?></li>
+                <li><?php esc_html_e(
+                    'Get the AI to run arbitrary code on your site via Novamira\'s PHP-execution abilities.',
+                    domain: 'novamira',
+                ); ?></li>
+            </ul>
+            <p><?php esc_html_e(
+                'Treat an uploaded .md the same way you\'d treat installing a plugin: trust the author first.',
+                domain: 'novamira',
+            ); ?></p>
+        </div>
+    </details>
+
+    <?php if ($user_posts === [] && $external_groups === []): ?>
+        <div class="novamira-skills-empty">
+            <span class="dashicons dashicons-welcome-learn-more"></span>
+            <p><?php esc_html_e(
+                'No skills yet. Upload a .md file or create one from scratch.',
+                domain: 'novamira',
+            ); ?></p>
+            <p>
+                <a href="<?php echo esc_url($new_url); ?>" class="button button-primary"><?php esc_html_e(
+                    'Create from scratch',
+                    domain: 'novamira',
+                ); ?></a>
+            </p>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($user_posts !== []): ?>
+    <section class="novamira-admin-list-section">
+        <div class="novamira-admin-list-header">
+            <h2><?php esc_html_e('Your Skills', domain: 'novamira'); ?> <span class="count"><?php
+
+            echo (int) $user_total;
+            ?></span></h2>
+            <input
+                type="search"
+                id="novamira-skills-search"
+                class="novamira-skills-search"
+                placeholder="<?php esc_attr_e('Filter on this page…', domain: 'novamira'); ?>"
+                autocomplete="off"
+            />
+        </div>
+        <div class="novamira-admin-list-list" data-novamira-skills-list>
+            <?php foreach ($user_posts as $post):
+                $slug = $post->post_name;
+                $enabled = $post->post_status === 'publish';
+                $description = trim($post->post_excerpt);
+                $validation = Admin\validation_issues($post);
+                $warnings = array_map(static fn(array $issue): string => $issue['label'], $validation['issues']);
+                $has_warning = $warnings !== [];
+                $critical_warning = $validation['critical'];
+                $edit_url = add_query_arg([
+                    'page' => Admin\PAGE_SLUG,
+                    'skill' => $post->ID,
+                ], admin_url('admin.php'));
+                $row_classes = ['novamira-admin-list-row', 'novamira-list-row', 'is-user-skill'];
+                $row_classes[] = $enabled ? 'is-on' : 'is-off';
+                if ($has_warning) {
+                    $row_classes[] = 'has-warn';
+                }
+                if (in_array((int) $post->ID, $just_imported, strict: true)) {
+                    $row_classes[] = 'is-just-imported';
+                }
+                ?>
+            <div
+                class="<?php echo esc_attr(implode(' ', $row_classes)); ?>"
+                data-novamira-search="<?php echo esc_attr($slug . ' ' . $description); ?>"
+            >
+                <a class="novamira-admin-list-main" href="<?php echo esc_url($edit_url); ?>">
+                    <span class="slug"><?php echo esc_html($slug !== '' ? $slug : $post->post_title); ?></span>
+                    <?php if (!$enabled): ?>
+                        <span class="novamira-list-inline-state"><?php esc_html_e(
+                            '— Disabled',
+                            domain: 'novamira',
+                        ); ?></span>
+                    <?php endif; ?>
+                    <?php if ($has_warning): ?>
+                        <span
+                            class="novamira-admin-list-warning<?php echo $critical_warning ? ' is-critical' : ''; ?>"
+                            role="note"
+                        ><span aria-hidden="true">⚠</span><span><?php echo
+                            esc_html(implode(' · ', $warnings))
+                        ; ?></span></span>
+                    <?php endif; ?>
+                </a>
+                <div class="novamira-admin-list-actions novamira-list-actions novamira-list-progressive-actions">
+                    <form method="post" action="<?php echo esc_url($action_url); ?>">
+                        <?php wp_nonce_field('novamira_skill_toggle_status_' . $post->ID); ?>
+                        <input type="hidden" name="action" value="novamira_skill_toggle_status" />
+                        <input type="hidden" name="post_id" value="<?php echo (int) $post->ID; ?>" />
+                        <button type="submit" class="action-btn"><?php echo
+                            $enabled
+                                ? esc_html__('Disable', domain: 'novamira')
+                                : esc_html__('Enable', domain: 'novamira')
+                        ; ?></button>
+                    </form>
+                    <a
+                        class="action-btn"
+                        href="<?php echo
+                            esc_url(wp_nonce_url(
+                                add_query_arg([
+                                    'action' => 'novamira_skill_download',
+                                    'post_id' => (int) $post->ID,
+                                ], admin_url('admin-post.php')),
+                                'novamira_skill_download_' . (int) $post->ID,
+                            ))
+                        ; ?>"
+                    ><?php esc_html_e('Download', domain: 'novamira'); ?></a>
+                    <form
+                        method="post"
+                        action="<?php echo esc_url($action_url); ?>"
+                        onsubmit="return confirm('<?php echo
+                            esc_js(__('Delete this skill permanently?', domain: 'novamira'))
+                        ; ?>');"
+                    >
+                        <?php wp_nonce_field('novamira_skill_delete_' . $post->ID); ?>
+                        <input type="hidden" name="action" value="novamira_skill_delete" />
+                        <input type="hidden" name="post_id" value="<?php echo (int) $post->ID; ?>" />
+                        <button type="submit" class="action-btn action-btn--danger"><?php
+
+                        esc_html_e('Delete', domain: 'novamira');
+                        ?></button>
+                    </form>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php if ($user_total_pages > 1): ?>
+            <nav class="novamira-skills-pagination" aria-label="<?php esc_attr_e(
+                'Skills pagination',
+                domain: 'novamira',
+            ); ?>">
+                <?php
+
+                /** @var mixed $links */
+                $links = paginate_links([
+                    'base' => add_query_arg(['paged' => '%#%'], admin_url('admin.php?page=' . Admin\PAGE_SLUG)),
+                    'format' => '',
+                    'current' => $paged,
+                    'total' => $user_total_pages,
+                    'prev_text' => '‹',
+                    'next_text' => '›',
+                    'type' => 'plain',
+                ]);
+                echo is_string($links) ? $links : ''; // phpcs:ignore WordPress.Security.EscapeOutput ?>
+            </nav>
+        <?php endif; ?>
+    </section>
+    <?php endif; ?>
+
+    <?php if ($trashed_posts !== []): ?>
+    <section class="novamira-admin-list-section novamira-admin-list-section--trash">
+        <div class="novamira-admin-list-header">
+            <h2><?php esc_html_e('Trash', domain: 'novamira'); ?> <span class="count"><?php
+
+            echo (int) count($trashed_posts);
+            ?></span></h2>
+            <span class="novamira-admin-list-trash-hint"><?php esc_html_e(
+                'Trashed skills are not loaded by the AI. Items are auto-removed after 30 days.',
+                domain: 'novamira',
+            ); ?></span>
+        </div>
+        <div class="novamira-admin-list-list">
+            <?php foreach ($trashed_posts as $post):
+                $slug = $post->post_name !== '' ? $post->post_name : $post->post_title;
+                // WP appends `__trashed` to post_name when trashing; strip for display.
+                $slug = (string) preg_replace('/__trashed$/', replacement: '', subject: $slug);
+                ?>
+            <div class="novamira-admin-list-row novamira-list-row is-trashed">
+                <div class="novamira-admin-list-main novamira-admin-list-main--trash" tabindex="0">
+                    <span class="slug"><?php echo esc_html($slug); ?></span>
+                </div>
+                <div class="novamira-admin-list-actions novamira-list-actions novamira-list-progressive-actions">
+                    <form method="post" action="<?php echo esc_url($action_url); ?>">
+                        <?php wp_nonce_field('novamira_skill_restore_' . $post->ID); ?>
+                        <input type="hidden" name="action" value="novamira_skill_restore" />
+                        <input type="hidden" name="post_id" value="<?php echo (int) $post->ID; ?>" />
+                        <button type="submit" class="action-btn"><?php
+
+                        esc_html_e('Restore', domain: 'novamira');
+                        ?></button>
+                    </form>
+                    <form
+                        method="post"
+                        action="<?php echo esc_url($action_url); ?>"
+                        onsubmit="return confirm('<?php echo
+                            esc_js(__('Delete this skill permanently? This cannot be undone.', domain: 'novamira'))
+                        ; ?>');"
+                    >
+                        <?php wp_nonce_field('novamira_skill_permanent_delete_' . $post->ID); ?>
+                        <input type="hidden" name="action" value="novamira_skill_permanent_delete" />
+                        <input type="hidden" name="post_id" value="<?php echo (int) $post->ID; ?>" />
+                        <button type="submit" class="action-btn action-btn--danger"><?php
+
+                        esc_html_e('Delete permanently', domain: 'novamira');
+                        ?></button>
+                    </form>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </section>
+    <?php endif; ?>
+
+    <?php foreach ($external_groups as $source_id => $group): ?>
+    <section class="novamira-admin-list-section novamira-admin-list-section--external">
+        <div class="novamira-admin-list-header">
+            <h2><?php
+
+            printf(
+                /* translators: %s: contributor label, e.g. "Novamira Pro" */
+                esc_html__('Skills from %s', domain: 'novamira'),
+                esc_html($group['label']),
+            );
+            ?> <span class="count"><?php
+
+            echo (int) count($group['skills']);
+            ?></span></h2>
+        </div>
+        <p class="novamira-admin-list-source-blurb">
+            <?php if (str_starts_with($source_id, 'novamira-pro')): ?>
+                <?php printf(
+                    /* translators: 1: link opening tag, 2: link closing tag */
+                    esc_html__(
+                        'These skills are enabled or disabled with their complete Novamira Pro specialization. You see only the skills relevant to the plugins you have installed. %1$sLearn more →%2$s',
+                        domain: 'novamira',
+                    ),
+                    '<a href="https://novamira.ai/pro/?utm_source=plugin&utm_medium=skills" target="_blank" rel="noopener">',
+                    '</a>',
+                ); ?>
+            <?php endif; ?>
+            <?php if (!str_starts_with($source_id, 'novamira-pro')): ?>
+                <?php esc_html_e(
+                    'Feature skills are enabled or disabled with their complete Novamira feature.',
+                    domain: 'novamira',
+                ); ?>
+            <?php endif; ?>
+        </p>
+        <div class="novamira-admin-list-list">
+            <?php foreach ($group['skills'] as $skill):
+                $slug = (string) ($skill['slug'] ?? '');
+                $description = trim((string) ($skill['description'] ?? ''));
+                $missing_description = $description === '';
+                $features = \Novamira\Features\features();
+                $managers = $features->features_for_skill($slug);
+                $toggleable_managers = array_values(array_filter(
+                    $managers,
+                    static fn(\Novamira\Features\Definition $feature): bool => $feature->toggleable,
+                ));
+                $feature_managed = $toggleable_managers !== [];
+                $infrastructure = $managers !== [] && $toggleable_managers === [];
+                $active = $features->is_skill_active($slug);
+                $specialization_managers = array_values(array_filter(
+                    $toggleable_managers,
+                    static fn(\Novamira\Features\Definition $feature): bool => $feature->kind === 'specialization',
+                ));
+                $only_specializations =
+                    $feature_managed && count($specialization_managers) === count($toggleable_managers);
+                $only_features = $feature_managed && $specialization_managers === [];
+                $manager_label = implode(', ', array_map(
+                    static fn(\Novamira\Features\Definition $feature): string => $feature->label(),
+                    $toggleable_managers,
+                ));
+                $manager_count = count($toggleable_managers);
+                $manage_label = match (true) {
+                    $only_specializations && $manager_count === 1 => sprintf(
+                        /* translators: %s: Novamira Pro specialization name */
+                        __('Part of Novamira Pro specialization: %s →', domain: 'novamira'),
+                        $manager_label,
+                    ),
+                    $only_specializations => __('Part of multiple Novamira Pro specializations →', domain: 'novamira'),
+                    $only_features && $manager_count === 1 => sprintf(
+                        /* translators: %s: Novamira feature name */
+                        __('Part of Novamira feature: %s →', domain: 'novamira'),
+                        $manager_label,
+                    ),
+                    $only_features => __('Part of multiple Novamira features →', domain: 'novamira'),
+                    default => __('Part of multiple Novamira components →', domain: 'novamira'),
+                };
+                ?>
+            <div class="novamira-admin-list-row novamira-list-row is-external <?php echo
+                $active ? 'is-on' : 'is-off'
+            ; ?>">
+                <?php if (!$missing_description): ?>
+                    <details class="novamira-admin-list-main novamira-admin-list-main--external">
+                        <summary class="novamira-admin-list-summary">
+                            <span class="slug"><?php echo esc_html($slug); ?></span>
+                            <?php if (!$active): ?>
+                                <span class="novamira-list-inline-state"><?php esc_html_e(
+                                    '— Disabled',
+                                    domain: 'novamira',
+                                ); ?></span>
+                            <?php endif; ?>
+                        </summary>
+                        <div class="novamira-admin-list-detail">
+                            <p><?php echo esc_html($description); ?></p>
+                        </div>
+                    </details>
+                <?php endif; ?>
+                <?php if ($missing_description): ?>
+                    <div class="novamira-admin-list-main novamira-admin-list-main--external" tabindex="0">
+                        <span class="slug"><?php echo esc_html($slug); ?></span>
+                        <?php if (!$active): ?>
+                            <span class="novamira-list-inline-state"><?php esc_html_e(
+                                '— Disabled',
+                                domain: 'novamira',
+                            ); ?></span>
+                        <?php endif; ?>
+                        <span
+                            class="novamira-admin-list-warning is-critical"
+                            role="note"
+                        ><span aria-hidden="true">⚠</span><span><?php esc_html_e(
+                            'Missing description',
+                            domain: 'novamira',
+                        ); ?></span></span>
+                    </div>
+                <?php endif; ?>
+                <div class="novamira-admin-list-actions novamira-list-actions novamira-list-progressive-actions">
+                    <?php if ($feature_managed): ?>
+                        <a class="action-btn" href="<?php echo
+                            esc_url(\Novamira\Features\Admin\url(
+                                count($toggleable_managers) === 1 ? $toggleable_managers[0]->id : null,
+                            ))
+                        ; ?>"><?php
+
+                        echo esc_html($manage_label);
+                        ?></a>
+                    <?php endif; ?>
+                    <?php if ($infrastructure): ?>
+                        <span class="novamira-admin-list-action-note"><?php esc_html_e(
+                            'Required by Novamira',
+                            domain: 'novamira',
+                        ); ?></span>
+                    <?php endif; ?>
+                    <?php if (!$feature_managed && !$infrastructure): ?>
+                        <span class="novamira-admin-list-action-note"><?php esc_html_e(
+                            'Managed by Novamira',
+                            domain: 'novamira',
+                        ); ?></span>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </section>
+    <?php endforeach; ?>
+
+</div>
+<script>
+(function () {
+    var file = document.getElementById('novamira-skills-upload-file');
+    var form = document.getElementById('novamira-skills-upload-form');
+    var MAX_UPLOAD = 20;
+    if (file && form) {
+        file.addEventListener('change', function () {
+            if (!file.files || file.files.length === 0) {
+                return;
+            }
+            if (file.files.length > MAX_UPLOAD) {
+                alert('Too many files. Upload up to ' + MAX_UPLOAD + ' skills at a time.');
+                file.value = '';
+                return;
+            }
+            form.submit();
+        });
+    }
+
+    // Client-side filter for the current page's rows. Descriptions stay
+    // searchable even though the compact list keeps them out of the scan view.
+    var search = document.getElementById('novamira-skills-search');
+    var list = document.querySelector('[data-novamira-skills-list]');
+    if (search && list) {
+        var rows = Array.prototype.slice.call(list.querySelectorAll('.novamira-admin-list-row'));
+        search.addEventListener('input', function () {
+            var q = search.value.toLowerCase().trim();
+            rows.forEach(function (row) {
+                if (q === '') {
+                    row.style.display = '';
+                    return;
+                }
+                var searchable = row.getAttribute('data-novamira-search') || row.textContent || '';
+                row.style.display = searchable.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
+            });
+        });
+    }
+})();
+</script>

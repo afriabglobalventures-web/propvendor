@@ -1,0 +1,457 @@
+/*
+ * Abilities Hub admin styles. Mirrors Skills and Sandbox: collapsible card
+ * sections and compact rows. Shared width, inline states, and progressive
+ * actions live in admin-list.css.
+ *
+ * Design tokens are scoped to .novamira-hub so they cascade to every section
+ * without leaking into the rest of wp-admin.
+ */
+
+.novamira-hub {
+    /* Text */
+    --nm-text: #1d2327;
+    --nm-text-soft: #646970;
+    --nm-muted: #52525b;
+    --nm-muted-2: #71717a;
+    --nm-muted-3: #a1a1aa;
+    --nm-hint: #d4d4d8;
+
+    /* Surfaces & borders. Parent headers and ability rows use a subtle zebra;
+     * actual disabled state remains explicit in text rather than surface color. */
+    --nm-bg: #fff;
+    --nm-bg-hover: #fafafa;
+    --nm-bg-rail: #f4f4f5;
+    --nm-provider-bg: #e9eaec;
+    --nm-provider-hover: #dcdcde;
+    --nm-category-bg: #f6f7f7;
+    --nm-category-alt: #f0f0f1;
+    --nm-category-hover: #e5e5e7;
+    --nm-row-alt: #fafafa;
+    --nm-row-hover: #f0f0f1;
+    --nm-border: #c3c4c7;
+    --nm-border-soft: #e4e4e7;
+    --nm-border-faint: #f4f4f5;
+
+    /* Pill palettes */
+    --nm-pill-bg: #f4f4f5;
+    --nm-pill-text: #52525b;
+    --nm-pill-mcp-bg: #eff6ff;
+    --nm-pill-mcp-text: #1d4ed8;
+    --nm-pill-on-bg: #dcfce7;
+    --nm-pill-on-text: #166534;
+    --nm-pill-off-bg: #e4e4e7;
+    --nm-pill-off-text: #3f3f46;
+    --nm-pill-managed-bg: #f4f4f5;
+    --nm-pill-managed-text: #52525b;
+
+    /* Focus, radius, shadow */
+    --nm-focus: #2271b1;
+    --nm-radius-sm: 3px;
+    --nm-radius: 4px;
+    --nm-radius-lg: 6px;
+    --nm-shadow: 0 1px 1px rgba(0, 0, 0, 0.03);
+
+    /* Spacing scale (4 / 8 / 12 / 16 / 24) */
+    --nm-space-1: 4px;
+    --nm-space-2: 8px;
+    --nm-space-3: 12px;
+    --nm-space-4: 16px;
+    --nm-space-6: 24px;
+
+    /* Motion */
+    --nm-transition: 120ms ease;
+}
+
+.novamira-hub .wrap-title {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--nm-space-3);
+    margin: var(--nm-space-3) 0 20px;
+}
+
+.novamira-hub .wrap-title h1 {
+    margin: 0;
+    font-size: 23px;
+    font-weight: 400;
+    color: var(--nm-text);
+}
+
+.novamira-hub .wrap-title .description {
+    max-width: 1200px;
+    margin: var(--nm-space-2) 0 0;
+    color: var(--nm-text-soft);
+}
+
+.novamira-hub-section {
+    background: var(--nm-bg);
+    border: 1px solid var(--nm-border);
+    border-radius: var(--nm-radius-lg);
+    box-shadow: var(--nm-shadow);
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+
+/* Boundary between Novamira's abilities and the other plugins' groups. */
+.novamira-hub-divider {
+    display: flex;
+    align-items: center;
+    gap: var(--nm-space-3);
+    margin: 28px 0 var(--nm-space-3);
+    padding: 0;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--nm-muted-2);
+}
+
+.novamira-hub-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--nm-border-soft);
+}
+
+/* Provider header (group level) */
+.novamira-hub-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--nm-space-4) var(--nm-space-6);
+    border-bottom: 1px solid var(--nm-border-soft);
+    background: var(--nm-provider-bg);
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+}
+
+.novamira-hub-header::-webkit-details-marker {
+    display: none;
+}
+
+.novamira-hub-header:hover {
+    background: var(--nm-provider-hover);
+}
+
+.novamira-hub-header:focus-visible {
+    outline: 2px solid var(--nm-focus);
+    outline-offset: -2px;
+}
+
+.novamira-hub-header::after {
+    content: "";
+    flex: none;
+    width: 7px;
+    height: 7px;
+    margin-left: var(--nm-space-3);
+    border-right: 2px solid var(--nm-muted-2);
+    border-bottom: 2px solid var(--nm-muted-2);
+    transform: rotate(-45deg);
+    transition: transform var(--nm-transition);
+}
+
+.novamira-hub-section[open] > .novamira-hub-header::after {
+    transform: rotate(45deg);
+}
+
+.novamira-hub-section:not([open]) > .novamira-hub-header {
+    border-bottom: none;
+}
+
+.novamira-hub-header h2 {
+    margin: 0 auto 0 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--nm-text);
+    letter-spacing: -0.01em;
+}
+
+.novamira-hub-header h2 .count {
+    margin-left: var(--nm-space-2);
+    color: var(--nm-muted-2);
+    font-weight: 400;
+    font-size: 13px;
+}
+
+/* Category sub-section */
+.novamira-hub-subsection {
+    border-top: 1px solid var(--nm-border-faint);
+}
+
+.novamira-hub-subsection:first-of-type {
+    border-top: none;
+}
+
+.novamira-hub-subheader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--nm-space-2) var(--nm-space-6);
+    background: var(--nm-category-bg);
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+}
+
+.novamira-hub-subheader::-webkit-details-marker {
+    display: none;
+}
+
+.novamira-hub-subheader:hover {
+    background: var(--nm-category-hover);
+}
+
+.novamira-hub-subsection:nth-of-type(even) > .novamira-hub-subheader {
+    background: var(--nm-category-alt);
+}
+
+.novamira-hub-subsection:nth-of-type(even) > .novamira-hub-subheader:hover {
+    background: var(--nm-category-hover);
+}
+
+.novamira-hub-subheader:focus-visible {
+    outline: 2px solid var(--nm-focus);
+    outline-offset: -2px;
+}
+
+.novamira-hub-subheader h3 {
+    margin: 0 auto 0 0;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--nm-muted-2);
+}
+
+.novamira-hub-subheader h3 .count {
+    margin-left: var(--nm-space-2);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--nm-muted-3);
+}
+
+.novamira-hub-subheader::after {
+    content: "";
+    flex: none;
+    width: 6px;
+    height: 6px;
+    margin-left: var(--nm-space-3);
+    border-right: 2px solid var(--nm-muted-3);
+    border-bottom: 2px solid var(--nm-muted-3);
+    transform: rotate(-45deg);
+    transition: transform var(--nm-transition);
+}
+
+.novamira-hub-subsection[open] > .novamira-hub-subheader::after {
+    transform: rotate(45deg);
+}
+
+/* "All disabled" pill in a provider/category header. The base .pill rules are
+ * scoped to row pill containers, so the header variant is styled on its own. */
+.novamira-hub-header h2 .novamira-hub-alloff,
+.novamira-hub-subheader h3 .novamira-hub-alloff {
+    margin-left: var(--nm-space-2);
+    padding: 2px var(--nm-space-2);
+    border-radius: var(--nm-radius-sm);
+    background: var(--nm-pill-off-bg);
+    color: var(--nm-pill-off-text);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.5;
+    text-transform: none;
+    letter-spacing: 0;
+    vertical-align: middle;
+}
+
+/* Immediate, accessible replacement for the browser's delayed title tooltip. */
+.novamira-hub [data-tooltip] {
+    position: relative;
+}
+
+.novamira-hub [data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    z-index: 100;
+    top: 50%;
+    left: calc(100% + var(--nm-space-2));
+    width: max-content;
+    max-width: min(440px, calc(100vw - 96px));
+    padding: 6px 9px;
+    border-radius: var(--nm-radius);
+    background: var(--nm-text);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.4;
+    letter-spacing: normal;
+    text-transform: none;
+    white-space: normal;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(-50%);
+}
+
+.novamira-hub [data-tooltip]:hover::after,
+.novamira-hub [data-tooltip]:focus-visible::after {
+    opacity: 1;
+    visibility: visible;
+}
+
+.novamira-hub-managed-owner {
+    margin-left: var(--nm-space-2);
+    color: var(--nm-muted-2);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+    white-space: nowrap;
+    text-decoration: none;
+}
+
+.novamira-hub-managed-owner {
+    cursor: help;
+}
+
+/* Rows */
+.novamira-hub-rows {
+    display: block;
+}
+
+.novamira-hub-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    align-items: center;
+    gap: var(--nm-space-3);
+    box-sizing: border-box;
+    min-height: 44px;
+    padding: var(--nm-space-1) var(--nm-space-6);
+    border-bottom: 1px solid var(--nm-border-faint);
+    transition: background var(--nm-transition);
+}
+
+/* Make the category hierarchy visible without changing the row surface: the
+ * category keeps the parent alignment, while its abilities begin one step in. */
+.novamira-hub-subsection > .novamira-hub-rows > .novamira-hub-row {
+    padding-inline-start: calc(var(--nm-space-6) + var(--nm-space-4));
+}
+
+/* Only an expanded row needs its controls pinned to the top, next to the slug;
+ * collapsed rows (the common case) keep everything vertically centered. */
+.novamira-hub-row:has(.novamira-hub-main[open]) {
+    align-items: start;
+}
+
+.novamira-hub-row:last-child {
+    border-bottom: none;
+}
+
+.novamira-hub-rows > .novamira-hub-row:nth-child(even) {
+    background: var(--nm-row-alt);
+}
+
+.novamira-hub-rows > .novamira-hub-row:hover {
+    background: var(--nm-row-hover);
+}
+
+/* While an AJAX toggle is in flight, dim the row and block further clicks. */
+.novamira-hub-row.is-busy {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.novamira-hub-main {
+    min-width: 0;
+}
+
+.novamira-hub-main--plain,
+.novamira-hub-summary {
+    display: flex;
+    align-items: baseline;
+    gap: var(--nm-space-2);
+    overflow: hidden;
+    min-width: 0;
+}
+
+.novamira-hub-summary {
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+}
+
+.novamira-hub-summary::-webkit-details-marker {
+    display: none;
+}
+
+.novamira-hub-summary:hover .slug {
+    text-decoration: underline;
+    text-decoration-color: var(--nm-hint);
+    text-underline-offset: 2px;
+}
+
+.novamira-hub-summary:focus-visible {
+    outline: 2px solid var(--nm-focus);
+    outline-offset: 2px;
+}
+
+.novamira-hub-main[open] > .novamira-hub-summary .desc {
+    display: none;
+}
+
+.novamira-hub-summary .desc {
+    display: none;
+}
+
+.novamira-hub-row.is-unavailable .novamira-hub-summary .desc {
+    display: inline;
+}
+
+.novamira-hub-detail {
+    padding: var(--nm-space-1) 0 var(--nm-space-2);
+}
+
+.novamira-hub-detail .desc-full {
+    margin: 0;
+    max-width: 70ch;
+    color: var(--nm-muted);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.novamira-hub-main .slug {
+    flex: none;
+    font-family: ui-monospace, "DM Mono", "JetBrains Mono", Consolas, monospace;
+    font-size: 13px;
+    color: var(--nm-text);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.novamira-hub-main .desc {
+    flex: 0 1 auto;
+    max-width: 70ch;
+    color: var(--nm-muted-2);
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.novamira-hub-main .desc::before {
+    content: "—";
+    margin-right: 6px;
+    color: var(--nm-hint);
+}
+
+.novamira-hub-actions {
+    margin: 0;
+}
+
+.novamira-hub-group-actions {
+    flex: none;
+    margin-right: var(--nm-space-2);
+}
