@@ -1,4 +1,9 @@
 <?php
+if (file_exists('C:/xampp/php/extras/ssl/openssl.cnf')) {
+    putenv('OPENSSL_CONF=C:/xampp/php/extras/ssl/openssl.cnf');
+} elseif (file_exists('C:/xampp/apache/bin/openssl.cnf')) {
+    putenv('OPENSSL_CONF=C:/xampp/apache/bin/openssl.cnf');
+}
 /**
  * The base configuration for WordPress
  *
@@ -90,7 +95,7 @@ define( 'WP_DEBUG', false );
 /* Add any custom values between this line and the "stop editing" line. */
 
 
-
+define( 'WP_ENVIRONMENT_TYPE', 'local' );
 /* That's all, stop editing! Happy publishing. */
 
 /** Absolute path to the WordPress directory. */
