@@ -2563,13 +2563,20 @@ add_filter('document_title_parts', 'propvendor_marketplace_filter_vendor_documen
 
 function propvendor_marketplace_create_enquiries_table() {
     global $wpdb;
-    $table_name = $wpdb->prefix . 'propvendor_enquiries';
     $charset_collate = $wpdb->get_charset_collate();
 
-    $sql = "CREATE TABLE {$table_name} (
+    $table_enquiries = $wpdb->prefix . 'propvendor_enquiries';
+    $table_threads   = $wpdb->prefix . 'propvendor_threads';
+    $table_messages  = $wpdb->prefix . 'propvendor_messages';
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+    // 1. Enquiries Table Schema (Fix 4: includes customer_user_id after vendor_id)
+    $sql_enquiries = "CREATE TABLE {$table_enquiries} (
         id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
         listing_id bigint(20) unsigned NOT NULL,
         vendor_id bigint(20) unsigned NOT NULL,
+        customer_user_id bigint(20) unsigned NOT NULL DEFAULT 0,
         customer_name varchar(255) NOT NULL,
         customer_email varchar(255) NOT NULL,
         customer_phone varchar(50) DEFAULT '',
@@ -2581,18 +2588,168 @@ function propvendor_marketplace_create_enquiries_table() {
         PRIMARY KEY  (id),
         KEY listing_id (listing_id),
         KEY vendor_id (vendor_id),
+        KEY customer_user_id (customer_user_id),
         KEY created_at (created_at)
     ) {$charset_collate};";
+    dbDelta($sql_enquiries);
 
-    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-    dbDelta($sql);
+    // Fallback: Ensure customer_user_id column exists on existing table if dbDelta did not alter
+    $col_exists = $wpdb->get_results($wpdb->prepare(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = 'customer_user_id'",
+        DB_NAME,
+        $table_enquiries
+    ));
+    if (empty($col_exists)) {
+        $wpdb->query("ALTER TABLE {$table_enquiries} ADD COLUMN customer_user_id bigint(20) unsigned NOT NULL DEFAULT 0 AFTER vendor_id, ADD KEY customer_user_id (customer_user_id)");
+    }
+
+    // 2. Threads Table Schema (Fix 5)
+    $sql_threads = "CREATE TABLE {$table_threads} (
+        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+        listing_id bigint(20) unsigned NOT NULL,
+        vendor_id bigint(20) unsigned NOT NULL,
+        customer_user_id bigint(20) unsigned NOT NULL DEFAULT 0,
+        customer_name varchar(255) NOT NULL,
+        customer_email varchar(255) NOT NULL,
+        status varchar(20) NOT NULL DEFAULT 'open',
+        last_message_at datetime NOT NULL,
+        created_at datetime NOT NULL,
+        PRIMARY KEY  (id),
+        KEY listing_id (listing_id),
+        KEY vendor_id (vendor_id),
+        KEY customer_user_id (customer_user_id),
+        KEY last_message_at (last_message_at)
+    ) {$charset_collate};";
+    dbDelta($sql_threads);
+
+    // 3. Messages Table Schema (Fix 5)
+    $sql_messages = "CREATE TABLE {$table_messages} (
+        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+        thread_id bigint(20) unsigned NOT NULL,
+        sender_id bigint(20) unsigned NOT NULL DEFAULT 0,
+        sender_role varchar(20) NOT NULL,
+        message text NOT NULL,
+        is_read tinyint(1) NOT NULL DEFAULT 0,
+        created_at datetime NOT NULL,
+        PRIMARY KEY  (id),
+        KEY thread_id (thread_id),
+        KEY thread_read (thread_id, is_read),
+        KEY created_at (created_at)
+    ) {$charset_collate};";
+    dbDelta($sql_messages);
+
+    // 4. Backfill existing enquiries (Fix 6)
+    propvendor_marketplace_backfill_enquiries();
+}
+
+function propvendor_marketplace_backfill_enquiries() {
+    global $wpdb;
+    $table_enquiries = $wpdb->prefix . 'propvendor_enquiries';
+    $table_threads   = $wpdb->prefix . 'propvendor_threads';
+    $table_messages  = $wpdb->prefix . 'propvendor_messages';
+
+    if (get_option('propvendor_enquiries_backfilled_v1')) {
+        return;
+    }
+
+    // Ensure tables exist before running
+    if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_threads)) !== $table_threads ||
+        $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_messages)) !== $table_messages) {
+        return;
+    }
+
+    $enquiries = $wpdb->get_results("SELECT * FROM {$table_enquiries} ORDER BY id ASC");
+    if (!empty($enquiries)) {
+        foreach ($enquiries as $enq) {
+            // Determine customer_user_id: check existing user ID or match WP user by customer_email
+            $customer_user_id = 0;
+            if (isset($enq->customer_user_id) && absint($enq->customer_user_id) > 0) {
+                $customer_user_id = absint($enq->customer_user_id);
+            } else {
+                $matched_user = get_user_by('email', $enq->customer_email);
+                if ($matched_user) {
+                    $customer_user_id = absint($matched_user->ID);
+                    $wpdb->update(
+                        $table_enquiries,
+                        array('customer_user_id' => $customer_user_id),
+                        array('id' => $enq->id),
+                        array('%d'),
+                        array('%d')
+                    );
+                }
+            }
+
+            // Check if thread already exists for this enquiry
+            $existing_thread_id = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$table_threads} WHERE listing_id = %d AND customer_email = %s AND created_at = %s LIMIT 1",
+                $enq->listing_id,
+                $enq->customer_email,
+                $enq->created_at
+            ));
+
+            if (!$existing_thread_id) {
+                $wpdb->insert(
+                    $table_threads,
+                    array(
+                        'listing_id'       => $enq->listing_id,
+                        'vendor_id'        => $enq->vendor_id,
+                        'customer_user_id' => $customer_user_id,
+                        'customer_name'    => $enq->customer_name,
+                        'customer_email'   => $enq->customer_email,
+                        'status'           => 'open',
+                        'last_message_at'  => $enq->created_at,
+                        'created_at'       => $enq->created_at,
+                    ),
+                    array('%d', '%d', '%d', '%s', '%s', '%s', '%s', '%s')
+                );
+                $existing_thread_id = $wpdb->insert_id;
+            }
+
+            if ($existing_thread_id) {
+                // Check if first message already exists
+                $existing_msg = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT id FROM {$table_messages} WHERE thread_id = %d AND sender_role = 'customer' AND created_at = %s LIMIT 1",
+                    $existing_thread_id,
+                    $enq->created_at
+                ));
+
+                if (!$existing_msg) {
+                    $wpdb->insert(
+                        $table_messages,
+                        array(
+                            'thread_id'   => $existing_thread_id,
+                            'sender_id'   => $customer_user_id,
+                            'sender_role' => 'customer',
+                            'message'     => $enq->message,
+                            'is_read'     => 0,
+                            'created_at'  => $enq->created_at,
+                        ),
+                        array('%d', '%d', '%s', '%s', '%d', '%s')
+                    );
+                }
+            }
+        }
+    }
+
+    update_option('propvendor_enquiries_backfilled_v1', 1);
 }
 
 function propvendor_marketplace_maybe_create_enquiries_table() {
     global $wpdb;
-    $table_name = $wpdb->prefix . 'propvendor_enquiries';
-    if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_name)) !== $table_name) {
+    $table_enquiries = $wpdb->prefix . 'propvendor_enquiries';
+    $table_threads   = $wpdb->prefix . 'propvendor_threads';
+    $table_messages  = $wpdb->prefix . 'propvendor_messages';
+
+    $schema_version = get_option('propvendor_enquiry_schema_version', '1.0');
+
+    if (
+        version_compare((string) $schema_version, '1.2', '<') ||
+        $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_enquiries)) !== $table_enquiries ||
+        $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_threads)) !== $table_threads ||
+        $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_messages)) !== $table_messages
+    ) {
         propvendor_marketplace_create_enquiries_table();
+        update_option('propvendor_enquiry_schema_version', '1.2');
     }
 }
 add_action('init', 'propvendor_marketplace_maybe_create_enquiries_table');
@@ -2665,6 +2822,11 @@ function propvendor_marketplace_render_listing_enquiry_form($post) {
 }
 
 function propvendor_marketplace_handle_enquiry_submission() {
+    // FIX 2: Explicit POST method guard
+    if ( 'POST' !== $_SERVER['REQUEST_METHOD'] ) {
+        wp_die( 'Method Not Allowed', '', array( 'response' => 405 ) );
+    }
+
     $listing_id = isset($_POST['listing_id']) ? absint($_POST['listing_id']) : 0;
     $listing = get_post($listing_id);
     $is_public = ($listing && propvendor_marketplace_is_public_listing($listing));
@@ -2729,10 +2891,11 @@ function propvendor_marketplace_handle_enquiry_submission() {
     set_transient($ip_key, $recent_count + 1, 10 * MINUTE_IN_SECONDS);
     set_transient($dup_key, 1, 2 * MINUTE_IN_SECONDS);
 
-    // 7. Store enquiry securely (Requirements 8, 11, 12)
+    // 7. Store enquiry securely (Requirements 8, 11, 12, Fix 1, Fix 4)
     global $wpdb;
     $table_name = $wpdb->prefix . 'propvendor_enquiries';
     $vendor_id = absint($listing->post_author);
+    $customer_user_id = get_current_user_id();
 
     // 8. Vendor notification logic (Requirements 6, 7)
     $forward_enquiries = get_user_meta($vendor_id, 'propvendor_forward_enquiries', true);
@@ -2751,11 +2914,37 @@ function propvendor_marketplace_handle_enquiry_submission() {
     }
 
     $can_forward_vendor_email = ($is_forwarding_enabled && !empty($target_email));
-    $vendor_email_sent = 0;
-    $vendor_recipient = '';
+    $vendor_recipient = $can_forward_vendor_email ? $target_email : '';
 
+    // Fix 1 & Fix 4: Insert into database first and verify return value before notifications or success messaging
+    $inserted = $wpdb->insert(
+        $table_name,
+        array(
+            'listing_id' => $listing_id,
+            'vendor_id' => $vendor_id,
+            'customer_user_id' => $customer_user_id,
+            'customer_name' => $customer_name,
+            'customer_email' => $customer_email,
+            'customer_phone' => $customer_phone,
+            'message' => $message,
+            'vendor_email_sent' => 0,
+            'vendor_email_address' => $vendor_recipient,
+            'ip_address' => $ip_address,
+            'created_at' => current_time('mysql'),
+        ),
+        array('%d', '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s')
+    );
+
+    if (false === $inserted) {
+        error_log($wpdb->last_error);
+        propvendor_marketplace_redirect_with_notice($redirect_url, 'error', 'Unable to record your enquiry due to a temporary system error. Please try again.');
+    }
+
+    $enquiry_id = $wpdb->insert_id;
+    $vendor_email_sent = 0;
+
+    // Send vendor notification ONLY after the enquiry has been successfully saved in the database
     if ($can_forward_vendor_email) {
-        $vendor_recipient = $target_email;
         $subject = sprintf('[PropVendor Enquiry] %s (Ref: #%d)', get_the_title($listing), $listing_id);
         $email_body = "Hello,\n\nYou have received a new customer enquiry for your listing on PropVendor.\n\n";
         $email_body .= "Listing: " . get_the_title($listing) . "\n";
@@ -2775,25 +2964,15 @@ function propvendor_marketplace_handle_enquiry_submission() {
         $sent = wp_mail($vendor_recipient, $subject, $email_body, $headers);
         if ($sent) {
             $vendor_email_sent = 1;
+            $wpdb->update(
+                $table_name,
+                array('vendor_email_sent' => 1),
+                array('id' => $enquiry_id),
+                array('%d'),
+                array('%d')
+            );
         }
     }
-
-    $wpdb->insert(
-        $table_name,
-        array(
-            'listing_id' => $listing_id,
-            'vendor_id' => $vendor_id,
-            'customer_name' => $customer_name,
-            'customer_email' => $customer_email,
-            'customer_phone' => $customer_phone,
-            'message' => $message,
-            'vendor_email_sent' => $vendor_email_sent,
-            'vendor_email_address' => $vendor_recipient,
-            'ip_address' => $ip_address,
-            'created_at' => current_time('mysql'),
-        ),
-        array('%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s')
-    );
 
     if ($can_forward_vendor_email) {
         $success_msg = 'Thank you! Your enquiry has been received and forwarded to the vendor.';
@@ -2805,6 +2984,38 @@ function propvendor_marketplace_handle_enquiry_submission() {
 }
 add_action('admin_post_nopriv_propvendor_submit_enquiry', 'propvendor_marketplace_handle_enquiry_submission');
 add_action('admin_post_propvendor_submit_enquiry', 'propvendor_marketplace_handle_enquiry_submission');
+
+function propvendor_marketplace_handle_admin_delete_enquiry() {
+    // Fix 3: Explicit HTTP POST guard
+    if ( 'POST' !== $_SERVER['REQUEST_METHOD'] ) {
+        wp_die( 'Method Not Allowed', '', array( 'response' => 405 ) );
+    }
+
+    if (!current_user_can('manage_options')) {
+        wp_die('You do not have sufficient permissions to access this page.');
+    }
+
+    $del_id = isset($_POST['enquiry_id']) ? absint($_POST['enquiry_id']) : 0;
+    check_admin_referer('propvendor_delete_enquiry_' . $del_id);
+
+    $paged = isset($_POST['paged']) ? max(1, absint($_POST['paged'])) : 1;
+    $redirect_url = admin_url('admin.php?page=propvendor-enquiries' . ($paged > 1 ? '&paged=' . $paged : ''));
+
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'propvendor_enquiries';
+
+    $deleted = $wpdb->delete($table_name, array('id' => $del_id), array('%d'));
+
+    if (false !== $deleted && $deleted > 0) {
+        $redirect_url = add_query_arg(array('propvendor_notice' => 'enquiry_deleted', 'enquiry_id' => $del_id), $redirect_url);
+    } else {
+        $redirect_url = add_query_arg(array('propvendor_notice' => 'delete_failed', 'enquiry_id' => $del_id), $redirect_url);
+    }
+
+    wp_safe_redirect($redirect_url);
+    exit;
+}
+add_action('admin_post_propvendor_delete_enquiry', 'propvendor_marketplace_handle_admin_delete_enquiry');
 
 function propvendor_marketplace_add_admin_menu() {
     add_menu_page(
@@ -2827,12 +3038,15 @@ function propvendor_marketplace_render_admin_enquiries_page() {
     global $wpdb;
     $table_name = $wpdb->prefix . 'propvendor_enquiries';
 
-    // Handle delete action
-    if (isset($_GET['action']) && 'delete' === $_GET['action'] && isset($_GET['enquiry_id'])) {
-        $del_id = absint($_GET['enquiry_id']);
-        check_admin_referer('propvendor_delete_enquiry_' . $del_id);
-        $wpdb->delete($table_name, array('id' => $del_id), array('%d'));
-        echo '<div class="notice notice-success is-dismissible"><p>Enquiry #' . absint($del_id) . ' deleted successfully.</p></div>';
+    // Display admin notices from redirect actions (Fix 3)
+    if (isset($_GET['propvendor_notice'])) {
+        $notice_code = sanitize_text_field(wp_unslash($_GET['propvendor_notice']));
+        $notice_id = isset($_GET['enquiry_id']) ? absint($_GET['enquiry_id']) : 0;
+        if ('enquiry_deleted' === $notice_code) {
+            echo '<div class="notice notice-success is-dismissible"><p>Enquiry #' . absint($notice_id) . ' deleted successfully.</p></div>';
+        } elseif ('delete_failed' === $notice_code) {
+            echo '<div class="notice notice-error is-dismissible"><p>Could not delete enquiry #' . absint($notice_id) . '. Record may have already been removed.</p></div>';
+        }
     }
 
     $per_page = 20;
@@ -2880,10 +3094,7 @@ function propvendor_marketplace_render_admin_enquiries_page() {
         $vendor_biz = $vendor ? get_user_meta($vendor->ID, 'propvendor_business_name', true) : '';
         $vendor_name = $vendor_biz ? $vendor_biz : ($vendor ? $vendor->display_name : 'Unknown');
 
-        $del_url = wp_nonce_url(
-            admin_url('admin.php?page=propvendor-enquiries&action=delete&enquiry_id=' . absint($enq->id)),
-            'propvendor_delete_enquiry_' . absint($enq->id)
-        );
+        $form_action = admin_url('admin-post.php');
 
         if ($enq->vendor_email_sent) {
             $status_label = '<span style="color:#0a8a4f; font-weight:600;">&#10003; Sent (' . esc_html($enq->vendor_email_address) . ')</span>';
@@ -2901,12 +3112,25 @@ function propvendor_marketplace_render_admin_enquiries_page() {
         if (!empty($enq->customer_phone)) {
             echo '<br><a href="tel:' . esc_attr($enq->customer_phone) . '">' . esc_html($enq->customer_phone) . '</a>';
         }
+        if (!empty($enq->customer_user_id)) {
+            echo '<br><small style="color:#64748b;">User #' . absint($enq->customer_user_id) . '</small>';
+        }
         echo '</td>';
         echo '<td><a href="' . esc_url($listing_link) . '" target="_blank">' . esc_html($listing_title) . '</a><br><small>Ref #' . absint($enq->listing_id) . '</small></td>';
         echo '<td>' . esc_html($vendor_name) . '</td>';
         echo '<td>' . $status_label . '</td>';
         echo '<td><div style="max-height: 80px; overflow-y: auto; background: #f8fafc; padding: 6px; border-radius: 4px; border: 1px solid #e2e8f0; font-size: 13px;">' . nl2br(esc_html($enq->message)) . '</div></td>';
-        echo '<td><a href="' . esc_url($del_url) . '" class="button button-small delete" onclick="return confirm(\'Delete this enquiry?\');">Delete</a></td>';
+        echo '<td>';
+        echo '<form method="post" action="' . esc_url($form_action) . '" onsubmit="return confirm(\'Permanently delete enquiry #' . absint($enq->id) . '?\');" style="margin:0;">';
+        wp_nonce_field('propvendor_delete_enquiry_' . absint($enq->id));
+        echo '<input type="hidden" name="action" value="propvendor_delete_enquiry" />';
+        echo '<input type="hidden" name="enquiry_id" value="' . absint($enq->id) . '" />';
+        if ($paged > 1) {
+            echo '<input type="hidden" name="paged" value="' . absint($paged) . '" />';
+        }
+        echo '<button type="submit" class="button button-small delete" style="color:#b32d2e; border-color:#b32d2e;">Delete</button>';
+        echo '</form>';
+        echo '</td>';
         echo '</tr>';
     }
 
