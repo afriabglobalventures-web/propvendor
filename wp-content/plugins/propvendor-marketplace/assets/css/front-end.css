@@ -1,0 +1,1106 @@
+.propvendor-hero {
+    display: grid;
+    grid-template-columns: 1.5fr 0.8fr;
+    gap: 2rem;
+    align-items: center;
+    padding: 2rem 0 1rem;
+}
+
+.propvendor-tag {
+    display: inline-block;
+    background: #eef7ff;
+    color: #0d5aa7;
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    padding: 0.4rem 0.7rem;
+    border-radius: 999px;
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+.propvendor-hero-copy h1 {
+    font-size: clamp(2.2rem, 3vw, 4rem);
+    line-height: 1.1;
+    margin-bottom: 1rem;
+}
+
+.propvendor-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 1.5rem;
+}
+
+.propvendor-btn {
+    display: inline-block;
+    padding: 0.9rem 1.4rem;
+    border-radius: 0.5rem;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.propvendor-btn.primary {
+    background: #0d5aa7;
+    color: #fff;
+}
+
+.propvendor-btn.secondary {
+    background: #ebf4ff;
+    color: #0b2e4d;
+}
+
+.propvendor-hero-panel,
+.propvendor-form-box,
+.propvendor-card,
+.propvendor-dashboard {
+    background: #fff;
+    border: 1px solid #e6edf4;
+    border-radius: 1rem;
+    box-shadow: 0 10px 26px rgba(16, 28, 45, 0.06);
+}
+
+.propvendor-hero-panel {
+    padding: 1.5rem;
+}
+
+.propvendor-hero-panel ul {
+    list-style: none;
+    padding: 0;
+    margin: 1rem 0 0;
+}
+
+.propvendor-hero-panel li {
+    padding: 0.55rem 0;
+    border-bottom: 1px solid #edf2f8;
+}
+
+.propvendor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.2rem;
+    margin: 1.5rem 0;
+}
+
+.propvendor-card {
+    padding: 1.2rem;
+}
+
+.propvendor-badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #0d5aa7;
+    background: #ecf5ff;
+    padding: 0.35rem 0.6rem;
+    border-radius: 999px;
+    margin-bottom: 0.8rem;
+}
+
+.propvendor-card h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1.2rem;
+}
+
+.propvendor-card h3 a {
+    text-decoration: none;
+    color: #081b2d;
+}
+
+.propvendor-price {
+    color: #0a8a4f;
+    font-weight: 900;
+    margin: 0.8rem 0 0.4rem;
+}
+
+.propvendor-status,
+.propvendor-meta,
+.propvendor-empty {
+    color: #52667d;
+}
+
+.propvendor-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin: 2rem 0;
+}
+
+.propvendor-info-grid > div {
+    background: #f7fafc;
+    border: 1px solid #eef2f7;
+    border-radius: 1rem;
+    padding: 1.2rem;
+}
+
+.propvendor-form-box {
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+}
+
+.propvendor-form {
+    display: grid;
+    gap: 0.9rem;
+}
+
+.propvendor-form label {
+    display: grid;
+    gap: 0.35rem;
+    font-weight: 600;
+    color: #1b2d3d;
+}
+
+.propvendor-form input,
+.propvendor-form select,
+.propvendor-form textarea {
+    width: 100%;
+    padding: 0.75rem 0.9rem;
+    border: 1px solid #d9e3ee;
+    border-radius: 0.6rem;
+    background: #fff;
+    font: inherit;
+}
+
+.propvendor-form button {
+    border: none;
+    border-radius: 0.6rem;
+    background: #0d5aa7;
+    color: #fff;
+    padding: 0.9rem 1.1rem;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.propvendor-dashboard {
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+}
+
+.propvendor-dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.propvendor-dashboard-header h2 {
+    margin: 0;
+}
+
+.propvendor-dashboard-header p {
+    margin: 0.35rem 0 0;
+    color: #52667d;
+}
+
+.propvendor-dashboard-add {
+    display: inline-block;
+    flex: 0 0 auto;
+    padding: 0.7rem 1rem;
+    border-radius: 0.6rem;
+    background: #0d5aa7;
+    color: #fff;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.propvendor-dashboard-add:hover,
+.propvendor-dashboard-add:focus {
+    background: #0b477f;
+    color: #fff;
+}
+
+.propvendor-dashboard-empty {
+    padding: 1.25rem;
+    border: 1px dashed #d9e3ee;
+    border-radius: 0.75rem;
+    text-align: center;
+}
+
+.propvendor-dashboard-table-wrap {
+    overflow-x: auto;
+    border: 1px solid #e6edf4;
+    border-radius: 0.75rem;
+}
+
+.propvendor-dashboard-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.propvendor-dashboard-table th,
+.propvendor-dashboard-table td {
+    padding: 0.85rem 0.75rem;
+    border-bottom: 1px solid #edf2f8;
+    vertical-align: middle;
+}
+
+.propvendor-dashboard-table th {
+    background: #f7fafc;
+    color: #1b2d3d;
+    font-size: 0.85rem;
+}
+
+.propvendor-dashboard-table tr:last-child td {
+    border-bottom: 0;
+}
+
+.propvendor-dashboard-status {
+    display: inline-block;
+    padding: 0.3rem 0.55rem;
+    border-radius: 999px;
+    background: #edf2f8;
+    color: #33485e;
+    font-size: 0.8rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.propvendor-dashboard-status-pending-review {
+    background: #fff4d6;
+    color: #7b5700;
+}
+
+.propvendor-dashboard-status-published {
+    background: #e5f7ed;
+    color: #12653a;
+}
+
+.propvendor-dashboard-status-rejected,
+.propvendor-dashboard-status-expired,
+.propvendor-dashboard-status-unavailable {
+    background: #fce9e8;
+    color: #8c2822;
+}
+
+.propvendor-dashboard-actions {
+    white-space: nowrap;
+}
+
+.propvendor-dashboard-actions a {
+    margin-right: 0.55rem;
+    font-weight: 700;
+}
+
+.propvendor-dashboard-list {
+    margin: 0;
+    padding-left: 1.2rem;
+}
+
+.propvendor-listing-detail {
+    margin: 1.5rem 0;
+}
+
+.propvendor-detail-top {
+    margin-bottom: 1rem;
+}
+
+.propvendor-detail-back {
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.propvendor-detail-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(260px, 0.8fr);
+    gap: 1.5rem;
+    align-items: start;
+}
+
+.propvendor-detail-main,
+.propvendor-detail-facts,
+.propvendor-detail-contact {
+    min-width: 0;
+    padding: 1.25rem;
+    border: 1px solid #e6edf4;
+    border-radius: 1rem;
+    background: #fff;
+    box-shadow: 0 10px 26px rgba(16, 28, 45, 0.06);
+}
+
+.propvendor-detail-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+    gap: 0.75rem;
+}
+
+.propvendor-detail-gallery figure {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    border-radius: 0.65rem;
+    background: #f0f4f8;
+}
+
+.propvendor-detail-gallery figure:first-child {
+    grid-column: 1 / -1;
+}
+
+.propvendor-detail-image {
+    display: block;
+    width: 100%;
+    max-height: 560px;
+    aspect-ratio: 16 / 10;
+    object-fit: cover;
+}
+
+.propvendor-detail-no-image {
+    display: grid;
+    min-height: 200px;
+    place-items: center;
+    margin: 0;
+    padding: 1rem;
+    border: 1px dashed #d9e3ee;
+    border-radius: 0.65rem;
+    background: #f7fafc;
+    color: #52667d;
+    text-align: center;
+}
+
+.propvendor-detail-description {
+    margin-top: 1.5rem;
+    overflow-wrap: anywhere;
+}
+
+.propvendor-detail-description h2,
+.propvendor-detail-facts h2,
+.propvendor-detail-contact h2 {
+    margin-top: 0;
+}
+
+.propvendor-detail-facts dl {
+    display: grid;
+    gap: 0;
+    margin: 0;
+}
+
+.propvendor-detail-facts dl > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #edf2f8;
+}
+
+.propvendor-detail-facts dl > div:last-child {
+    border-bottom: 0;
+}
+
+.propvendor-detail-facts dt {
+    color: #52667d;
+    font-weight: 600;
+}
+
+.propvendor-detail-facts dd {
+    margin: 0;
+    font-weight: 700;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+.propvendor-detail-sidebar {
+    display: grid;
+    gap: 1rem;
+}
+
+.propvendor-detail-contact {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.propvendor-detail-contact h2,
+.propvendor-detail-contact p {
+    margin-bottom: 0;
+}
+
+.propvendor-contact-action {
+    display: block;
+    padding: 0.75rem 1rem;
+    border-radius: 0.55rem;
+    background: #0d5aa7;
+    color: #fff;
+    font-weight: 700;
+    text-align: center;
+    text-decoration: none;
+}
+
+.propvendor-contact-action:hover,
+.propvendor-contact-action:focus {
+    background: #0b477f;
+    color: #fff;
+}
+
+.propvendor-contact-detail,
+.propvendor-detail-muted {
+    color: #52667d;
+    overflow-wrap: anywhere;
+}
+
+.propvendor-related-listings {
+    margin-top: 1.5rem;
+}
+
+.propvendor-browse {
+    margin: 1.5rem 0;
+}
+
+.propvendor-filter-form {
+    padding: 1.25rem;
+    border: 1px solid #e6edf4;
+    border-radius: 1rem;
+    background: #fff;
+    box-shadow: 0 10px 26px rgba(16, 28, 45, 0.06);
+}
+
+.propvendor-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+    gap: 1rem;
+}
+
+.propvendor-filter-grid label {
+    display: grid;
+    gap: 0.4rem;
+    color: #1b2d3d;
+    font-weight: 600;
+}
+
+.propvendor-filter-grid input,
+.propvendor-filter-grid select {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 2.8rem;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid #d9e3ee;
+    border-radius: 0.55rem;
+    background: #fff;
+    font: inherit;
+}
+
+.propvendor-filter-note {
+    margin: 1rem 0 0;
+    color: #52667d;
+    font-size: 0.9rem;
+}
+
+.propvendor-filter-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+}
+
+.propvendor-filter-actions button {
+    min-height: 2.8rem;
+    padding: 0.65rem 1rem;
+    border: 0;
+    border-radius: 0.55rem;
+    background: #0d5aa7;
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.propvendor-filter-actions button:hover,
+.propvendor-filter-actions button:focus {
+    background: #0b477f;
+}
+
+.propvendor-filter-actions a {
+    font-weight: 700;
+}
+
+.propvendor-results-count {
+    margin: 1.25rem 0 0.75rem;
+    color: #52667d;
+    font-weight: 700;
+}
+
+.propvendor-browse .propvendor-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+}
+
+.propvendor-browse .propvendor-card {
+    overflow: hidden;
+    padding: 0;
+}
+
+.propvendor-browse .propvendor-card-image {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    object-fit: cover;
+    background: #f0f4f8;
+}
+
+.propvendor-browse .propvendor-card-image-link {
+    display: block;
+}
+
+.propvendor-listing-card-content {
+    padding: 1.1rem;
+}
+
+.propvendor-pagination {
+    margin: 1.5rem 0;
+}
+
+.propvendor-pagination .page-numbers {
+    display: flex;
+    justify-content: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.propvendor-pagination .page-numbers a,
+.propvendor-pagination .page-numbers span {
+    display: inline-block;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d9e3ee;
+    border-radius: 0.45rem;
+}
+
+.propvendor-pagination .page-numbers .current {
+    border-color: #0d5aa7;
+    background: #0d5aa7;
+    color: #fff;
+}
+
+@media (max-width: 767px) {
+    .propvendor-hero {
+        grid-template-columns: 1fr;
+    }
+
+    .propvendor-detail-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .propvendor-detail-main,
+    .propvendor-detail-facts,
+    .propvendor-detail-contact,
+    .propvendor-detail-enquiry {
+        padding: 1rem;
+    }
+
+    .propvendor-filter-form {
+        padding: 1rem;
+    }
+
+    .propvendor-filter-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .propvendor-filter-actions button,
+    .propvendor-filter-actions a {
+        text-align: center;
+    }
+
+    .propvendor-dashboard {
+        padding: 1rem;
+    }
+
+    .propvendor-dashboard-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .propvendor-dashboard-table,
+    .propvendor-dashboard-table tbody,
+    .propvendor-dashboard-table tr,
+    .propvendor-dashboard-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .propvendor-dashboard-table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    .propvendor-dashboard-table tr {
+        padding: 0.4rem 0.85rem;
+        border-bottom: 1px solid #e6edf4;
+    }
+
+    .propvendor-dashboard-table tr:last-child {
+        border-bottom: 0;
+    }
+
+    .propvendor-dashboard-table td {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.55rem 0;
+        border-bottom: 1px solid #f0f3f7;
+        text-align: right;
+        overflow-wrap: anywhere;
+    }
+
+    .propvendor-dashboard-table td::before {
+        content: attr(data-label);
+        flex: 0 0 38%;
+        color: #52667d;
+        font-weight: 700;
+        text-align: left;
+    }
+
+    .propvendor-dashboard-table td:last-child {
+        border-bottom: 0;
+    }
+
+    .propvendor-dashboard-nav {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .propvendor-dashboard-tab-action {
+        margin-left: 0;
+        text-align: center;
+    }
+
+    .propvendor-vendor-header {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+
+    .propvendor-vendor-title-row {
+        justify-content: center;
+    }
+
+    .propvendor-vendor-meta-row {
+        justify-content: center;
+    }
+
+    .propvendor-vendor-contact-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .propvendor-vendor-contact-actions .propvendor-btn {
+        text-align: center;
+    }
+}
+
+/* ==========================================================================
+   Vendor Dashboard Navigation Tabs
+   ========================================================================== */
+.propvendor-dashboard-nav {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #e6edf4;
+}
+
+.propvendor-dashboard-tab {
+    display: inline-block;
+    padding: 0.55rem 1rem;
+    border-radius: 0.5rem;
+    font-weight: 700;
+    font-size: 0.95rem;
+    text-decoration: none;
+    color: #52667d;
+    background: #f7fafc;
+    border: 1px solid #e2e8f0;
+    transition: all 0.2s ease;
+}
+
+.propvendor-dashboard-tab:hover,
+.propvendor-dashboard-tab:focus {
+    color: #0d5aa7;
+    border-color: #0d5aa7;
+    background: #edf5ff;
+}
+
+.propvendor-dashboard-tab.active {
+    background: #0d5aa7;
+    color: #fff;
+    border-color: #0d5aa7;
+}
+
+.propvendor-dashboard-tab-action {
+    margin-left: auto;
+    background: #0a8a4f;
+    color: #fff;
+    border-color: #0a8a4f;
+}
+
+.propvendor-dashboard-tab-action:hover,
+.propvendor-dashboard-tab-action:focus {
+    background: #087342;
+    color: #fff;
+    border-color: #087342;
+}
+
+/* ==========================================================================
+   Vendor Public Profile Layout & Cards
+   ========================================================================== */
+.propvendor-vendor-profile-container {
+    margin: 1.5rem 0 3rem;
+}
+
+.propvendor-profile-owner-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    background: #eef7ff;
+    border: 1px solid #c2defc;
+    color: #0b477f;
+    padding: 0.85rem 1.25rem;
+    border-radius: 0.75rem;
+    margin-bottom: 1.5rem;
+    font-weight: 600;
+}
+
+.propvendor-vendor-profile-card {
+    background: #fff;
+    border: 1px solid #e6edf4;
+    border-radius: 1rem;
+    box-shadow: 0 10px 26px rgba(16, 28, 45, 0.06);
+    padding: 2rem;
+    margin-bottom: 2.5rem;
+}
+
+.propvendor-vendor-header {
+    display: flex;
+    gap: 1.75rem;
+    align-items: flex-start;
+}
+
+.propvendor-vendor-avatar-wrap {
+    flex: 0 0 auto;
+}
+
+.propvendor-vendor-avatar {
+    width: 105px;
+    height: 105px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #e6edf4;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    display: block;
+}
+
+.propvendor-vendor-monogram {
+    width: 105px;
+    height: 105px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0d5aa7, #073868);
+    color: #fff;
+    font-size: 2.75rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid #e6edf4;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.propvendor-vendor-header-content {
+    flex: 1 1 auto;
+}
+
+.propvendor-vendor-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.4rem;
+}
+
+.propvendor-vendor-name {
+    margin: 0;
+    font-size: clamp(1.6rem, 2.5vw, 2.2rem);
+    line-height: 1.2;
+    color: #081b2d;
+}
+
+.propvendor-badge-verified {
+    background: #e5f7ed;
+    color: #12653a;
+}
+
+.propvendor-vendor-meta-row {
+    display: flex;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+    color: #52667d;
+    font-size: 0.95rem;
+}
+
+.propvendor-vendor-meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.propvendor-vendor-contact-person {
+    margin: 0.6rem 0 0;
+    color: #52667d;
+    font-size: 0.95rem;
+}
+
+.propvendor-vendor-bio-box {
+    margin-top: 1.75rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #edf2f8;
+}
+
+.propvendor-vendor-bio-box h3 {
+    margin: 0 0 0.75rem;
+    font-size: 1.2rem;
+    color: #1b2d3d;
+}
+
+.propvendor-vendor-bio-text {
+    color: #33485e;
+    line-height: 1.6;
+}
+
+.propvendor-vendor-bio-text p:last-child {
+    margin-bottom: 0;
+}
+
+.propvendor-vendor-contact-box {
+    margin-top: 1.75rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #edf2f8;
+}
+
+.propvendor-vendor-contact-box h3 {
+    margin: 0 0 0.75rem;
+    font-size: 1.2rem;
+    color: #1b2d3d;
+}
+
+.propvendor-vendor-contact-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.propvendor-btn-sm {
+    padding: 0.45rem 0.85rem;
+    font-size: 0.85rem;
+}
+
+/* ==========================================================================
+   Profile Edit Form Specifics
+   ========================================================================== */
+.propvendor-profile-edit-box {
+    margin: 1.5rem 0;
+}
+
+.propvendor-form-subtext {
+    margin: 0.25rem 0 1.25rem;
+    color: #52667d;
+}
+
+.propvendor-profile-photo-field {
+    background: #f7fafc;
+    border: 1px dashed #d9e3ee;
+    padding: 1.25rem;
+    border-radius: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.propvendor-photo-current {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    margin: 0.75rem 0;
+}
+
+.propvendor-photo-thumb {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #d9e3ee;
+}
+
+.propvendor-checkbox-label {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    font-weight: 500 !important;
+    color: #33485e !important;
+    cursor: pointer;
+}
+
+.propvendor-checkbox-label input[type="checkbox"] {
+    width: auto !important;
+    margin: 0 !important;
+}
+
+.propvendor-form-section-divider {
+    margin: 1.5rem 0 0.75rem;
+    padding-top: 1rem;
+    border-top: 1px solid #edf2f8;
+}
+
+.propvendor-form-section-divider h4 {
+    margin: 0 0 0.35rem;
+    font-size: 1.1rem;
+    color: #1b2d3d;
+}
+
+.propvendor-field-hint {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin: 0.25rem 0 0;
+}
+
+.propvendor-form-actions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-top: 1rem;
+}
+
+.propvendor-detail-vendor-name {
+    font-size: 1.15rem;
+    margin: 0.25rem 0;
+}
+
+.propvendor-detail-vendor-name a {
+    color: #081b2d;
+    text-decoration: none;
+}
+
+.propvendor-detail-vendor-name a:hover {
+    color: #0d5aa7;
+}
+
+.propvendor-detail-view-profile {
+    margin: 0.4rem 0 1rem;
+}
+
+/* ==========================================================================
+   Customer Enquiry System
+   ========================================================================== */
+.propvendor-detail-enquiry {
+    background: #fff;
+    border: 1px solid #e6edf4;
+    border-radius: 0.85rem;
+    padding: 1.5rem;
+    box-shadow: 0 4px 14px rgba(16, 28, 45, 0.05);
+}
+
+.propvendor-detail-enquiry h2 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    font-size: 1.35rem;
+    color: #102a43;
+}
+
+.propvendor-enquiry-intro {
+    font-size: 0.9rem;
+    color: #52667d;
+    margin-bottom: 1.25rem;
+    line-height: 1.45;
+}
+
+.propvendor-enquiry-listing-meta {
+    background: #f0f6fc;
+    border: 1px solid #d0e2ff;
+    border-radius: 0.5rem;
+    padding: 0.65rem 0.85rem;
+    font-size: 0.88rem;
+    color: #0b477f;
+    margin-bottom: 1.15rem;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.propvendor-enquiry-listing-meta strong {
+    color: #081b2d;
+}
+
+.propvendor-enquiry-ref {
+    display: inline-block;
+    color: #52667d;
+    font-size: 0.82rem;
+    margin-left: 0.25rem;
+}
+
+.propvendor-enquiry-form label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #243b53;
+    margin-bottom: 0.85rem;
+}
+
+.propvendor-enquiry-form input[type="text"],
+.propvendor-enquiry-form input[type="email"],
+.propvendor-enquiry-form input[type="tel"],
+.propvendor-enquiry-form textarea {
+    display: block;
+    width: 100%;
+    margin-top: 0.35rem;
+    padding: 0.65rem 0.85rem;
+    border: 1px solid #c9d7e4;
+    border-radius: 0.5rem;
+    font-size: 0.95rem;
+    color: #102a43;
+    background-color: #fff;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.propvendor-enquiry-form input:focus,
+.propvendor-enquiry-form textarea:focus {
+    outline: none;
+    border-color: #0d5aa7;
+    box-shadow: 0 0 0 3px rgba(13, 90, 167, 0.15);
+}
+
+.propvendor-enquiry-form textarea {
+    resize: vertical;
+    min-height: 90px;
+}
+
+.propvendor-enquiry-submit {
+    width: 100%;
+    margin-top: 0.5rem;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    font-weight: 700;
+    text-align: center;
+    border-radius: 0.5rem;
+}
+
+.propvendor-enquiry-privacy-note {
+    font-size: 0.78rem;
+    color: #64748b;
+    margin-top: 0.85rem;
+    margin-bottom: 0;
+    text-align: center;
+    line-height: 1.35;
+}
+
