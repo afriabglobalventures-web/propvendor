@@ -3105,7 +3105,7 @@ add_action('admin_post_nopriv_propvendor_submit_enquiry', 'propvendor_marketplac
 add_action('admin_post_propvendor_submit_enquiry', 'propvendor_marketplace_handle_enquiry_submission');
 
 function propvendor_marketplace_handle_admin_delete_enquiry() {
-    // Fix 3: Explicit HTTP POST guard
+    // Explicit HTTP POST guard
     if ( 'POST' !== $_SERVER['REQUEST_METHOD'] ) {
         wp_die( 'Method Not Allowed', '', array( 'response' => 405 ) );
     }
@@ -3121,9 +3121,45 @@ function propvendor_marketplace_handle_admin_delete_enquiry() {
     $redirect_url = admin_url('admin.php?page=propvendor-enquiries' . ($paged > 1 ? '&paged=' . $paged : ''));
 
     global $wpdb;
-    $table_name = $wpdb->prefix . 'propvendor_enquiries';
+    $table_enquiries = $wpdb->prefix . 'propvendor_enquiries';
+    $table_threads   = $wpdb->prefix . 'propvendor_threads';
+    $table_messages  = $wpdb->prefix . 'propvendor_messages';
 
-    $deleted = $wpdb->delete($table_name, array('id' => $del_id), array('%d'));
+    // 1. Fetch enquiry record
+    $enquiry = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table_enquiries} WHERE id = %d", $del_id));
+    if (!$enquiry) {
+        $redirect_url = add_query_arg(array('propvendor_notice' => 'delete_failed', 'enquiry_id' => $del_id), $redirect_url);
+        wp_safe_redirect($redirect_url);
+        exit;
+    }
+
+    // Finding 6: Cascading Enquiry Deletion
+    // Step 1: Find the matching thread in wp_propvendor_threads
+    $thread = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$table_threads} WHERE listing_id = %d AND customer_email = %s AND created_at = %s LIMIT 1",
+        $enquiry->listing_id,
+        $enquiry->customer_email,
+        $enquiry->created_at
+    ));
+    if (!$thread) {
+        $thread = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$table_threads} WHERE listing_id = %d AND customer_email = %s ORDER BY ABS(TIMESTAMPDIFF(SECOND, created_at, %s)) ASC LIMIT 1",
+            $enquiry->listing_id,
+            $enquiry->customer_email,
+            $enquiry->created_at
+        ));
+    }
+
+    if ($thread) {
+        // Step 2: Delete all child messages from wp_propvendor_messages where thread_id = $thread->id
+        $wpdb->delete($table_messages, array('thread_id' => $thread->id), array('%d'));
+
+        // Step 3: Delete the thread from wp_propvendor_threads
+        $wpdb->delete($table_threads, array('id' => $thread->id), array('%d'));
+    }
+
+    // Step 4: Delete the primary row from wp_propvendor_enquiries
+    $deleted = $wpdb->delete($table_enquiries, array('id' => $del_id), array('%d'));
 
     if (false !== $deleted && $deleted > 0) {
         $redirect_url = add_query_arg(array('propvendor_notice' => 'enquiry_deleted', 'enquiry_id' => $del_id), $redirect_url);
@@ -3278,13 +3314,14 @@ function propvendor_marketplace_render_admin_enquiries_page() {
  */
 
 /**
- * Central Ownership Authorization Helper
+ * Central Ownership Authorization Helper (Finding 1)
  *
- * @param int $thread_id
- * @param int $user_id
+ * @param int    $thread_id
+ * @param int    $user_id
+ * @param string $context 'vendor', 'customer', or empty for general
  * @return bool
  */
-function propvendor_marketplace_user_can_access_thread($thread_id, $user_id = 0) {
+function propvendor_marketplace_user_can_access_thread($thread_id, $user_id = 0, $context = '') {
     if (empty($user_id)) {
         $user_id = get_current_user_id();
     }
@@ -3306,18 +3343,24 @@ function propvendor_marketplace_user_can_access_thread($thread_id, $user_id = 0)
         return false;
     }
 
-    // a) User is an Administrator
-    if (user_can($user_id, 'manage_options')) {
-        return true;
+    $is_admin    = user_can($user_id, 'manage_options');
+    $is_vendor   = ((int) $thread->vendor_id === (int) $user_id);
+    $is_customer = ((int) $thread->customer_user_id > 0 && (int) $thread->customer_user_id === (int) $user_id);
+
+    // Finding 1 Context rules:
+    // 1. Vendor Context: Vendor access requires (int)$thread->vendor_id === (int)$user_id (or Admin).
+    if ('vendor' === $context) {
+        return $is_admin || $is_vendor;
     }
 
-    // b) User is the assigned Vendor
-    if ((int) $thread->vendor_id === (int) $user_id) {
-        return true;
+    // 2. Customer Context: Customer access requires (int)$thread->customer_user_id === (int)$user_id AND $thread->customer_user_id > 0.
+    // Guest threads (customer_user_id === 0) are strictly blocked from customer views.
+    if ('customer' === $context) {
+        return $is_customer;
     }
 
-    // c) User is the assigned Customer AND customer_user_id > 0
-    if ((int) $thread->customer_user_id > 0 && (int) $thread->customer_user_id === (int) $user_id) {
+    // 3. General / unspecified context:
+    if ($is_admin || $is_vendor || $is_customer) {
         return true;
     }
 
@@ -3346,7 +3389,7 @@ function propvendor_marketplace_mask_phone($phone) {
         return '';
     }
     if ($len < 7) {
-        return $trimmed;
+        return ($has_plus ? '+' : '') . substr($digits, 0, 1) . '****' . substr($digits, -1);
     }
     $first4 = substr($digits, 0, 4);
     $last3  = substr($digits, -3);
@@ -3509,19 +3552,14 @@ function propvendor_marketplace_render_vendor_inbox($vendor_id) {
     // Determine active thread
     $active_thread_id = isset($_GET['thread_id']) ? absint($_GET['thread_id']) : 0;
     if ($active_thread_id > 0) {
-        if (!propvendor_marketplace_user_can_access_thread($active_thread_id, $vendor_id)) {
+        if (!propvendor_marketplace_user_can_access_thread($active_thread_id, $vendor_id, 'vendor')) {
             wp_die('Access denied.', '', array('response' => 403));
         }
     } else {
         $active_thread_id = (int) $threads[0]->id;
     }
 
-    // Mark customer messages in active thread as read
-    $wpdb->query($wpdb->prepare(
-        "UPDATE {$table_messages} SET is_read = 1 WHERE thread_id = %d AND sender_role = 'customer'",
-        $active_thread_id
-    ));
-
+    // Finding 5: Explicit POST action for read receipts. Automatic GET updates removed.
     $active_thread = null;
     foreach ($threads as $t) {
         if ((int) $t->id === $active_thread_id) {
@@ -3531,6 +3569,17 @@ function propvendor_marketplace_render_vendor_inbox($vendor_id) {
     }
     if (!$active_thread) {
         $active_thread = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table_threads} WHERE id = %d", $active_thread_id));
+    }
+
+    // Finding 5: If there are unread customer messages in active thread, trigger explicit POST mark-read
+    $has_unread = (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(id) FROM {$table_messages} WHERE thread_id = %d AND sender_role = 'customer' AND is_read = 0",
+        $active_thread_id
+    ));
+    if ($has_unread > 0) {
+        $mark_read_nonce = wp_create_nonce('propvendor_mark_read_' . $active_thread_id);
+        $admin_post_url  = admin_url('admin-post.php');
+        $output .= '<script>(function(){ try { var fd = new FormData(); fd.append("action", "propvendor_mark_thread_read"); fd.append("thread_id", "' . absint($active_thread_id) . '"); fd.append("propvendor_mark_read_nonce", "' . esc_js($mark_read_nonce) . '"); fd.append("is_ajax", "1"); fetch("' . esc_url($admin_post_url) . '", { method: "POST", body: fd, credentials: "same-origin" }).catch(function(){}); } catch(e){} })();</script>';
     }
 
     $output .= '<div class="pv-inbox-container">';
@@ -3625,13 +3674,14 @@ function propvendor_marketplace_render_vendor_inbox($vendor_id) {
                 $output .= '<span><strong>Phone:</strong> <a href="tel:' . esc_attr($customer_phone) . '">' . esc_html($customer_phone) . '</a></span>';
             }
         } else {
+            // Part 2: Monetization Engine Lead Masking & Anti-Inspector Rule
             $masked_email = propvendor_marketplace_mask_email($active_thread->customer_email);
             $output .= '<span><strong>Email:</strong> <span class="pv-masked-info">' . esc_html($masked_email) . '</span></span>';
             if (!empty($customer_phone)) {
                 $masked_phone = propvendor_marketplace_mask_phone($customer_phone);
                 $output .= '<span><strong>Phone:</strong> <span class="pv-masked-info">' . esc_html($masked_phone) . '</span></span>';
             }
-            $output .= '<span class="pv-unlock-lead-wrap"><span class="pv-unlock-badge">&#128274; Locked Lead</span> <a href="#unlock" class="pv-btn-unlock-lead" onclick="alert(\'Upgrade to PropVendor Premium or Purchase Lead Credits to reveal direct customer phone numbers &amp; email addresses.\'); return false;">Upgrade to Unlock Full Contact Info</a></span>';
+            $output .= '<span class="pv-unlock-lead-wrap"><span class="pv-unlock-badge">🔒 Locked Lead</span> <a href="#unlock" class="pv-btn-unlock-lead" onclick="alert(\'Upgrade to PropVendor Premium or Purchase Lead Credits to reveal direct customer phone numbers &amp; email addresses.\'); return false;">Upgrade to Unlock Direct Contact Details</a></span>';
         }
         $output .= '</div>';
         $output .= '</div>';
@@ -3665,14 +3715,14 @@ function propvendor_marketplace_render_vendor_inbox($vendor_id) {
         }
         $output .= '</div>';
 
-        // Reply Box Form
+        // Reply Box Form with Finding 4 frontend maxlength="5000"
         $output .= '<div class="pv-reply-box">';
         $output .= '<form class="pv-reply-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
         $output .= wp_nonce_field('propvendor_inbox_reply_' . $active_thread_id, 'propvendor_inbox_nonce', true, false);
         $output .= '<input type="hidden" name="action" value="propvendor_send_inbox_reply" />';
         $output .= '<input type="hidden" name="thread_id" value="' . absint($active_thread_id) . '" />';
         $output .= '<input type="hidden" name="redirect_context" value="vendor" />';
-        $output .= '<textarea name="message_content" rows="3" required minlength="2" placeholder="Write your reply to ' . esc_attr($active_thread->customer_name) . '..."></textarea>';
+        $output .= '<textarea name="message_content" rows="3" required minlength="2" maxlength="5000" placeholder="Write your reply to ' . esc_attr($active_thread->customer_name) . '..."></textarea>';
         $output .= '<button type="submit" class="propvendor-btn primary pv-reply-submit">Send Reply</button>';
         $output .= '</form>';
         $output .= '</div>';
@@ -3691,7 +3741,7 @@ function propvendor_marketplace_render_vendor_inbox($vendor_id) {
 }
 
 /**
- * Customer Dashboard Inbox Shortcode: [propvendor_customer_inbox]
+ * Customer Dashboard Inbox Shortcode: [propvendor_customer_inbox] (Finding 1)
  *
  * @return string HTML
  */
@@ -3706,8 +3756,9 @@ function propvendor_marketplace_customer_inbox_shortcode() {
     $table_threads   = $wpdb->prefix . 'propvendor_threads';
     $table_messages  = $wpdb->prefix . 'propvendor_messages';
 
+    // Finding 1: Query threads strictly matching customer_user_id = get_current_user_id() and customer_user_id > 0
     $threads = $wpdb->get_results($wpdb->prepare(
-        "SELECT * FROM {$table_threads} WHERE customer_user_id = %d ORDER BY last_message_at DESC",
+        "SELECT * FROM {$table_threads} WHERE customer_user_id = %d AND customer_user_id > 0 ORDER BY last_message_at DESC",
         $current_user_id
     ));
 
@@ -3724,19 +3775,14 @@ function propvendor_marketplace_customer_inbox_shortcode() {
 
     $active_thread_id = isset($_GET['thread_id']) ? absint($_GET['thread_id']) : 0;
     if ($active_thread_id > 0) {
-        if (!propvendor_marketplace_user_can_access_thread($active_thread_id, $current_user_id)) {
+        if (!propvendor_marketplace_user_can_access_thread($active_thread_id, $current_user_id, 'customer')) {
             wp_die('Access denied.', '', array('response' => 403));
         }
     } else {
         $active_thread_id = (int) $threads[0]->id;
     }
 
-    // Mark vendor messages in active thread as read
-    $wpdb->query($wpdb->prepare(
-        "UPDATE {$table_messages} SET is_read = 1 WHERE thread_id = %d AND sender_role = 'vendor'",
-        $active_thread_id
-    ));
-
+    // Finding 5: Explicit POST action for read receipts. Automatic GET updates removed.
     $active_thread = null;
     foreach ($threads as $t) {
         if ((int) $t->id === $active_thread_id) {
@@ -3745,7 +3791,21 @@ function propvendor_marketplace_customer_inbox_shortcode() {
         }
     }
     if (!$active_thread) {
-        $active_thread = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table_threads} WHERE id = %d", $active_thread_id));
+        $candidate = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table_threads} WHERE id = %d", $active_thread_id));
+        if ($candidate && (int) $candidate->customer_user_id === (int) $current_user_id && (int) $candidate->customer_user_id > 0) {
+            $active_thread = $candidate;
+        }
+    }
+
+    // Finding 5: If there are unread vendor messages in active thread, trigger explicit POST mark-read
+    $has_unread = (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(id) FROM {$table_messages} WHERE thread_id = %d AND sender_role = 'vendor' AND is_read = 0",
+        $active_thread_id
+    ));
+    if ($has_unread > 0) {
+        $mark_read_nonce = wp_create_nonce('propvendor_mark_read_' . $active_thread_id);
+        $admin_post_url  = admin_url('admin-post.php');
+        $output .= '<script>(function(){ try { var fd = new FormData(); fd.append("action", "propvendor_mark_thread_read"); fd.append("thread_id", "' . absint($active_thread_id) . '"); fd.append("propvendor_mark_read_nonce", "' . esc_js($mark_read_nonce) . '"); fd.append("is_ajax", "1"); fetch("' . esc_url($admin_post_url) . '", { method: "POST", body: fd, credentials: "same-origin" }).catch(function(){}); } catch(e){} })();</script>';
     }
 
     $output .= '<div class="pv-inbox-container">';
@@ -3864,14 +3924,14 @@ function propvendor_marketplace_customer_inbox_shortcode() {
         }
         $output .= '</div>';
 
-        // Reply Box
+        // Reply Box with Finding 4 frontend maxlength="5000"
         $output .= '<div class="pv-reply-box">';
         $output .= '<form class="pv-reply-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
         $output .= wp_nonce_field('propvendor_inbox_reply_' . $active_thread_id, 'propvendor_inbox_nonce', true, false);
         $output .= '<input type="hidden" name="action" value="propvendor_send_inbox_reply" />';
         $output .= '<input type="hidden" name="thread_id" value="' . absint($active_thread_id) . '" />';
         $output .= '<input type="hidden" name="redirect_context" value="customer" />';
-        $output .= '<textarea name="message_content" rows="3" required minlength="2" placeholder="Write your reply to ' . esc_attr($vendor_name) . '..."></textarea>';
+        $output .= '<textarea name="message_content" rows="3" required minlength="2" maxlength="5000" placeholder="Write your reply to ' . esc_attr($vendor_name) . '..."></textarea>';
         $output .= '<button type="submit" class="propvendor-btn primary pv-reply-submit">Send Reply</button>';
         $output .= '</form>';
         $output .= '</div>';
@@ -3892,7 +3952,98 @@ function propvendor_marketplace_customer_inbox_shortcode() {
 add_shortcode('propvendor_customer_inbox', 'propvendor_marketplace_customer_inbox_shortcode');
 
 /**
+ * Finding 5: Explicit POST/AJAX action for read receipts
+ */
+function propvendor_marketplace_mark_thread_read() {
+    // 1. Verify HTTP POST method
+    if ('POST' !== $_SERVER['REQUEST_METHOD']) {
+        if (wp_doing_ajax() || !empty($_POST['is_ajax'])) {
+            wp_send_json_error(array('message' => 'Method Not Allowed'), 405);
+        }
+        wp_die('Method Not Allowed', '', array('response' => 405));
+    }
+
+    if (!is_user_logged_in()) {
+        if (wp_doing_ajax() || !empty($_POST['is_ajax'])) {
+            wp_send_json_error(array('message' => 'Unauthorized'), 403);
+        }
+        wp_die('Access denied.', '', array('response' => 403));
+    }
+
+    $thread_id = isset($_POST['thread_id']) ? absint($_POST['thread_id']) : 0;
+    if ($thread_id <= 0) {
+        if (wp_doing_ajax() || !empty($_POST['is_ajax'])) {
+            wp_send_json_error(array('message' => 'Invalid thread.'), 400);
+        }
+        wp_die('Invalid thread.', '', array('response' => 400));
+    }
+
+    // 2. Nonce verification
+    $nonce = isset($_POST['propvendor_mark_read_nonce']) ? sanitize_text_field(wp_unslash($_POST['propvendor_mark_read_nonce'])) : '';
+    if (!wp_verify_nonce($nonce, 'propvendor_mark_read_' . $thread_id)) {
+        if (wp_doing_ajax() || !empty($_POST['is_ajax'])) {
+            wp_send_json_error(array('message' => 'Security check failed.'), 403);
+        }
+        wp_die('Security verification failed.', '', array('response' => 403));
+    }
+
+    $current_user_id = get_current_user_id();
+
+    // 3. Central ownership authorization
+    if (!propvendor_marketplace_user_can_access_thread($thread_id, $current_user_id)) {
+        if (wp_doing_ajax() || !empty($_POST['is_ajax'])) {
+            wp_send_json_error(array('message' => 'Forbidden'), 403);
+        }
+        wp_die('Access denied.', '', array('response' => 403));
+    }
+
+    global $wpdb;
+    $table_threads  = $wpdb->prefix . 'propvendor_threads';
+    $table_messages = $wpdb->prefix . 'propvendor_messages';
+
+    $thread = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table_threads} WHERE id = %d", $thread_id));
+    if (!$thread) {
+        if (wp_doing_ajax() || !empty($_POST['is_ajax'])) {
+            wp_send_json_error(array('message' => 'Thread not found.'), 404);
+        }
+        wp_die('Conversation thread not found.', '', array('response' => 404));
+    }
+
+    // 4. Idempotently update wp_propvendor_messages SET is_read = 1 for incoming messages only
+    if ((int) $current_user_id === (int) $thread->vendor_id) {
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$table_messages} SET is_read = 1 WHERE thread_id = %d AND sender_role = 'customer' AND is_read = 0",
+            $thread_id
+        ));
+    } elseif ((int) $thread->customer_user_id > 0 && (int) $current_user_id === (int) $thread->customer_user_id) {
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$table_messages} SET is_read = 1 WHERE thread_id = %d AND sender_role = 'vendor' AND is_read = 0",
+            $thread_id
+        ));
+    } elseif (user_can($current_user_id, 'manage_options')) {
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$table_messages} SET is_read = 1 WHERE thread_id = %d AND sender_id != %d AND is_read = 0",
+            $thread_id,
+            $current_user_id
+        ));
+    }
+
+    if (wp_doing_ajax() || !empty($_POST['is_ajax']) || (isset($_SERVER['HTTP_ACCEPT']) && false !== strpos($_SERVER['HTTP_ACCEPT'], 'application/json'))) {
+        wp_send_json_success(array('thread_id' => $thread_id, 'status' => 'marked_read'));
+    }
+
+    $redirect_url = isset($_POST['redirect_url']) ? esc_url_raw($_POST['redirect_url']) : wp_get_referer();
+    if (!$redirect_url) {
+        $redirect_url = home_url();
+    }
+    wp_safe_redirect($redirect_url);
+    exit;
+}
+add_action('admin_post_propvendor_mark_thread_read', 'propvendor_marketplace_mark_thread_read');
+
+/**
  * Handle in-app reply POST submission: admin_post_propvendor_send_inbox_reply
+ * (Findings 1, 2, 3, 4)
  */
 function propvendor_marketplace_handle_send_inbox_reply() {
     // 1. Verify HTTP POST method
@@ -3917,8 +4068,12 @@ function propvendor_marketplace_handle_send_inbox_reply() {
 
     $current_user_id = get_current_user_id();
 
-    // 3. Central ownership authorization
-    if (!propvendor_marketplace_user_can_access_thread($thread_id, $current_user_id)) {
+    // Determine redirect context
+    $redirect_context = isset($_POST['redirect_context']) ? sanitize_key($_POST['redirect_context']) : '';
+    $context = ('customer' === $redirect_context) ? 'customer' : (('vendor' === $redirect_context) ? 'vendor' : '');
+
+    // 3. Central ownership authorization with strict context (Finding 1)
+    if (!propvendor_marketplace_user_can_access_thread($thread_id, $current_user_id, $context)) {
         wp_die('Access denied.', '', array('response' => 403));
     }
 
@@ -3932,7 +4087,6 @@ function propvendor_marketplace_handle_send_inbox_reply() {
     }
 
     // Determine redirect URL
-    $redirect_context = isset($_POST['redirect_context']) ? sanitize_key($_POST['redirect_context']) : '';
     if ('customer' === $redirect_context || ((int) $thread->customer_user_id === (int) $current_user_id && !user_can($current_user_id, 'manage_options') && (int) $thread->vendor_id !== (int) $current_user_id)) {
         $redirect_url = add_query_arg(array('thread_id' => $thread_id), home_url('/customer-inbox/'));
     } else {
@@ -3944,6 +4098,25 @@ function propvendor_marketplace_handle_send_inbox_reply() {
     $reply_text = trim($reply_text);
     if (empty($reply_text) || mb_strlen($reply_text) < 2) {
         propvendor_marketplace_redirect_with_notice($redirect_url, 'error', 'Please enter a reply message of at least 2 characters.');
+    }
+
+    // Finding 4: Server-Side Message Bounding - enforce maximum 5,000 characters
+    if (mb_strlen($reply_text) > 5000) {
+        propvendor_marketplace_redirect_with_notice($redirect_url, 'error', 'Your message exceeds the maximum allowed length of 5,000 characters.');
+    }
+
+    // Finding 3: Server-Side Rate Limiting - transient capping replies at 10 submissions per 60 seconds
+    $rate_transient_key = 'pv_reply_rate_' . $current_user_id;
+    $current_rate_count = (int) get_transient($rate_transient_key);
+    if ($current_rate_count >= 10) {
+        propvendor_marketplace_redirect_with_notice($redirect_url, 'error', 'You have sent too many replies in a short period. Please wait a minute before replying again.');
+    }
+
+    // Finding 3: Server-Side Duplicate Protection - MD5 hash of thread_id|user_id|message for 60 seconds
+    $dup_hash = md5($thread_id . '|' . $current_user_id . '|' . $reply_text);
+    $dup_transient_key = 'pv_reply_dup_' . $dup_hash;
+    if (get_transient($dup_transient_key)) {
+        propvendor_marketplace_redirect_with_notice($redirect_url, 'error', 'Duplicate reply detected. You have already sent this exact message.');
     }
 
     // 5. Determine sender role securely based on user identity
@@ -3978,6 +4151,10 @@ function propvendor_marketplace_handle_send_inbox_reply() {
         propvendor_marketplace_redirect_with_notice($redirect_url, 'error', 'Unable to send reply due to a database error. Please try again.');
     }
 
+    // Finding 3: Record rate limit and duplicate protection transients for 60 seconds
+    set_transient($rate_transient_key, $current_rate_count + 1, 60);
+    set_transient($dup_transient_key, 1, 60);
+
     // 7. Update wp_propvendor_threads status and last_message_at
     $new_status = ('vendor' === $sender_role) ? 'replied' : 'open';
     $wpdb->update(
@@ -3991,29 +4168,51 @@ function propvendor_marketplace_handle_send_inbox_reply() {
         array('%d')
     );
 
-    // 8. Email Notification Alert
+    // 8. Safe Email Notification Alert (Finding 2)
     $listing = get_post($thread->listing_id);
     $listing_title = $listing ? get_the_title($listing) : ('Listing #' . $thread->listing_id);
     $snippet = wp_trim_words($reply_text, 25, '...');
-
-    $headers = array(
-        'From: PropVendor Marketplace <no-reply@' . wp_parse_url(home_url(), PHP_URL_HOST) . '>',
-    );
 
     if ('vendor' === $sender_role) {
         // Vendor replied -> Alert customer
         $vendor_user = get_user_by('id', $thread->vendor_id);
         $vendor_name = $vendor_user ? $vendor_user->display_name : 'The vendor';
-        $customer_inbox_link = home_url('/customer-inbox/?thread_id=' . $thread_id);
+
+        // Finding 2: Never expose a vendor's private account email; use configured public email or site default.
+        $public_email = get_user_meta($thread->vendor_id, 'propvendor_public_email', true);
+        if (!empty($public_email) && is_email($public_email)) {
+            $vendor_reply_to = sanitize_email($public_email);
+        } else {
+            $vendor_reply_to = 'no-reply@' . wp_parse_url(home_url(), PHP_URL_HOST);
+        }
+
+        $headers = array(
+            'From: PropVendor Marketplace <no-reply@' . wp_parse_url(home_url(), PHP_URL_HOST) . '>',
+            'Reply-To: ' . $vendor_reply_to,
+        );
 
         $customer_email = $thread->customer_email;
         if (!empty($customer_email) && is_email($customer_email)) {
             $subject = sprintf('New reply regarding %s', $listing_title);
-            $body  = "Hello " . $thread->customer_name . ",\n\n";
-            $body .= $vendor_name . " has replied to your enquiry regarding " . $listing_title . ":\n\n";
-            $body .= "\"" . $snippet . "\"\n\n";
-            $body .= "Log in to your account to view the full conversation: " . $customer_inbox_link . "\n\n";
-            $body .= "Regards,\nPropVendor Team";
+
+            // Finding 2: Safe Guest Communication Workflow
+            if ((int) $thread->customer_user_id === 0) {
+                // Guest inquiry: do NOT link to customer inbox, append registration CTA
+                $register_link = wp_registration_url();
+                $body  = "Hello " . $thread->customer_name . ",\n\n";
+                $body .= $vendor_name . " has replied to your enquiry regarding " . $listing_title . ":\n\n";
+                $body .= "\"" . $snippet . "\"\n\n";
+                $body .= "Note: You submitted this inquiry as a guest. To view your full message history or chat live on PropVendor, register an account using this email address: " . $register_link . "\n\n";
+                $body .= "Regards,\nPropVendor Team";
+            } else {
+                // Registered customer: link to customer inbox
+                $customer_inbox_link = home_url('/customer-inbox/?thread_id=' . $thread_id);
+                $body  = "Hello " . $thread->customer_name . ",\n\n";
+                $body .= $vendor_name . " has replied to your enquiry regarding " . $listing_title . ":\n\n";
+                $body .= "\"" . $snippet . "\"\n\n";
+                $body .= "Log in to your account to view the full conversation: " . $customer_inbox_link . "\n\n";
+                $body .= "Regards,\nPropVendor Team";
+            }
 
             wp_mail($customer_email, $subject, $body, $headers);
         }
@@ -4022,6 +4221,10 @@ function propvendor_marketplace_handle_send_inbox_reply() {
         $vendor_user = get_user_by('id', $thread->vendor_id);
         $vendor_name = $vendor_user ? $vendor_user->display_name : 'Vendor';
         $vendor_inbox_link = home_url('/vendor-dashboard/?view=inbox&thread_id=' . $thread_id);
+
+        $headers = array(
+            'From: PropVendor Marketplace <no-reply@' . wp_parse_url(home_url(), PHP_URL_HOST) . '>',
+        );
 
         $vendor_email = '';
         $public_email = get_user_meta($thread->vendor_id, 'propvendor_public_email', true);
