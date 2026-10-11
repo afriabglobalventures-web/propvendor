@@ -2648,7 +2648,7 @@ function propvendor_marketplace_backfill_enquiries() {
     $table_threads   = $wpdb->prefix . 'propvendor_threads';
     $table_messages  = $wpdb->prefix . 'propvendor_messages';
 
-    if (get_option('propvendor_enquiries_backfilled_v1')) {
+    if (get_option('propvendor_enquiries_backfilled_v2')) {
         return;
     }
 
@@ -2661,17 +2661,19 @@ function propvendor_marketplace_backfill_enquiries() {
     $enquiries = $wpdb->get_results("SELECT * FROM {$table_enquiries} ORDER BY id ASC");
     if (!empty($enquiries)) {
         foreach ($enquiries as $enq) {
-            // Determine customer_user_id: check existing user ID or match WP user by customer_email
+            // Determine customer_user_id: strictly respect authentic session customer_user_id.
+            // Never infer account ownership from guest-submitted email strings.
+            // Explicitly prevent self-conversations where customer_user_id equals vendor_id.
             $customer_user_id = 0;
             if (isset($enq->customer_user_id) && absint($enq->customer_user_id) > 0) {
-                $customer_user_id = absint($enq->customer_user_id);
-            } else {
-                $matched_user = get_user_by('email', $enq->customer_email);
-                if ($matched_user) {
-                    $customer_user_id = absint($matched_user->ID);
+                $candidate_id = absint($enq->customer_user_id);
+                if ($candidate_id !== absint($enq->vendor_id)) {
+                    $customer_user_id = $candidate_id;
+                } else {
+                    // Invalid self-conversation attribution: reset enquiry record to guest (0)
                     $wpdb->update(
                         $table_enquiries,
-                        array('customer_user_id' => $customer_user_id),
+                        array('customer_user_id' => 0),
                         array('id' => $enq->id),
                         array('%d'),
                         array('%d')
@@ -2703,6 +2705,13 @@ function propvendor_marketplace_backfill_enquiries() {
                     array('%d', '%d', '%d', '%s', '%s', '%s', '%s', '%s')
                 );
                 $existing_thread_id = $wpdb->insert_id;
+            } else {
+                // Ensure existing thread does not have invalid self-conversation attribution
+                $existing_thread = $wpdb->get_row($wpdb->prepare("SELECT id, vendor_id, customer_user_id FROM {$table_threads} WHERE id = %d", $existing_thread_id));
+                if ($existing_thread && absint($existing_thread->customer_user_id) > 0 && absint($existing_thread->customer_user_id) === absint($existing_thread->vendor_id)) {
+                    $wpdb->update($table_threads, array('customer_user_id' => 0), array('id' => $existing_thread_id), array('%d'), array('%d'));
+                    $wpdb->update($table_messages, array('sender_id' => 0), array('thread_id' => $existing_thread_id, 'sender_role' => 'customer'), array('%d'), array('%d', '%s'));
+                }
             }
 
             if ($existing_thread_id) {
@@ -2731,7 +2740,7 @@ function propvendor_marketplace_backfill_enquiries() {
         }
     }
 
-    update_option('propvendor_enquiries_backfilled_v1', 1);
+    update_option('propvendor_enquiries_backfilled_v2', 1);
 }
 
 function propvendor_marketplace_maybe_create_enquiries_table() {
@@ -2763,6 +2772,14 @@ function propvendor_marketplace_render_listing_enquiry_form($post) {
     $listing_title = get_the_title($post);
 
     $current_user = wp_get_current_user();
+    if ($current_user->exists() && (int) $post->post_author === (int) $current_user->ID) {
+        $html = '<section class="propvendor-detail-enquiry propvendor-enquiry-box" id="propvendor-enquiry-form-wrap" aria-labelledby="propvendor-enquiry-heading">';
+        $html .= '<h2 id="propvendor-enquiry-heading">Listing Enquiries</h2>';
+        $html .= '<p class="propvendor-enquiry-intro" style="color:#64748b; font-style:italic;">You are the author of this listing. Customer enquiries submitted for this property are forwarded to your configured email.</p>';
+        $html .= '</section>';
+        return $html;
+    }
+
     $default_name = $current_user->exists() ? $current_user->display_name : '';
     $default_email = $current_user->exists() ? $current_user->user_email : '';
 
@@ -2896,6 +2913,11 @@ function propvendor_marketplace_handle_enquiry_submission() {
     $table_name = $wpdb->prefix . 'propvendor_enquiries';
     $vendor_id = absint($listing->post_author);
     $customer_user_id = get_current_user_id();
+
+    // Prevent invalid self-conversations where vendor submits enquiry on their own listing
+    if ($customer_user_id > 0 && $customer_user_id === $vendor_id) {
+        propvendor_marketplace_redirect_with_notice($redirect_url, 'error', 'You cannot submit an enquiry on your own listing.');
+    }
 
     // 8. Vendor notification logic (Requirements 6, 7)
     $forward_enquiries = get_user_meta($vendor_id, 'propvendor_forward_enquiries', true);
