@@ -1104,3 +1104,350 @@
     line-height: 1.35;
 }
 
+/* ==========================================================================
+   Phase 3: On-Site Messaging Inbox Styles
+   ========================================================================== */
+
+/* Unread Badge */
+.pv-badge-unread {
+    display: inline-block;
+    background: #e53e3e;
+    color: #ffffff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: 0.2rem 0.45rem;
+    border-radius: 999px;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+}
+
+.propvendor-dashboard-tab.active .pv-badge-unread {
+    background: #ffffff;
+    color: #0d5aa7;
+}
+
+/* Two-column Inbox Container */
+.pv-inbox-container {
+    display: flex;
+    min-height: 580px;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    background: #ffffff;
+    overflow: hidden;
+    margin-top: 1.5rem;
+    box-shadow: 0 4px 14px rgba(16, 28, 45, 0.05);
+}
+
+/* Left Column: Sidebar / Thread List */
+.pv-inbox-sidebar {
+    width: 320px;
+    flex-shrink: 0;
+    border-right: 1px solid #e2e8f0;
+    background: #f8fafc;
+    display: flex;
+    flex-direction: column;
+}
+
+.pv-inbox-sidebar-header {
+    padding: 1rem 1.2rem;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1e293b;
+    background: #ffffff;
+}
+
+.pv-inbox-thread-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.pv-inbox-thread-item {
+    border-bottom: 1px solid #edf2f7;
+    margin: 0;
+}
+
+.pv-inbox-thread-link {
+    display: block;
+    padding: 0.9rem 1.1rem;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.15s ease;
+    position: relative;
+}
+
+.pv-inbox-thread-link:hover {
+    background: #edf2f7;
+}
+
+.pv-inbox-thread-item.is-active .pv-inbox-thread-link {
+    background: #e2e8f0;
+    border-left: 4px solid #0d5aa7;
+}
+
+.pv-inbox-thread-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 0.3rem;
+}
+
+.pv-inbox-thread-name {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.pv-inbox-unread-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: #e53e3e;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.pv-inbox-thread-time {
+    font-size: 0.75rem;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+.pv-inbox-thread-property {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: #0d5aa7;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pv-inbox-thread-thumb {
+    width: 34px;
+    height: 34px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid #cbd5e1;
+    flex-shrink: 0;
+}
+
+.pv-inbox-thread-snippet {
+    font-size: 0.82rem;
+    color: #64748b;
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Right Column: Main Conversation Pane */
+.pv-inbox-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    min-width: 0;
+}
+
+.pv-inbox-header {
+    padding: 1.1rem 1.4rem;
+    border-bottom: 1px solid #e2e8f0;
+    background: #ffffff;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.pv-inbox-header-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 0.35rem;
+}
+
+.pv-inbox-header-title a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.pv-inbox-header-title a:hover {
+    color: #0d5aa7;
+    text-decoration: underline;
+}
+
+.pv-inbox-header-meta {
+    font-size: 0.85rem;
+    color: #475569;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+}
+
+.pv-inbox-header-status {
+    display: inline-block;
+    padding: 0.25rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.pv-status-open {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.pv-status-replied {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.pv-status-closed {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+/* Chat Message History Stream */
+.pv-msg-stream {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+    background: #f8fafc;
+    max-height: 440px;
+}
+
+.pv-msg-row {
+    display: flex;
+    flex-direction: column;
+    max-width: 75%;
+}
+
+.pv-msg-from-customer {
+    align-self: flex-start;
+}
+
+.pv-msg-from-vendor {
+    align-self: flex-end;
+}
+
+.pv-msg-from-admin {
+    align-self: center;
+    max-width: 85%;
+}
+
+.pv-msg-bubble {
+    padding: 0.85rem 1.1rem;
+    border-radius: 0.75rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    word-break: break-word;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.pv-msg-customer,
+.pv-msg-from-customer .pv-msg-bubble {
+    background: #ffffff;
+    color: #1e293b;
+    border: 1px solid #e2e8f0;
+    border-bottom-left-radius: 2px;
+}
+
+.pv-msg-vendor,
+.pv-msg-from-vendor .pv-msg-bubble {
+    background: #0d5aa7;
+    color: #ffffff;
+    border-bottom-right-radius: 2px;
+}
+
+.pv-msg-from-admin .pv-msg-bubble {
+    background: #fef3c7;
+    color: #78350f;
+    border: 1px solid #fde68a;
+    text-align: center;
+}
+
+.pv-msg-meta {
+    font-size: 0.72rem;
+    color: #64748b;
+    margin-top: 0.35rem;
+}
+
+.pv-msg-from-vendor .pv-msg-meta {
+    text-align: right;
+    color: #64748b;
+}
+
+/* Reply Box Form */
+.pv-reply-box {
+    padding: 1.1rem 1.4rem;
+    border-top: 1px solid #e2e8f0;
+    background: #ffffff;
+}
+
+.pv-reply-form textarea {
+    display: block;
+    width: 100%;
+    min-height: 80px;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    font-size: 0.95rem;
+    box-sizing: border-box;
+    resize: vertical;
+    margin-bottom: 0.75rem;
+    color: #102a43;
+    font-family: inherit;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pv-reply-form textarea:focus {
+    outline: none;
+    border-color: #0d5aa7;
+    box-shadow: 0 0 0 3px rgba(13, 90, 167, 0.15);
+}
+
+.pv-reply-submit {
+    padding: 0.65rem 1.4rem;
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+/* Responsive Layout (under 768px) */
+@media (max-width: 768px) {
+    .pv-inbox-container {
+        flex-direction: column;
+        min-height: auto;
+    }
+
+    .pv-inbox-sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid #e2e8f0;
+        max-height: 260px;
+    }
+
+    .pv-msg-row {
+        max-width: 90%;
+    }
+
+    .pv-inbox-header {
+        flex-direction: column;
+    }
+}
+

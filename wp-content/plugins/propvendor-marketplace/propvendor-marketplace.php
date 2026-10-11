@@ -330,7 +330,7 @@ function propvendor_marketplace_restrict_vendor_admin_access() {
 
     if ('admin-post.php' === $pagenow) {
         $action = isset($_REQUEST['action']) ? sanitize_key(wp_unslash($_REQUEST['action'])) : '';
-        if (in_array($action, array('propvendor_submit_listing', 'propvendor_update_listing', 'propvendor_listing_image', 'propvendor_update_vendor_profile', 'propvendor_vendor_image', 'propvendor_submit_enquiry'), true)) {
+        if (in_array($action, array('propvendor_submit_listing', 'propvendor_update_listing', 'propvendor_listing_image', 'propvendor_update_vendor_profile', 'propvendor_vendor_image', 'propvendor_submit_enquiry', 'propvendor_send_inbox_reply'), true)) {
             return;
         }
     }
@@ -432,6 +432,10 @@ function propvendor_marketplace_create_default_pages() {
             'title' => 'Login and My Account',
             'content' => '<p>Customers and vendors can manage their profiles, saved searches and listing status from their account area.</p>',
         ),
+        'customer-inbox' => array(
+            'title' => 'Customer Inbox',
+            'content' => '[propvendor_customer_inbox]',
+        ),
     );
 
     foreach ($pages as $slug => $page) {
@@ -456,6 +460,22 @@ function propvendor_marketplace_create_default_pages() {
         }
     }
 }
+
+function propvendor_marketplace_ensure_customer_inbox_page() {
+    $existing = get_page_by_path('customer-inbox');
+    if (!$existing) {
+        wp_insert_post(
+            array(
+                'post_title'   => 'Customer Inbox',
+                'post_name'    => 'customer-inbox',
+                'post_content' => '[propvendor_customer_inbox]',
+                'post_status'  => 'publish',
+                'post_type'    => 'page',
+            )
+        );
+    }
+}
+add_action('init', 'propvendor_marketplace_ensure_customer_inbox_page');
 
 function propvendor_marketplace_public_listing_meta_query() {
     $moderation_keys = array('propvendor_listing_status', 'propvendor_status');
@@ -1353,15 +1373,26 @@ function propvendor_marketplace_vendor_dashboard_shortcode() {
     $public_profile_url = propvendor_marketplace_get_vendor_profile_url($user_id);
     $dashboard_url = home_url('/vendor-dashboard/');
     $profile_tab_url = add_query_arg(array('view' => 'profile'), $dashboard_url);
+    $inbox_tab_url = add_query_arg(array('view' => 'inbox'), $dashboard_url);
+
+    $unread_count = propvendor_marketplace_get_vendor_unread_count($user_id);
+    $unread_badge = ($unread_count > 0) ? ' <span class="pv-badge-unread">' . esc_html($unread_count) . '</span>' : '';
 
     $notice = propvendor_marketplace_get_notice_message();
     $output = '<section class="propvendor-dashboard" aria-labelledby="propvendor-dashboard-title">';
     $output .= '<nav class="propvendor-dashboard-nav" aria-label="Vendor Dashboard Navigation">';
     $output .= '<a class="propvendor-dashboard-tab ' . ('listings' === $view ? 'active' : '') . '" href="' . esc_url($dashboard_url) . '">My Listings</a>';
+    $output .= '<a class="propvendor-dashboard-tab ' . ('inbox' === $view ? 'active' : '') . '" href="' . esc_url($inbox_tab_url) . '">Inbox' . $unread_badge . '</a>';
     $output .= '<a class="propvendor-dashboard-tab ' . ('profile' === $view ? 'active' : '') . '" href="' . esc_url($profile_tab_url) . '">Edit Profile</a>';
     $output .= '<a class="propvendor-dashboard-tab" href="' . esc_url($public_profile_url) . '" target="_blank" rel="noopener">View Public Profile &#8599;</a>';
     $output .= '<a class="propvendor-dashboard-tab propvendor-dashboard-tab-action" href="' . esc_url(home_url('/submit-a-listing/')) . '">+ Add New Listing</a>';
     $output .= '</nav>' . $notice;
+
+    if ('inbox' === $view) {
+        $output .= propvendor_marketplace_render_vendor_inbox($user_id);
+        $output .= '</section>';
+        return $output;
+    }
 
     if ('profile' === $view) {
         $output .= propvendor_marketplace_render_vendor_profile_form($user_id);
@@ -2965,6 +2996,43 @@ function propvendor_marketplace_handle_enquiry_submission() {
     $enquiry_id = $wpdb->insert_id;
     $vendor_email_sent = 0;
 
+    // Phase 3: Create conversation thread and initial message
+    $table_threads  = $wpdb->prefix . 'propvendor_threads';
+    $table_messages = $wpdb->prefix . 'propvendor_messages';
+    $now_mysql = current_time('mysql');
+    $thread_id = 0;
+
+    $thread_inserted = $wpdb->insert(
+        $table_threads,
+        array(
+            'listing_id'       => $listing_id,
+            'vendor_id'        => $vendor_id,
+            'customer_user_id' => $customer_user_id,
+            'customer_name'    => $customer_name,
+            'customer_email'   => $customer_email,
+            'status'           => 'open',
+            'last_message_at'  => $now_mysql,
+            'created_at'       => $now_mysql,
+        ),
+        array('%d', '%d', '%d', '%s', '%s', '%s', '%s', '%s')
+    );
+
+    if (false !== $thread_inserted) {
+        $thread_id = $wpdb->insert_id;
+        $wpdb->insert(
+            $table_messages,
+            array(
+                'thread_id'   => $thread_id,
+                'sender_id'   => $customer_user_id,
+                'sender_role' => 'customer',
+                'message'     => $message,
+                'is_read'     => 0,
+                'created_at'  => $now_mysql,
+            ),
+            array('%d', '%d', '%s', '%s', '%d', '%s')
+        );
+    }
+
     // Send vendor notification ONLY after the enquiry has been successfully saved in the database
     if ($can_forward_vendor_email) {
         $subject = sprintf('[PropVendor Enquiry] %s (Ref: #%d)', get_the_title($listing), $listing_id);
@@ -2976,6 +3044,10 @@ function propvendor_marketplace_handle_enquiry_submission() {
         $email_body .= "Email: " . $customer_email . "\n";
         $email_body .= "Phone: " . ($customer_phone ? $customer_phone : "Not provided") . "\n\n";
         $email_body .= "Message:\n" . $message . "\n\n";
+        if (!empty($thread_id)) {
+            $email_body .= "View and respond via Vendor Dashboard:\n";
+            $email_body .= home_url('/vendor-dashboard/?view=inbox&thread_id=' . $thread_id) . "\n\n";
+        }
         $email_body .= "Regards,\nPropVendor Marketplace\n" . home_url();
 
         $headers = array(
@@ -3173,5 +3245,672 @@ function propvendor_marketplace_render_admin_enquiries_page() {
 
     echo '</div>';
 }
+
+/**
+ * ----------------------------------------------------------------------
+ * Phase 3: On-Site Messaging Inbox System
+ * ----------------------------------------------------------------------
+ */
+
+/**
+ * Central Ownership Authorization Helper
+ *
+ * @param int $thread_id
+ * @param int $user_id
+ * @return bool
+ */
+function propvendor_marketplace_user_can_access_thread($thread_id, $user_id = 0) {
+    if (empty($user_id)) {
+        $user_id = get_current_user_id();
+    }
+    $user_id = absint($user_id);
+    if ($user_id <= 0) {
+        return false;
+    }
+
+    $thread_id = absint($thread_id);
+    if ($thread_id <= 0) {
+        return false;
+    }
+
+    global $wpdb;
+    $table_threads = $wpdb->prefix . 'propvendor_threads';
+    $thread = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table_threads} WHERE id = %d", $thread_id));
+
+    if (!$thread) {
+        return false;
+    }
+
+    // a) User is an Administrator
+    if (user_can($user_id, 'manage_options')) {
+        return true;
+    }
+
+    // b) User is the assigned Vendor
+    if ((int) $thread->vendor_id === (int) $user_id) {
+        return true;
+    }
+
+    // c) User is the assigned Customer AND customer_user_id > 0
+    if ((int) $thread->customer_user_id > 0 && (int) $thread->customer_user_id === (int) $user_id) {
+        return true;
+    }
+
+    // Guest submissions (customer_user_id === 0) access via dashboard inbox disallowed unless Admin or Vendor
+    return false;
+}
+
+/**
+ * Get total unread messages count for a vendor
+ *
+ * @param int $vendor_id
+ * @return int
+ */
+function propvendor_marketplace_get_vendor_unread_count($vendor_id = 0) {
+    if (empty($vendor_id)) {
+        $vendor_id = get_current_user_id();
+    }
+    $vendor_id = absint($vendor_id);
+    if ($vendor_id <= 0) {
+        return 0;
+    }
+
+    global $wpdb;
+    $table_threads  = $wpdb->prefix . 'propvendor_threads';
+    $table_messages = $wpdb->prefix . 'propvendor_messages';
+
+    $count = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(m.id) FROM {$table_messages} m 
+         INNER JOIN {$table_threads} t ON m.thread_id = t.id 
+         WHERE t.vendor_id = %d AND m.sender_role = 'customer' AND m.is_read = 0",
+        $vendor_id
+    ));
+
+    return absint($count);
+}
+
+/**
+ * Get total unread messages count for a customer
+ *
+ * @param int $customer_id
+ * @return int
+ */
+function propvendor_marketplace_get_customer_unread_count($customer_id = 0) {
+    if (empty($customer_id)) {
+        $customer_id = get_current_user_id();
+    }
+    $customer_id = absint($customer_id);
+    if ($customer_id <= 0) {
+        return 0;
+    }
+
+    global $wpdb;
+    $table_threads  = $wpdb->prefix . 'propvendor_threads';
+    $table_messages = $wpdb->prefix . 'propvendor_messages';
+
+    $count = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(m.id) FROM {$table_messages} m 
+         INNER JOIN {$table_threads} t ON m.thread_id = t.id 
+         WHERE t.customer_user_id = %d AND m.sender_role = 'vendor' AND m.is_read = 0",
+        $customer_id
+    ));
+
+    return absint($count);
+}
+
+/**
+ * Render Vendor Inbox view inside Vendor Dashboard
+ *
+ * @param int $vendor_id
+ * @return string HTML
+ */
+function propvendor_marketplace_render_vendor_inbox($vendor_id) {
+    global $wpdb;
+    $table_threads   = $wpdb->prefix . 'propvendor_threads';
+    $table_messages  = $wpdb->prefix . 'propvendor_messages';
+    $table_enquiries = $wpdb->prefix . 'propvendor_enquiries';
+
+    $threads = $wpdb->get_results($wpdb->prepare(
+        "SELECT * FROM {$table_threads} WHERE vendor_id = %d ORDER BY last_message_at DESC",
+        $vendor_id
+    ));
+
+    $output = '<div class="propvendor-dashboard-header"><div><h2>Inbox</h2><p>Communicate directly with prospective clients and customers.</p></div></div>';
+
+    if (empty($threads)) {
+        $output .= '<div class="propvendor-dashboard-empty"><p class="propvendor-empty">You have no messages yet. Enquiries received for your listings will appear here.</p></div>';
+        return $output;
+    }
+
+    // Determine active thread
+    $active_thread_id = isset($_GET['thread_id']) ? absint($_GET['thread_id']) : 0;
+    if ($active_thread_id > 0) {
+        if (!propvendor_marketplace_user_can_access_thread($active_thread_id, $vendor_id)) {
+            wp_die('Access denied.', '', array('response' => 403));
+        }
+    } else {
+        $active_thread_id = (int) $threads[0]->id;
+    }
+
+    // Mark customer messages in active thread as read
+    $wpdb->query($wpdb->prepare(
+        "UPDATE {$table_messages} SET is_read = 1 WHERE thread_id = %d AND sender_role = 'customer'",
+        $active_thread_id
+    ));
+
+    $active_thread = null;
+    foreach ($threads as $t) {
+        if ((int) $t->id === $active_thread_id) {
+            $active_thread = $t;
+            break;
+        }
+    }
+    if (!$active_thread) {
+        $active_thread = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table_threads} WHERE id = %d", $active_thread_id));
+    }
+
+    $output .= '<div class="pv-inbox-container">';
+
+    // Left Column: Thread List Pane
+    $output .= '<div class="pv-inbox-sidebar">';
+    $output .= '<div class="pv-inbox-sidebar-header">Conversations (' . count($threads) . ')</div>';
+    $output .= '<ul class="pv-inbox-thread-list">';
+
+    $dashboard_url = home_url('/vendor-dashboard/');
+
+    foreach ($threads as $t) {
+        $is_active = ((int) $t->id === $active_thread_id);
+        $thread_url = add_query_arg(array('view' => 'inbox', 'thread_id' => $t->id), $dashboard_url);
+
+        $unread_count = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(id) FROM {$table_messages} WHERE thread_id = %d AND sender_role = 'customer' AND is_read = 0",
+            $t->id
+        ));
+
+        $latest_msg = $wpdb->get_row($wpdb->prepare(
+            "SELECT message, created_at FROM {$table_messages} WHERE thread_id = %d ORDER BY created_at DESC LIMIT 1",
+            $t->id
+        ));
+        $snippet = $latest_msg ? wp_trim_words(esc_html($latest_msg->message), 8, '...') : '';
+        $time_diff = human_time_diff(strtotime($t->last_message_at), current_time('timestamp')) . ' ago';
+
+        $listing = get_post($t->listing_id);
+        $listing_title = $listing ? get_the_title($listing) : ('Listing #' . $t->listing_id);
+        $thumb_url = $listing ? get_the_post_thumbnail_url($listing, 'thumbnail') : '';
+
+        $item_class = 'pv-inbox-thread-item' . ($is_active ? ' is-active' : '') . ($unread_count > 0 ? ' is-unread' : '');
+
+        $output .= '<li class="' . esc_attr($item_class) . '">';
+        $output .= '<a class="pv-inbox-thread-link" href="' . esc_url($thread_url) . '">';
+        $output .= '<div class="pv-inbox-thread-header">';
+        $output .= '<span class="pv-inbox-thread-name">';
+        if ($unread_count > 0) {
+            $output .= '<span class="pv-inbox-unread-dot" title="Unread messages"></span>';
+        }
+        $output .= esc_html($t->customer_name);
+        $output .= '</span>';
+        $output .= '<span class="pv-inbox-thread-time">' . esc_html($time_diff) . '</span>';
+        $output .= '</div>';
+
+        $output .= '<div class="pv-inbox-thread-property">';
+        if ($thumb_url) {
+            $output .= '<img class="pv-inbox-thread-thumb" src="' . esc_url($thumb_url) . '" alt="" />';
+        }
+        $output .= '<span>' . esc_html($listing_title) . '</span>';
+        $output .= '</div>';
+
+        if ($snippet) {
+            $output .= '<div class="pv-inbox-thread-snippet">' . $snippet . '</div>';
+        }
+
+        $output .= '</a>';
+        $output .= '</li>';
+    }
+
+    $output .= '</ul>';
+    $output .= '</div>'; // pv-inbox-sidebar
+
+    // Right Column: Active Conversation Pane
+    $output .= '<div class="pv-inbox-main">';
+
+    if ($active_thread) {
+        $listing = get_post($active_thread->listing_id);
+        $listing_title = $listing ? get_the_title($listing) : ('Listing #' . $active_thread->listing_id);
+        $listing_url = $listing ? get_permalink($listing) : '#';
+
+        $customer_phone = $wpdb->get_var($wpdb->prepare(
+            "SELECT customer_phone FROM {$table_enquiries} WHERE listing_id = %d AND customer_email = %s AND customer_phone != '' ORDER BY id DESC LIMIT 1",
+            $active_thread->listing_id,
+            $active_thread->customer_email
+        ));
+
+        $status = sanitize_key($active_thread->status ?: 'open');
+        $status_label = ucfirst($status);
+
+        // Header
+        $output .= '<div class="pv-inbox-header">';
+        $output .= '<div>';
+        $output .= '<h3 class="pv-inbox-header-title"><a href="' . esc_url($listing_url) . '" target="_blank" rel="noopener">' . esc_html($listing_title) . ' &#8599;</a></h3>';
+        $output .= '<div class="pv-inbox-header-meta">';
+        $output .= '<span><strong>Customer:</strong> ' . esc_html($active_thread->customer_name) . '</span>';
+        $output .= '<span><strong>Email:</strong> <a href="mailto:' . esc_attr($active_thread->customer_email) . '">' . esc_html($active_thread->customer_email) . '</a></span>';
+        if (!empty($customer_phone)) {
+            $output .= '<span><strong>Phone:</strong> ' . esc_html($customer_phone) . '</span>';
+        }
+        $output .= '</div>';
+        $output .= '</div>';
+        $output .= '<div><span class="pv-inbox-header-status pv-status-' . esc_attr($status) . '">' . esc_html($status_label) . '</span></div>';
+        $output .= '</div>';
+
+        // Messages History Stream
+        $messages = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$table_messages} WHERE thread_id = %d ORDER BY created_at ASC",
+            $active_thread_id
+        ));
+
+        $output .= '<div class="pv-msg-stream" id="pv-msg-stream">';
+        if (!empty($messages)) {
+            foreach ($messages as $msg) {
+                $role = sanitize_key($msg->sender_role);
+                $is_vendor = ('vendor' === $role);
+                $is_customer = ('customer' === $role);
+                $row_class = 'pv-msg-row ' . ($is_vendor ? 'pv-msg-from-vendor pv-msg-vendor' : ($is_customer ? 'pv-msg-from-customer pv-msg-customer' : 'pv-msg-from-admin'));
+
+                $sender_label = $is_vendor ? 'You (Vendor)' : ($is_customer ? esc_html($active_thread->customer_name) : 'Administrator');
+                $msg_time = date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($msg->created_at));
+
+                $output .= '<div class="' . esc_attr($row_class) . '">';
+                $output .= '<div class="pv-msg-bubble">' . nl2br(esc_html($msg->message)) . '</div>';
+                $output .= '<div class="pv-msg-meta">' . $sender_label . ' &bull; ' . esc_html($msg_time) . '</div>';
+                $output .= '</div>';
+            }
+        } else {
+            $output .= '<p class="propvendor-empty" style="text-align:center;">No messages in this conversation yet.</p>';
+        }
+        $output .= '</div>';
+
+        // Reply Box Form
+        $output .= '<div class="pv-reply-box">';
+        $output .= '<form class="pv-reply-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+        $output .= wp_nonce_field('propvendor_inbox_reply_' . $active_thread_id, 'propvendor_inbox_nonce', true, false);
+        $output .= '<input type="hidden" name="action" value="propvendor_send_inbox_reply" />';
+        $output .= '<input type="hidden" name="thread_id" value="' . absint($active_thread_id) . '" />';
+        $output .= '<input type="hidden" name="redirect_context" value="vendor" />';
+        $output .= '<textarea name="message_content" rows="3" required minlength="2" placeholder="Write your reply to ' . esc_attr($active_thread->customer_name) . '..."></textarea>';
+        $output .= '<button type="submit" class="propvendor-btn primary pv-reply-submit">Send Reply</button>';
+        $output .= '</form>';
+        $output .= '</div>';
+
+    } else {
+        $output .= '<div style="padding: 2rem; text-align: center; color: #64748b;">Select a conversation from the left to view messages.</div>';
+    }
+
+    $output .= '</div>'; // pv-inbox-main
+    $output .= '</div>'; // pv-inbox-container
+
+    // Auto-scroll conversation stream to bottom
+    $output .= '<script>document.addEventListener("DOMContentLoaded", function() { var el = document.getElementById("pv-msg-stream"); if (el) { el.scrollTop = el.scrollHeight; } });</script>';
+
+    return $output;
+}
+
+/**
+ * Customer Dashboard Inbox Shortcode: [propvendor_customer_inbox]
+ *
+ * @return string HTML
+ */
+function propvendor_marketplace_customer_inbox_shortcode() {
+    if (!is_user_logged_in()) {
+        $login_url = wp_login_url(home_url('/customer-inbox/'));
+        return '<div class="propvendor-dashboard"><h2>Customer Inbox</h2><p class="propvendor-empty">Please <a href="' . esc_url($login_url) . '">log in</a> with your account to view your messages and enquiries.</p></div>';
+    }
+
+    $current_user_id = get_current_user_id();
+    global $wpdb;
+    $table_threads   = $wpdb->prefix . 'propvendor_threads';
+    $table_messages  = $wpdb->prefix . 'propvendor_messages';
+
+    $threads = $wpdb->get_results($wpdb->prepare(
+        "SELECT * FROM {$table_threads} WHERE customer_user_id = %d ORDER BY last_message_at DESC",
+        $current_user_id
+    ));
+
+    $notice = propvendor_marketplace_get_notice_message();
+    $output = '<section class="propvendor-dashboard" aria-labelledby="propvendor-customer-inbox-title">';
+    $output .= '<div class="propvendor-dashboard-header"><div><h2 id="propvendor-customer-inbox-title">My Messages</h2><p>View your enquiries and chat directly with property and vehicle vendors.</p></div></div>';
+    $output .= $notice;
+
+    if (empty($threads)) {
+        $output .= '<div class="propvendor-dashboard-empty"><p class="propvendor-empty">You have no active message threads yet. Send an enquiry on any listing to start a conversation.</p><a class="propvendor-dashboard-add" href="' . esc_url(home_url('/browse-listings/')) . '">Browse Listings</a></div>';
+        $output .= '</section>';
+        return $output;
+    }
+
+    $active_thread_id = isset($_GET['thread_id']) ? absint($_GET['thread_id']) : 0;
+    if ($active_thread_id > 0) {
+        if (!propvendor_marketplace_user_can_access_thread($active_thread_id, $current_user_id)) {
+            wp_die('Access denied.', '', array('response' => 403));
+        }
+    } else {
+        $active_thread_id = (int) $threads[0]->id;
+    }
+
+    // Mark vendor messages in active thread as read
+    $wpdb->query($wpdb->prepare(
+        "UPDATE {$table_messages} SET is_read = 1 WHERE thread_id = %d AND sender_role = 'vendor'",
+        $active_thread_id
+    ));
+
+    $active_thread = null;
+    foreach ($threads as $t) {
+        if ((int) $t->id === $active_thread_id) {
+            $active_thread = $t;
+            break;
+        }
+    }
+    if (!$active_thread) {
+        $active_thread = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table_threads} WHERE id = %d", $active_thread_id));
+    }
+
+    $output .= '<div class="pv-inbox-container">';
+
+    // Left sidebar: thread list
+    $output .= '<div class="pv-inbox-sidebar">';
+    $output .= '<div class="pv-inbox-sidebar-header">Conversations (' . count($threads) . ')</div>';
+    $output .= '<ul class="pv-inbox-thread-list">';
+
+    $base_inbox_url = home_url('/customer-inbox/');
+
+    foreach ($threads as $t) {
+        $is_active = ((int) $t->id === $active_thread_id);
+        $thread_url = add_query_arg(array('thread_id' => $t->id), $base_inbox_url);
+
+        $unread_count = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(id) FROM {$table_messages} WHERE thread_id = %d AND sender_role = 'vendor' AND is_read = 0",
+            $t->id
+        ));
+
+        $latest_msg = $wpdb->get_row($wpdb->prepare(
+            "SELECT message, created_at FROM {$table_messages} WHERE thread_id = %d ORDER BY created_at DESC LIMIT 1",
+            $t->id
+        ));
+        $snippet = $latest_msg ? wp_trim_words(esc_html($latest_msg->message), 8, '...') : '';
+        $time_diff = human_time_diff(strtotime($t->last_message_at), current_time('timestamp')) . ' ago';
+
+        $listing = get_post($t->listing_id);
+        $listing_title = $listing ? get_the_title($listing) : ('Listing #' . $t->listing_id);
+        $thumb_url = $listing ? get_the_post_thumbnail_url($listing, 'thumbnail') : '';
+
+        $vendor_user = get_user_by('id', $t->vendor_id);
+        $vendor_name = $vendor_user ? $vendor_user->display_name : 'Vendor';
+
+        $item_class = 'pv-inbox-thread-item' . ($is_active ? ' is-active' : '') . ($unread_count > 0 ? ' is-unread' : '');
+
+        $output .= '<li class="' . esc_attr($item_class) . '">';
+        $output .= '<a class="pv-inbox-thread-link" href="' . esc_url($thread_url) . '">';
+        $output .= '<div class="pv-inbox-thread-header">';
+        $output .= '<span class="pv-inbox-thread-name">';
+        if ($unread_count > 0) {
+            $output .= '<span class="pv-inbox-unread-dot" title="Unread messages"></span>';
+        }
+        $output .= esc_html($vendor_name);
+        $output .= '</span>';
+        $output .= '<span class="pv-inbox-thread-time">' . esc_html($time_diff) . '</span>';
+        $output .= '</div>';
+
+        $output .= '<div class="pv-inbox-thread-property">';
+        if ($thumb_url) {
+            $output .= '<img class="pv-inbox-thread-thumb" src="' . esc_url($thumb_url) . '" alt="" />';
+        }
+        $output .= '<span>' . esc_html($listing_title) . '</span>';
+        $output .= '</div>';
+
+        if ($snippet) {
+            $output .= '<div class="pv-inbox-thread-snippet">' . $snippet . '</div>';
+        }
+
+        $output .= '</a>';
+        $output .= '</li>';
+    }
+
+    $output .= '</ul>';
+    $output .= '</div>'; // pv-inbox-sidebar
+
+    // Right column: active conversation
+    $output .= '<div class="pv-inbox-main">';
+
+    if ($active_thread) {
+        $listing = get_post($active_thread->listing_id);
+        $listing_title = $listing ? get_the_title($listing) : ('Listing #' . $active_thread->listing_id);
+        $listing_url = $listing ? get_permalink($listing) : '#';
+
+        $vendor_user = get_user_by('id', $active_thread->vendor_id);
+        $vendor_name = $vendor_user ? $vendor_user->display_name : 'Vendor';
+
+        $status = sanitize_key($active_thread->status ?: 'open');
+        $status_label = ucfirst($status);
+
+        // Header
+        $output .= '<div class="pv-inbox-header">';
+        $output .= '<div>';
+        $output .= '<h3 class="pv-inbox-header-title"><a href="' . esc_url($listing_url) . '" target="_blank" rel="noopener">' . esc_html($listing_title) . ' &#8599;</a></h3>';
+        $output .= '<div class="pv-inbox-header-meta">';
+        $output .= '<span><strong>Vendor:</strong> ' . esc_html($vendor_name) . '</span>';
+        $output .= '</div>';
+        $output .= '</div>';
+        $output .= '<div><span class="pv-inbox-header-status pv-status-' . esc_attr($status) . '">' . esc_html($status_label) . '</span></div>';
+        $output .= '</div>';
+
+        // Messages Stream
+        $messages = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$table_messages} WHERE thread_id = %d ORDER BY created_at ASC",
+            $active_thread_id
+        ));
+
+        $output .= '<div class="pv-msg-stream" id="pv-msg-stream-cust">';
+        if (!empty($messages)) {
+            foreach ($messages as $msg) {
+                $role = sanitize_key($msg->sender_role);
+                $is_vendor = ('vendor' === $role);
+                $is_customer = ('customer' === $role);
+                $row_class = 'pv-msg-row ' . ($is_vendor ? 'pv-msg-from-vendor pv-msg-vendor' : ($is_customer ? 'pv-msg-from-customer pv-msg-customer' : 'pv-msg-from-admin'));
+
+                $sender_label = $is_customer ? 'You (Customer)' : ($is_vendor ? esc_html($vendor_name) : 'Administrator');
+                $msg_time = date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($msg->created_at));
+
+                $output .= '<div class="' . esc_attr($row_class) . '">';
+                $output .= '<div class="pv-msg-bubble">' . nl2br(esc_html($msg->message)) . '</div>';
+                $output .= '<div class="pv-msg-meta">' . $sender_label . ' &bull; ' . esc_html($msg_time) . '</div>';
+                $output .= '</div>';
+            }
+        } else {
+            $output .= '<p class="propvendor-empty" style="text-align:center;">No messages in this conversation yet.</p>';
+        }
+        $output .= '</div>';
+
+        // Reply Box
+        $output .= '<div class="pv-reply-box">';
+        $output .= '<form class="pv-reply-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+        $output .= wp_nonce_field('propvendor_inbox_reply_' . $active_thread_id, 'propvendor_inbox_nonce', true, false);
+        $output .= '<input type="hidden" name="action" value="propvendor_send_inbox_reply" />';
+        $output .= '<input type="hidden" name="thread_id" value="' . absint($active_thread_id) . '" />';
+        $output .= '<input type="hidden" name="redirect_context" value="customer" />';
+        $output .= '<textarea name="message_content" rows="3" required minlength="2" placeholder="Write your reply to ' . esc_attr($vendor_name) . '..."></textarea>';
+        $output .= '<button type="submit" class="propvendor-btn primary pv-reply-submit">Send Reply</button>';
+        $output .= '</form>';
+        $output .= '</div>';
+
+    } else {
+        $output .= '<div style="padding: 2rem; text-align: center; color: #64748b;">Select a conversation to view messages.</div>';
+    }
+
+    $output .= '</div>'; // pv-inbox-main
+    $output .= '</div>'; // pv-inbox-container
+
+    // Auto-scroll conversation stream to bottom
+    $output .= '<script>document.addEventListener("DOMContentLoaded", function() { var el = document.getElementById("pv-msg-stream-cust"); if (el) { el.scrollTop = el.scrollHeight; } });</script>';
+
+    $output .= '</section>';
+    return $output;
+}
+add_shortcode('propvendor_customer_inbox', 'propvendor_marketplace_customer_inbox_shortcode');
+
+/**
+ * Handle in-app reply POST submission: admin_post_propvendor_send_inbox_reply
+ */
+function propvendor_marketplace_handle_send_inbox_reply() {
+    // 1. Verify HTTP POST method
+    if ('POST' !== $_SERVER['REQUEST_METHOD']) {
+        wp_die('Method Not Allowed', '', array('response' => 405));
+    }
+
+    if (!is_user_logged_in()) {
+        wp_die('Access denied.', '', array('response' => 403));
+    }
+
+    $thread_id = isset($_POST['thread_id']) ? absint($_POST['thread_id']) : 0;
+    if ($thread_id <= 0) {
+        wp_die('Invalid thread.', '', array('response' => 400));
+    }
+
+    // 2. Nonce verification
+    $nonce = isset($_POST['propvendor_inbox_nonce']) ? sanitize_text_field(wp_unslash($_POST['propvendor_inbox_nonce'])) : '';
+    if (!wp_verify_nonce($nonce, 'propvendor_inbox_reply_' . $thread_id)) {
+        wp_die('Security verification failed. Please reload and try again.', '', array('response' => 403));
+    }
+
+    $current_user_id = get_current_user_id();
+
+    // 3. Central ownership authorization
+    if (!propvendor_marketplace_user_can_access_thread($thread_id, $current_user_id)) {
+        wp_die('Access denied.', '', array('response' => 403));
+    }
+
+    global $wpdb;
+    $table_threads  = $wpdb->prefix . 'propvendor_threads';
+    $table_messages = $wpdb->prefix . 'propvendor_messages';
+
+    $thread = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table_threads} WHERE id = %d", $thread_id));
+    if (!$thread) {
+        wp_die('Conversation thread not found.', '', array('response' => 404));
+    }
+
+    // Determine redirect URL
+    $redirect_context = isset($_POST['redirect_context']) ? sanitize_key($_POST['redirect_context']) : '';
+    if ('customer' === $redirect_context || ((int) $thread->customer_user_id === (int) $current_user_id && !user_can($current_user_id, 'manage_options') && (int) $thread->vendor_id !== (int) $current_user_id)) {
+        $redirect_url = add_query_arg(array('thread_id' => $thread_id), home_url('/customer-inbox/'));
+    } else {
+        $redirect_url = add_query_arg(array('view' => 'inbox', 'thread_id' => $thread_id), home_url('/vendor-dashboard/'));
+    }
+
+    // 4. Sanitize and validate reply message
+    $reply_text = isset($_POST['message_content']) ? sanitize_textarea_field(wp_unslash($_POST['message_content'])) : '';
+    $reply_text = trim($reply_text);
+    if (empty($reply_text) || mb_strlen($reply_text) < 2) {
+        propvendor_marketplace_redirect_with_notice($redirect_url, 'error', 'Please enter a reply message of at least 2 characters.');
+    }
+
+    // 5. Determine sender role securely based on user identity
+    if ((int) $current_user_id === (int) $thread->vendor_id) {
+        $sender_role = 'vendor';
+    } elseif ((int) $thread->customer_user_id > 0 && (int) $current_user_id === (int) $thread->customer_user_id) {
+        $sender_role = 'customer';
+    } elseif (user_can($current_user_id, 'manage_options')) {
+        $sender_role = 'admin';
+    } else {
+        wp_die('Access denied.', '', array('response' => 403));
+    }
+
+    $now_mysql = current_time('mysql');
+
+    // 6. Insert reply into wp_propvendor_messages
+    $inserted = $wpdb->insert(
+        $table_messages,
+        array(
+            'thread_id'   => $thread_id,
+            'sender_id'   => $current_user_id,
+            'sender_role' => $sender_role,
+            'message'     => $reply_text,
+            'is_read'     => 0,
+            'created_at'  => $now_mysql,
+        ),
+        array('%d', '%d', '%s', '%s', '%d', '%s')
+    );
+
+    if (false === $inserted) {
+        error_log($wpdb->last_error);
+        propvendor_marketplace_redirect_with_notice($redirect_url, 'error', 'Unable to send reply due to a database error. Please try again.');
+    }
+
+    // 7. Update wp_propvendor_threads status and last_message_at
+    $new_status = ('vendor' === $sender_role) ? 'replied' : 'open';
+    $wpdb->update(
+        $table_threads,
+        array(
+            'last_message_at' => $now_mysql,
+            'status'          => $new_status,
+        ),
+        array('id' => $thread_id),
+        array('%s', '%s'),
+        array('%d')
+    );
+
+    // 8. Email Notification Alert
+    $listing = get_post($thread->listing_id);
+    $listing_title = $listing ? get_the_title($listing) : ('Listing #' . $thread->listing_id);
+    $snippet = wp_trim_words($reply_text, 25, '...');
+
+    $headers = array(
+        'From: PropVendor Marketplace <no-reply@' . wp_parse_url(home_url(), PHP_URL_HOST) . '>',
+    );
+
+    if ('vendor' === $sender_role) {
+        // Vendor replied -> Alert customer
+        $vendor_user = get_user_by('id', $thread->vendor_id);
+        $vendor_name = $vendor_user ? $vendor_user->display_name : 'The vendor';
+        $customer_inbox_link = home_url('/customer-inbox/?thread_id=' . $thread_id);
+
+        $customer_email = $thread->customer_email;
+        if (!empty($customer_email) && is_email($customer_email)) {
+            $subject = sprintf('New reply regarding %s', $listing_title);
+            $body  = "Hello " . $thread->customer_name . ",\n\n";
+            $body .= $vendor_name . " has replied to your enquiry regarding " . $listing_title . ":\n\n";
+            $body .= "\"" . $snippet . "\"\n\n";
+            $body .= "Log in to your account to view the full conversation: " . $customer_inbox_link . "\n\n";
+            $body .= "Regards,\nPropVendor Team";
+
+            wp_mail($customer_email, $subject, $body, $headers);
+        }
+    } elseif ('customer' === $sender_role) {
+        // Customer replied -> Alert vendor
+        $vendor_user = get_user_by('id', $thread->vendor_id);
+        $vendor_name = $vendor_user ? $vendor_user->display_name : 'Vendor';
+        $vendor_inbox_link = home_url('/vendor-dashboard/?view=inbox&thread_id=' . $thread_id);
+
+        $vendor_email = '';
+        $public_email = get_user_meta($thread->vendor_id, 'propvendor_public_email', true);
+        if (!empty($public_email) && is_email($public_email)) {
+            $vendor_email = sanitize_email($public_email);
+        } elseif ($vendor_user && is_email($vendor_user->user_email)) {
+            $vendor_email = sanitize_email($vendor_user->user_email);
+        }
+
+        if (!empty($vendor_email)) {
+            $subject = sprintf('New reply regarding %s', $listing_title);
+            $body  = "Hello " . $vendor_name . ",\n\n";
+            $body .= $thread->customer_name . " has replied to your conversation regarding " . $listing_title . ":\n\n";
+            $body .= "\"" . $snippet . "\"\n\n";
+            $body .= "Log in to your vendor dashboard to view and respond: " . $vendor_inbox_link . "\n\n";
+            $body .= "Regards,\nPropVendor Team";
+
+            wp_mail($vendor_email, $subject, $body, $headers);
+        }
+    }
+
+    // 9. Redirect safely back to active thread view with success notice
+    propvendor_marketplace_redirect_with_notice($redirect_url, 'success', 'Your reply has been sent.');
+}
+add_action('admin_post_propvendor_send_inbox_reply', 'propvendor_marketplace_handle_send_inbox_reply');
+
 
 
