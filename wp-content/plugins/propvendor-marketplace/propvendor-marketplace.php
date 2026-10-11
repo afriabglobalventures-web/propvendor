@@ -2155,6 +2155,7 @@ function propvendor_marketplace_handle_profile_update() {
     $public_email = sanitize_email(wp_unslash($_POST['propvendor_public_email'] ?? ''));
     $show_phone = (isset($_POST['propvendor_show_phone']) && '1' === $_POST['propvendor_show_phone']) ? '1' : '0';
     $show_email = (isset($_POST['propvendor_show_email']) && '1' === $_POST['propvendor_show_email']) ? '1' : '0';
+    $forward_enquiries = (isset($_POST['propvendor_forward_enquiries']) && '1' === $_POST['propvendor_forward_enquiries']) ? '1' : '0';
 
     if (empty($display_name)) {
         $display_name = $business_name ? $business_name : $user->display_name;
@@ -2173,6 +2174,7 @@ function propvendor_marketplace_handle_profile_update() {
     update_user_meta($current_user_id, 'propvendor_public_email', $public_email);
     update_user_meta($current_user_id, 'propvendor_show_phone', $show_phone);
     update_user_meta($current_user_id, 'propvendor_show_email', $show_email);
+    update_user_meta($current_user_id, 'propvendor_forward_enquiries', $forward_enquiries);
 
     if (isset($_POST['propvendor_remove_profile_image']) && '1' === $_POST['propvendor_remove_profile_image']) {
         $old_img = absint(get_user_meta($current_user_id, 'propvendor_profile_image_id', true));
@@ -2206,6 +2208,10 @@ function propvendor_marketplace_render_vendor_profile_form($user_id) {
     $public_email = get_user_meta($user_id, 'propvendor_public_email', true);
     $show_phone = get_user_meta($user_id, 'propvendor_show_phone', true);
     $show_email = get_user_meta($user_id, 'propvendor_show_email', true);
+    $forward_enquiries = get_user_meta($user_id, 'propvendor_forward_enquiries', true);
+    if ('' === (string) $forward_enquiries && '1' === (string) $show_email) {
+        $forward_enquiries = '1';
+    }
     $img_id = absint(get_user_meta($user_id, 'propvendor_profile_image_id', true));
 
     $types = array('Property', 'Land', 'Vehicles', 'Rentals', 'Services', 'General Marketplace');
@@ -2252,6 +2258,11 @@ function propvendor_marketplace_render_vendor_profile_form($user_id) {
     $html .= '<label>Public Contact Email (Optional)<input type="email" name="propvendor_public_email" value="' . esc_attr($public_email) . '" placeholder="e.g. sales@mybusiness.com" /></label>';
     $html .= '<label class="propvendor-checkbox-label"><input type="checkbox" name="propvendor_show_email" value="1" ' . checked('1', (string) $show_email, false) . ' /> Publish contact email on public profile and listings</label>';
 
+    $html .= '<div class="propvendor-forwarding-setting-box" style="margin-top: 1rem; margin-bottom: 0.75rem; padding: 0.95rem; background: #f0f7ff; border: 1px solid #c2defc; border-radius: 0.5rem;">';
+    $html .= '<label class="propvendor-checkbox-label" style="font-weight: 700; color: #0b477f;"><input type="checkbox" name="propvendor_forward_enquiries" value="1" ' . checked('1', (string) $forward_enquiries, false) . ' /> Direct Email Forwarding — Forward customer listing enquiries directly to my email</label>';
+    $html .= '<p class="propvendor-field-hint" style="margin: 0.35rem 0 0 1.55rem; color: #234b6e; font-size: 0.85rem; line-height: 1.45;">When enabled, enquiries submitted through your listing pages are immediately forwarded to your contact email (or your registered account email if no public email is provided). Your private account email is kept confidential and never displayed publicly.</p>';
+    $html .= '</div>';
+
     $html .= '<div class="propvendor-form-actions">';
     $html .= '<button type="submit">Save Profile Changes</button>';
     $html .= ' <a class="propvendor-btn secondary" href="' . esc_url(home_url('/vendor-dashboard/')) . '">Cancel</a>';
@@ -2261,6 +2272,104 @@ function propvendor_marketplace_render_vendor_profile_form($user_id) {
 
     return $html;
 }
+
+function propvendor_marketplace_add_admin_user_profile_fields($user) {
+    if (!current_user_can('manage_options') && !in_array('vendor', (array) $user->roles, true)) {
+        return;
+    }
+
+    $business_name = get_user_meta($user->ID, 'propvendor_business_name', true);
+    $business_type = get_user_meta($user->ID, 'propvendor_business_type', true);
+    $location = get_user_meta($user->ID, 'propvendor_location', true);
+    $phone = get_user_meta($user->ID, 'propvendor_phone_number', true);
+    $show_phone = get_user_meta($user->ID, 'propvendor_show_phone', true);
+    $public_email = get_user_meta($user->ID, 'propvendor_public_email', true);
+    $show_email = get_user_meta($user->ID, 'propvendor_show_email', true);
+    $forward_enquiries = get_user_meta($user->ID, 'propvendor_forward_enquiries', true);
+    if ('' === (string) $forward_enquiries && '1' === (string) $show_email) {
+        $forward_enquiries = '1';
+    }
+    ?>
+    <h2>PropVendor Marketplace Settings</h2>
+    <table class="form-table">
+        <tr>
+            <th><label for="propvendor_business_name">Business / Brand Name</label></th>
+            <td><input type="text" name="propvendor_business_name" id="propvendor_business_name" value="<?php echo esc_attr($business_name); ?>" class="regular-text" /></td>
+        </tr>
+        <tr>
+            <th><label for="propvendor_business_type">Business Type</label></th>
+            <td>
+                <select name="propvendor_business_type" id="propvendor_business_type">
+                    <?php
+                    $types = array('Property', 'Land', 'Vehicles', 'Rentals', 'Services', 'General Marketplace');
+                    foreach ($types as $type_opt) {
+                        echo '<option value="' . esc_attr($type_opt) . '" ' . selected($business_type, $type_opt, false) . '>' . esc_html($type_opt) . '</option>';
+                    }
+                    ?>
+                </select>
+            </td>
+        </tr>
+        <tr>
+            <th><label for="propvendor_location">Location / City</label></th>
+            <td><input type="text" name="propvendor_location" id="propvendor_location" value="<?php echo esc_attr($location); ?>" class="regular-text" /></td>
+        </tr>
+        <tr>
+            <th><label for="propvendor_phone_number">Phone Number</label></th>
+            <td>
+                <input type="text" name="propvendor_phone_number" id="propvendor_phone_number" value="<?php echo esc_attr($phone); ?>" class="regular-text" /><br>
+                <label><input type="checkbox" name="propvendor_show_phone" value="1" <?php checked('1', (string) $show_phone); ?> /> Publish phone number on public storefront & listings</label>
+            </td>
+        </tr>
+        <tr>
+            <th><label for="propvendor_public_email">Public Contact Email</label></th>
+            <td>
+                <input type="email" name="propvendor_public_email" id="propvendor_public_email" value="<?php echo esc_attr($public_email); ?>" class="regular-text" /><br>
+                <label><input type="checkbox" name="propvendor_show_email" value="1" <?php checked('1', (string) $show_email); ?> /> Publish contact email on public storefront & listings</label>
+            </td>
+        </tr>
+        <tr>
+            <th><label for="propvendor_forward_enquiries">Direct Email Forwarding</label></th>
+            <td>
+                <label>
+                    <input type="checkbox" name="propvendor_forward_enquiries" id="propvendor_forward_enquiries" value="1" <?php checked('1', (string) $forward_enquiries); ?> />
+                    <strong>Enable Direct Email Forwarding</strong>
+                </label>
+                <p class="description">When checked, customer enquiries submitted on this vendor's listings are forwarded directly to their contact email (or their WordPress account email if no public email is configured). If unchecked, enquiries are stored for administrator review without direct vendor notification.</p>
+            </td>
+        </tr>
+    </table>
+    <?php
+}
+add_action('show_user_profile', 'propvendor_marketplace_add_admin_user_profile_fields');
+add_action('edit_user_profile', 'propvendor_marketplace_add_admin_user_profile_fields');
+
+function propvendor_marketplace_save_admin_user_profile_fields($user_id) {
+    if (!current_user_can('edit_user', $user_id)) {
+        return;
+    }
+
+    if (isset($_POST['propvendor_business_name'])) {
+        update_user_meta($user_id, 'propvendor_business_name', sanitize_text_field(wp_unslash($_POST['propvendor_business_name'])));
+    }
+    if (isset($_POST['propvendor_business_type'])) {
+        update_user_meta($user_id, 'propvendor_business_type', sanitize_text_field(wp_unslash($_POST['propvendor_business_type'])));
+    }
+    if (isset($_POST['propvendor_location'])) {
+        update_user_meta($user_id, 'propvendor_location', sanitize_text_field(wp_unslash($_POST['propvendor_location'])));
+    }
+    if (isset($_POST['propvendor_phone_number'])) {
+        update_user_meta($user_id, 'propvendor_phone_number', sanitize_text_field(wp_unslash($_POST['propvendor_phone_number'])));
+        update_user_meta($user_id, 'propvendor_show_phone', (isset($_POST['propvendor_show_phone']) && '1' === $_POST['propvendor_show_phone']) ? '1' : '0');
+    }
+    if (isset($_POST['propvendor_public_email'])) {
+        update_user_meta($user_id, 'propvendor_public_email', sanitize_email(wp_unslash($_POST['propvendor_public_email'])));
+        update_user_meta($user_id, 'propvendor_show_email', (isset($_POST['propvendor_show_email']) && '1' === $_POST['propvendor_show_email']) ? '1' : '0');
+    }
+    $forward_enquiries = (isset($_POST['propvendor_forward_enquiries']) && '1' === $_POST['propvendor_forward_enquiries']) ? '1' : '0';
+    update_user_meta($user_id, 'propvendor_forward_enquiries', $forward_enquiries);
+}
+add_action('personal_options_update', 'propvendor_marketplace_save_admin_user_profile_fields');
+add_action('edit_user_profile_update', 'propvendor_marketplace_save_admin_user_profile_fields');
 
 function propvendor_marketplace_vendor_profile_shortcode($atts = array()) {
     $atts = shortcode_atts(array(
@@ -2626,15 +2735,27 @@ function propvendor_marketplace_handle_enquiry_submission() {
     $vendor_id = absint($listing->post_author);
 
     // 8. Vendor notification logic (Requirements 6, 7)
+    $forward_enquiries = get_user_meta($vendor_id, 'propvendor_forward_enquiries', true);
     $public_email = get_user_meta($vendor_id, 'propvendor_public_email', true);
     $show_email = get_user_meta($vendor_id, 'propvendor_show_email', true);
 
-    $has_public_vendor_email = ('1' === (string) $show_email && !empty($public_email) && is_email($public_email));
+    // Forwarding is enabled if explicitly '1', or backwards-compatible if show_email is '1' and forward_enquiries is not explicitly '0'
+    $is_forwarding_enabled = ('1' === (string) $forward_enquiries) || ('' === (string) $forward_enquiries && '1' === (string) $show_email);
+
+    $vendor_obj = get_user_by('id', $vendor_id);
+    $target_email = '';
+    if (!empty($public_email) && is_email($public_email)) {
+        $target_email = sanitize_email($public_email);
+    } elseif ($vendor_obj && is_email($vendor_obj->user_email)) {
+        $target_email = sanitize_email($vendor_obj->user_email);
+    }
+
+    $can_forward_vendor_email = ($is_forwarding_enabled && !empty($target_email));
     $vendor_email_sent = 0;
     $vendor_recipient = '';
 
-    if ($has_public_vendor_email) {
-        $vendor_recipient = sanitize_email($public_email);
+    if ($can_forward_vendor_email) {
+        $vendor_recipient = $target_email;
         $subject = sprintf('[PropVendor Enquiry] %s (Ref: #%d)', get_the_title($listing), $listing_id);
         $email_body = "Hello,\n\nYou have received a new customer enquiry for your listing on PropVendor.\n\n";
         $email_body .= "Listing: " . get_the_title($listing) . "\n";
@@ -2674,7 +2795,7 @@ function propvendor_marketplace_handle_enquiry_submission() {
         array('%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s')
     );
 
-    if ($has_public_vendor_email) {
+    if ($can_forward_vendor_email) {
         $success_msg = 'Thank you! Your enquiry has been received and forwarded to the vendor.';
     } else {
         $success_msg = 'Thank you! Your enquiry has been recorded and submitted for administrator review. (Note: The vendor has not enabled direct email forwarding).';
