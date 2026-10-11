@@ -2368,6 +2368,24 @@ function propvendor_marketplace_add_admin_user_profile_fields($user) {
                 <p class="description">When checked, customer enquiries submitted on this vendor's listings are forwarded directly to their contact email (or their WordPress account email if no public email is configured). If unchecked, enquiries are stored for administrator review without direct vendor notification.</p>
             </td>
         </tr>
+        <?php if (current_user_can('manage_options')) : 
+            $vendor_plan = get_user_meta($user->ID, 'propvendor_vendor_plan', true);
+            $vendor_plan = strtolower(trim((string) $vendor_plan));
+            if (empty($vendor_plan)) {
+                $vendor_plan = 'free';
+            }
+        ?>
+        <tr>
+            <th><label for="propvendor_vendor_plan">PropVendor Plan Tier</label></th>
+            <td>
+                <select name="propvendor_vendor_plan" id="propvendor_vendor_plan">
+                    <option value="free" <?php selected($vendor_plan, 'free'); ?>>Free (Masked Contact Leads)</option>
+                    <option value="premium" <?php selected(in_array($vendor_plan, array('premium', 'pro', 'unlocked'), true), true); ?>>Premium Vendor (Unlocked Direct Leads)</option>
+                </select>
+                <p class="description">Controls customer contact visibility in vendor lead views. Free vendors see masked phone/email with Pay-to-Unlock prompts; Premium vendors see direct contact info.</p>
+            </td>
+        </tr>
+        <?php endif; ?>
     </table>
     <?php
 }
@@ -2398,6 +2416,13 @@ function propvendor_marketplace_save_admin_user_profile_fields($user_id) {
     }
     $forward_enquiries = (isset($_POST['propvendor_forward_enquiries']) && '1' === $_POST['propvendor_forward_enquiries']) ? '1' : '0';
     update_user_meta($user_id, 'propvendor_forward_enquiries', $forward_enquiries);
+
+    if (current_user_can('manage_options') && isset($_POST['propvendor_vendor_plan'])) {
+        $plan = sanitize_key(wp_unslash($_POST['propvendor_vendor_plan']));
+        if (in_array($plan, array('free', 'premium', 'pro', 'unlocked'), true)) {
+            update_user_meta($user_id, 'propvendor_vendor_plan', $plan);
+        }
+    }
 }
 add_action('personal_options_update', 'propvendor_marketplace_save_admin_user_profile_fields');
 add_action('edit_user_profile_update', 'propvendor_marketplace_save_admin_user_profile_fields');
@@ -3301,6 +3326,105 @@ function propvendor_marketplace_user_can_access_thread($thread_id, $user_id = 0)
 }
 
 /**
+ * Mask a phone number string for free tier display (retain first 4 and last 3 digits).
+ *
+ * @param string $phone
+ * @return string
+ */
+function propvendor_marketplace_mask_phone($phone) {
+    if (empty($phone)) {
+        return '';
+    }
+    $trimmed = trim((string) $phone);
+    if ('' === $trimmed) {
+        return '';
+    }
+    $has_plus = (strpos($trimmed, '+') === 0);
+    $digits = preg_replace('/[^\d]/', '', $trimmed);
+    $len = strlen($digits);
+    if ($len === 0) {
+        return '';
+    }
+    if ($len < 7) {
+        return $trimmed;
+    }
+    $first4 = substr($digits, 0, 4);
+    $last3  = substr($digits, -3);
+    return ($has_plus ? '+' : '') . $first4 . '****' . $last3;
+}
+
+/**
+ * Mask an email address string for free tier display (mask name portion).
+ *
+ * @param string $email
+ * @return string
+ */
+function propvendor_marketplace_mask_email($email) {
+    if (empty($email)) {
+        return '';
+    }
+    $trimmed = trim((string) $email);
+    if ('' === $trimmed || !is_email($trimmed)) {
+        return '';
+    }
+    $parts = explode('@', $trimmed);
+    $user = $parts[0];
+    $domain = isset($parts[1]) ? $parts[1] : '';
+    $len = strlen($user);
+
+    if ($len <= 1) {
+        $masked_user = '*';
+    } elseif ($len === 2) {
+        $masked_user = $user[0] . '*';
+    } else {
+        $masked_user = $user[0] . '***' . substr($user, -1);
+    }
+
+    return $masked_user . '@' . $domain;
+}
+
+/**
+ * Check if a vendor can view unmasked customer lead contact info.
+ *
+ * @param int $vendor_id
+ * @param int $thread_id
+ * @return bool
+ */
+function propvendor_marketplace_vendor_can_view_contact_info($vendor_id, $thread_id = 0) {
+    $vendor_id = absint($vendor_id);
+    if ($vendor_id <= 0) {
+        $vendor_id = get_current_user_id();
+    }
+
+    // 1. Administrator check
+    if (current_user_can('manage_options') || ($vendor_id > 0 && user_can($vendor_id, 'manage_options'))) {
+        return true;
+    }
+
+    if ($vendor_id <= 0) {
+        return false;
+    }
+
+    // 2. Vendor Plan Tier check (premium, pro, unlocked)
+    $plan = get_user_meta($vendor_id, 'propvendor_vendor_plan', true);
+    $plan = strtolower(trim((string) $plan));
+    if (in_array($plan, array('premium', 'pro', 'unlocked'), true)) {
+        return true;
+    }
+
+    // 3. Unlocked specific thread check
+    $thread_id = absint($thread_id);
+    if ($thread_id > 0) {
+        $unlocked_threads = get_user_meta($vendor_id, 'propvendor_unlocked_thread_ids', true);
+        if (is_array($unlocked_threads) && in_array($thread_id, array_map('absint', $unlocked_threads), true)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
  * Get total unread messages count for a vendor
  *
  * @param int $vendor_id
@@ -3487,15 +3611,27 @@ function propvendor_marketplace_render_vendor_inbox($vendor_id) {
         $status = sanitize_key($active_thread->status ?: 'open');
         $status_label = ucfirst($status);
 
+        $can_view_contact = propvendor_marketplace_vendor_can_view_contact_info($vendor_id, $active_thread_id);
+
         // Header
         $output .= '<div class="pv-inbox-header">';
         $output .= '<div>';
         $output .= '<h3 class="pv-inbox-header-title"><a href="' . esc_url($listing_url) . '" target="_blank" rel="noopener">' . esc_html($listing_title) . ' &#8599;</a></h3>';
         $output .= '<div class="pv-inbox-header-meta">';
         $output .= '<span><strong>Customer:</strong> ' . esc_html($active_thread->customer_name) . '</span>';
-        $output .= '<span><strong>Email:</strong> <a href="mailto:' . esc_attr($active_thread->customer_email) . '">' . esc_html($active_thread->customer_email) . '</a></span>';
-        if (!empty($customer_phone)) {
-            $output .= '<span><strong>Phone:</strong> ' . esc_html($customer_phone) . '</span>';
+        if ($can_view_contact) {
+            $output .= '<span><strong>Email:</strong> <a href="mailto:' . esc_attr($active_thread->customer_email) . '">' . esc_html($active_thread->customer_email) . '</a></span>';
+            if (!empty($customer_phone)) {
+                $output .= '<span><strong>Phone:</strong> <a href="tel:' . esc_attr($customer_phone) . '">' . esc_html($customer_phone) . '</a></span>';
+            }
+        } else {
+            $masked_email = propvendor_marketplace_mask_email($active_thread->customer_email);
+            $output .= '<span><strong>Email:</strong> <span class="pv-masked-info">' . esc_html($masked_email) . '</span></span>';
+            if (!empty($customer_phone)) {
+                $masked_phone = propvendor_marketplace_mask_phone($customer_phone);
+                $output .= '<span><strong>Phone:</strong> <span class="pv-masked-info">' . esc_html($masked_phone) . '</span></span>';
+            }
+            $output .= '<span class="pv-unlock-lead-wrap"><span class="pv-unlock-badge">&#128274; Locked Lead</span> <a href="#unlock" class="pv-btn-unlock-lead" onclick="alert(\'Upgrade to PropVendor Premium or Purchase Lead Credits to reveal direct customer phone numbers &amp; email addresses.\'); return false;">Upgrade to Unlock Full Contact Info</a></span>';
         }
         $output .= '</div>';
         $output .= '</div>';
