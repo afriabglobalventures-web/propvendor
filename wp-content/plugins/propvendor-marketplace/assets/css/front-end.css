@@ -163,6 +163,20 @@
     font: inherit;
 }
 
+.propvendor-form select,
+.propvendor-form input[type="text"],
+.propvendor-form input[type="number"],
+.propvendor-form input[type="email"],
+.propvendor-form input[type="tel"],
+select.form-control {
+    height: 44px !important;
+    line-height: 1.5 !important;
+    padding: 8px 12px !important;
+    vertical-align: middle !important;
+    box-sizing: border-box !important;
+    font-size: 14px !important;
+}
+
 .propvendor-form button {
     border: none;
     border-radius: 0.6rem;
@@ -1511,5 +1525,413 @@
     transform: translateY(-1px);
     box-shadow: 0 3px 6px rgba(5, 150, 105, 0.35);
     color: #ffffff !important;
+}
+
+/* Stage 2: Owner-Direct & Trust Safeguard Badges and Notices */
+.propvendor-badge-direct-owner {
+    background: #0a8a4f !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.04em;
+    box-shadow: 0 1px 3px rgba(10, 138, 79, 0.2);
+}
+
+.propvendor-detail-owner-badge {
+    margin: 0.5rem 0 1rem 0;
+}
+
+.propvendor-badge-regulatory-verified {
+    background: #0b5394 !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.03em;
+    box-shadow: 0 1px 3px rgba(11, 83, 148, 0.2);
+}
+
+.propvendor-safety-notice-card {
+    margin: 1.25rem 0;
+    padding: 1rem 1.25rem;
+    background: #fff8e6;
+    border: 1px solid #ffd591;
+    border-left: 4px solid #fa8c16;
+    border-radius: 6px;
+    color: #873800;
+    font-size: 0.92rem;
+    line-height: 1.5;
+    font-weight: 500;
+}
+
+.propvendor-vehicle-legal-notice-card {
+    margin: 1.25rem 0;
+    padding: 1rem 1.25rem;
+    background: #f0f5ff;
+    border: 1px solid #adc6ff;
+    border-left: 4px solid #2f54eb;
+    border-radius: 6px;
+    color: #10239e;
+    font-size: 0.92rem;
+    line-height: 1.5;
+    font-weight: 500;
+}
+
+/* Category-Specific Form Sections & Dynamic Fields */
+.propvendor-category-fields {
+    margin: 1.5rem 0;
+    padding: 1.25rem 1.5rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    transition: opacity 0.2s ease;
+}
+
+.propvendor-category-fields h4 {
+    margin: 0 0 1rem 0;
+    font-size: 1.05rem;
+    color: #1e293b;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 0.5rem;
+}
+
+.propvendor-form-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+/* Multiple Image Upload & Preview Grid */
+.propvendor-image-upload-wrap {
+    margin: 1.25rem 0;
+}
+
+.propvendor-image-preview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.85rem;
+}
+
+.propvendor-preview-card {
+    position: relative;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.propvendor-preview-thumb {
+    width: 100%;
+    height: 90px;
+    object-fit: cover;
+    display: block;
+}
+
+.propvendor-preview-meta {
+    font-size: 0.68rem;
+    color: #475569;
+    padding: 4px 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: #f8fafc;
+}
+
+.propvendor-preview-remove-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: rgba(239, 68, 68, 0.9);
+    color: #fff !important;
+    border: none;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    line-height: 20px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.15s ease;
+}
+
+.propvendor-preview-remove-btn:hover {
+    background: #dc2626;
+}
+
+/* Existing Images Management (Edit Mode) */
+.propvendor-existing-images-box {
+    margin: 1.25rem 0;
+    padding: 1.25rem;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+}
+
+.propvendor-existing-images-box h4 {
+    margin: 0 0 0.85rem 0;
+    font-size: 1rem;
+    color: #1e293b;
+}
+
+.propvendor-existing-images-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 0.85rem;
+}
+
+.propvendor-existing-image-card {
+    position: relative;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #fff;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    transition: opacity 0.2s ease, border-color 0.2s ease;
+}
+
+.propvendor-existing-image-card img {
+    width: 100%;
+    height: 90px;
+    object-fit: cover;
+    border-radius: 4px;
+}
+
+.propvendor-existing-image-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    margin-top: 4px;
+}
+
+.propvendor-existing-image-actions label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 500;
+    padding: 3px 6px;
+    border-radius: 4px;
+    transition: background-color 0.15s ease;
+}
+
+.propvendor-existing-image-actions .propvendor-action-main {
+    color: #1e40af;
+    background-color: #eff6ff;
+}
+
+.propvendor-existing-image-actions .propvendor-action-main:hover {
+    background-color: #dbeafe;
+}
+
+.propvendor-existing-image-actions .propvendor-action-delete {
+    color: #991b1b;
+    background-color: #fef2f2;
+}
+
+.propvendor-existing-image-actions .propvendor-action-delete:hover {
+    background-color: #fee2e2;
+}
+
+.propvendor-existing-image-actions input[type="radio"],
+.propvendor-existing-image-actions input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.propvendor-image-marked-deleted {
+    opacity: 0.45;
+    border-color: #ef4444 !important;
+    background: #fef2f2 !important;
+}
+
+.propvendor-image-primary-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: #0d5aa7;
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Location & Address Schema Enhancements */
+.propvendor-legacy-warning {
+    display: block;
+    color: #b7791f;
+    font-size: 0.85rem;
+    margin-top: 4px;
+    font-weight: 500;
+}
+
+.propvendor-address-required-mark {
+    color: #d9363e;
+    font-weight: bold;
+}
+
+.propvendor-address-label-text {
+    font-weight: 600;
+}
+
+.propvendor-field-hint {
+    display: block;
+    font-size: 0.8rem;
+    color: #64748b;
+    font-weight: 400;
+    margin-top: 2px;
+    margin-bottom: 5px;
+    line-height: 1.35;
+}
+
+/* Stage 3: Vendor Listing Quota Styles */
+.propvendor-quota-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.propvendor-quota-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.propvendor-quota-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.95rem;
+}
+
+.propvendor-quota-label {
+    font-weight: 600;
+    color: #475569;
+}
+
+.propvendor-quota-badge {
+    display: inline-block;
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.propvendor-quota-badge-vip {
+    background: #dbeafe;
+    color: #1e40af;
+    border: 1px solid #bfdbfe;
+}
+
+.propvendor-quota-badge-free {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+}
+
+.propvendor-quota-badge-expired {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
+}
+
+.propvendor-quota-expiry {
+    font-size: 0.85rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.propvendor-quota-body {
+    margin-bottom: 0.5rem;
+}
+
+.propvendor-quota-stats {
+    display: flex;
+    gap: 1.5rem;
+    align-items: baseline;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.propvendor-quota-stat-item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+}
+
+.propvendor-quota-stat-num {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1;
+}
+
+.propvendor-quota-stat-text {
+    font-size: 0.9rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.propvendor-quota-progress-track {
+    width: 100%;
+    height: 8px;
+    background: #f1f5f9;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 0.5rem;
+}
+
+.propvendor-quota-progress-bar {
+    height: 100%;
+    background: #2563eb;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.propvendor-quota-progress-bar.full {
+    background: #e11d48;
+}
+
+.propvendor-quota-limit-banner {
+    background: #fff1f2;
+    border-left: 4px solid #e11d48;
+    color: #9f1239;
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+    margin-top: 0.85rem;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.propvendor-quota-info-note {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin-top: 0.75rem;
+    line-height: 1.4;
+}
+
+.propvendor-quota-exceeded-box {
+    border-left: 4px solid #e11d48 !important;
 }
 

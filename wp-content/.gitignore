@@ -1,5 +1,5 @@
 wp-config.php
-wp-content/uploads/
+uploads/
 wp-content/upgrade/
 *.log
 .htaccess

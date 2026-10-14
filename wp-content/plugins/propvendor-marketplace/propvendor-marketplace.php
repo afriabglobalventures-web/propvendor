@@ -18,6 +18,831 @@ function propvendor_marketplace_get_listing_status_choices() {
     return array('Pending review', 'Published', 'Rejected', 'Sold', 'Rented', 'Unavailable', 'Expired');
 }
 
+/**
+ * =========================================================================
+ * STAGE 3: LISTING QUOTA & VIP ENTITLEMENT HELPERS
+ * =========================================================================
+ */
+
+if (!defined('PROPVENDOR_FREE_LISTING_LIMIT')) {
+    define('PROPVENDOR_FREE_LISTING_LIMIT', 3);
+}
+
+/**
+ * Get the configurable free listing quota limit.
+ *
+ * @return int
+ */
+function propvendor_marketplace_get_free_listing_limit() {
+    return (int) apply_filters('propvendor_free_listing_limit', PROPVENDOR_FREE_LISTING_LIMIT);
+}
+
+/**
+ * Invalidate the in-request active listing count cache.
+ *
+ * @param int $user_id Optional user ID. If 0, clears all.
+ */
+function propvendor_marketplace_invalidate_listing_count_cache($user_id = 0) {
+    global $propvendor_listing_count_cache;
+    $user_id = absint($user_id);
+    if ($user_id > 0 && isset($propvendor_listing_count_cache[$user_id])) {
+        unset($propvendor_listing_count_cache[$user_id]);
+    } else {
+        $propvendor_listing_count_cache = array();
+    }
+}
+add_action('save_post', 'propvendor_marketplace_invalidate_listing_count_cache', 5);
+add_action('deleted_post', 'propvendor_marketplace_invalidate_listing_count_cache', 5);
+add_action('transition_post_status', 'propvendor_marketplace_invalidate_listing_count_cache', 5);
+
+/**
+ * Resolve canonical listing status with documented precedence and fail-closed resolution.
+ *
+ * Precedence:
+ * 1. Fail-closed: If either propvendor_listing_status or propvendor_status has an inactive marker
+ *    ('Rejected', 'Unavailable', 'Expired', 'Sold', 'Rented'), that inactive marker takes precedence
+ *    to prevent conflicting metadata from counting an inactive listing as active.
+ * 2. Primary key: propvendor_listing_status (if non-empty).
+ * 3. Fallback key: propvendor_status (if non-empty).
+ * 4. Default: Derived from WordPress post_status ('publish' -> 'Published', 'pending' -> 'Pending review',
+ *    'draft' -> 'Rejected', default -> 'Unavailable').
+ *
+ * @param int $post_id
+ * @return string Canonical moderation status string
+ */
+function propvendor_marketplace_get_canonical_listing_status($post_id) {
+    $post_id = absint($post_id);
+    if ($post_id <= 0) {
+        return 'Unavailable';
+    }
+
+    $post = get_post($post_id);
+    if (!$post || !in_array($post->post_type, propvendor_marketplace_get_listing_post_types(), true)) {
+        return 'Unavailable';
+    }
+
+    $meta_listing_status = trim((string) get_post_meta($post_id, 'propvendor_listing_status', true));
+    $meta_status         = trim((string) get_post_meta($post_id, 'propvendor_status', true));
+
+    $inactive_statuses = array('Rejected', 'Unavailable', 'Expired', 'Sold', 'Rented');
+
+    // 1. Fail-closed: inactive status marker in either key takes precedence
+    if (in_array($meta_listing_status, $inactive_statuses, true)) {
+        return $meta_listing_status;
+    }
+    if (in_array($meta_status, $inactive_statuses, true)) {
+        return $meta_status;
+    }
+
+    // 2. Primary key propvendor_listing_status
+    if ('' !== $meta_listing_status) {
+        return $meta_listing_status;
+    }
+
+    // 3. Fallback key propvendor_status
+    if ('' !== $meta_status) {
+        return $meta_status;
+    }
+
+    // 4. Default derivation from WordPress core post_status
+    switch ($post->post_status) {
+        case 'publish':
+            return 'Published';
+        case 'pending':
+            return 'Pending review';
+        case 'draft':
+            return 'Rejected';
+        case 'trash':
+            return 'Unavailable';
+        default:
+            return 'Unavailable';
+    }
+}
+
+/**
+ * Check if a listing is currently in the active pool.
+ *
+ * A listing consumes a slot when ALL of the following are true:
+ * - post_type is one of the three supported listing types (property_listing, land_listing, vehicle_listing).
+ * - post_status is EXACTLY 'publish' or 'pending'.
+ * - Canonical moderation status is NOT in: Rejected, Unavailable, Expired, Sold, Rented.
+ *
+ * Explicitly does NOT count: draft, auto-draft, future, private, trash, permanently deleted,
+ * or any listing with an inactive moderation marker.
+ *
+ * @param int $post_id
+ * @return bool
+ */
+function propvendor_marketplace_is_listing_active($post_id) {
+    $post_id = absint($post_id);
+    if ($post_id <= 0) {
+        return false;
+    }
+
+    $post = get_post($post_id);
+    if (!$post || !in_array($post->post_type, propvendor_marketplace_get_listing_post_types(), true)) {
+        return false;
+    }
+
+    if (!in_array($post->post_status, array('publish', 'pending'), true)) {
+        return false;
+    }
+
+    $canonical_status = propvendor_marketplace_get_canonical_listing_status($post_id);
+    $inactive_statuses = array('Rejected', 'Unavailable', 'Expired', 'Sold', 'Rented');
+
+    if (in_array($canonical_status, $inactive_statuses, true)) {
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Count active listings for a vendor across all supported post types.
+ *
+ * Uses in-request static cache to optimize repeated calls per request.
+ * Excludes listings that have any inactive status marker via NOT EXISTS.
+ *
+ * @param int $user_id
+ * @param int $exclude_post_id Optional post ID to exclude (e.g. during reactivation checks)
+ * @return int
+ */
+function propvendor_marketplace_get_vendor_active_listing_count($user_id, $exclude_post_id = 0) {
+    global $wpdb, $propvendor_listing_count_cache;
+
+    $user_id = absint($user_id);
+    if ($user_id <= 0) {
+        return 0;
+    }
+
+    if (!is_array($propvendor_listing_count_cache)) {
+        $propvendor_listing_count_cache = array();
+    }
+
+    $exclude_post_id = absint($exclude_post_id);
+    $cache_key = $user_id . ':' . $exclude_post_id;
+
+    if (isset($propvendor_listing_count_cache[$cache_key])) {
+        return (int) $propvendor_listing_count_cache[$cache_key];
+    }
+
+    $post_types = propvendor_marketplace_get_listing_post_types();
+    $type_placeholders = implode(', ', array_fill(0, count($post_types), '%s'));
+
+    $inactive_statuses = array('Rejected', 'Unavailable', 'Expired', 'Sold', 'Rented');
+    $inactive_placeholders = implode(', ', array_fill(0, count($inactive_statuses), '%s'));
+
+    $exclude_clause = '';
+    $params = array_merge(array($user_id), $post_types);
+
+    if ($exclude_post_id > 0) {
+        $exclude_clause = ' AND p.ID <> %d ';
+        $params[] = $exclude_post_id;
+    }
+
+    $params = array_merge($params, $inactive_statuses);
+
+    $sql = "SELECT COUNT(p.ID)
+            FROM {$wpdb->posts} p
+            WHERE p.post_author = %d
+              AND p.post_type IN ({$type_placeholders})
+              AND p.post_status IN ('publish', 'pending')
+              {$exclude_clause}
+              AND NOT EXISTS (
+                  SELECT 1 FROM {$wpdb->postmeta} pm
+                  WHERE pm.post_id = p.ID
+                    AND pm.meta_key IN ('propvendor_listing_status', 'propvendor_status')
+                    AND pm.meta_value IN ({$inactive_placeholders})
+              )";
+
+    $count = (int) $wpdb->get_var($wpdb->prepare($sql, $params));
+    $propvendor_listing_count_cache[$cache_key] = $count;
+
+    return $count;
+}
+
+/**
+ * Check if a vendor has active VIP listing privileges.
+ *
+ * Rules:
+ * - Administrators with manage_options bypass quota entirely.
+ * - propvendor_listing_plan must be 'vip'.
+ * - If expiry is empty/unset: VIP is valid (permanent admin choice).
+ * - If expiry is a valid future date: VIP valid.
+ * - If expiry is in the past: Expired (not VIP).
+ * - If expiry is malformed/unparseable: Fail closed as expired (not VIP) and error_log.
+ * - Timezone handling: compares against current_time('timestamp') in site timezone (WAT).
+ * - Date-only expiry (YYYY-MM-DD) is interpreted as 23:59:59 end-of-day site time.
+ * - Independent: never grants VIP from lead plan (premium/pro/unlocked).
+ *
+ * @param int $user_id
+ * @return bool
+ */
+function propvendor_marketplace_is_vendor_vip($user_id) {
+    $user_id = absint($user_id);
+    if ($user_id <= 0) {
+        return false;
+    }
+
+    if (user_can($user_id, 'manage_options')) {
+        return true;
+    }
+
+    $plan = strtolower(trim((string) get_user_meta($user_id, 'propvendor_listing_plan', true)));
+    if ('vip' !== $plan) {
+        return false;
+    }
+
+    $expires_at = get_user_meta($user_id, 'propvendor_plan_expires_at', true);
+    if ('' !== trim((string) $expires_at)) {
+        $expiry_str = trim((string) $expires_at);
+        $site_tz = wp_timezone();
+        $now_ts = current_time('timestamp');
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $expiry_str)) {
+            $dt = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $expiry_str . ' 23:59:59', $site_tz);
+            $expiry_ts = $dt ? $dt->getTimestamp() : false;
+        } elseif (is_numeric($expiry_str)) {
+            $expiry_ts = (int) $expiry_str;
+        } else {
+            try {
+                $dt = new DateTimeImmutable($expiry_str, $site_tz);
+                $expiry_ts = $dt->getTimestamp();
+            } catch (Exception $e) {
+                $expiry_ts = false;
+            }
+        }
+
+        if (false === $expiry_ts || $expiry_ts <= 0) {
+            error_log(sprintf('PropVendor: Malformed VIP plan expiry "%s" for user ID %d. Treated as expired.', $expiry_str, $user_id));
+            return false;
+        }
+
+        if ($now_ts > $expiry_ts) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Get listing plan status identifier for a vendor.
+ *
+ * @param int $user_id
+ * @return string 'vip' | 'expired_vip' | 'free'
+ */
+function propvendor_marketplace_get_vendor_listing_plan($user_id) {
+    $user_id = absint($user_id);
+    if ($user_id <= 0) {
+        return 'free';
+    }
+    if (user_can($user_id, 'manage_options')) {
+        return 'vip';
+    }
+    $raw_plan = strtolower(trim((string) get_user_meta($user_id, 'propvendor_listing_plan', true)));
+    if ('vip' !== $raw_plan) {
+        return 'free';
+    }
+    if (!propvendor_marketplace_is_vendor_vip($user_id)) {
+        return 'expired_vip';
+    }
+    return 'vip';
+}
+
+/**
+ * Check if a vendor can submit a new listing or reactivate an existing one.
+ *
+ * Evaluated against the listing owner (post_author).
+ * If the acting user has manage_options, bypasses quota entirely.
+ *
+ * @param int $owner_id User ID of listing owner
+ * @param int $existing_post_id Optional existing post ID (0 for new submission)
+ * @param int $acting_user_id Optional acting user ID (defaults to current logged-in user)
+ * @return bool
+ */
+function propvendor_marketplace_vendor_can_create_listing($owner_id, $existing_post_id = 0, $acting_user_id = 0) {
+    $owner_id = absint($owner_id);
+    if ($acting_user_id <= 0) {
+        $acting_user_id = get_current_user_id();
+    }
+
+    // Acting admin with manage_options bypasses quota entirely
+    if ($acting_user_id > 0 && user_can($acting_user_id, 'manage_options')) {
+        return true;
+    }
+
+    if ($owner_id <= 0) {
+        return false;
+    }
+
+    // Owner is admin or active VIP
+    if (propvendor_marketplace_is_vendor_vip($owner_id)) {
+        return true;
+    }
+
+    $limit = propvendor_marketplace_get_free_listing_limit();
+    $existing_post_id = absint($existing_post_id);
+
+    if ($existing_post_id > 0) {
+        // Editing an already active listing does NOT consume another slot
+        if (propvendor_marketplace_is_listing_active($existing_post_id)) {
+            return true;
+        }
+        // Reactivating an inactive listing: check if adding it would exceed the quota
+        $active_count = propvendor_marketplace_get_vendor_active_listing_count($owner_id, $existing_post_id);
+        return ($active_count < $limit);
+    }
+
+    // New listing creation
+    $active_count = propvendor_marketplace_get_vendor_active_listing_count($owner_id);
+    return ($active_count < $limit);
+}
+
+/**
+ * Render the vendor listing quota card for the vendor dashboard.
+ *
+ * @param int $user_id
+ * @return string HTML
+ */
+function propvendor_marketplace_render_vendor_quota_card($user_id) {
+    $user_id = absint($user_id);
+    if ($user_id <= 0) {
+        return '';
+    }
+
+    $limit = propvendor_marketplace_get_free_listing_limit();
+    $active_count = propvendor_marketplace_get_vendor_active_listing_count($user_id);
+    $is_vip = propvendor_marketplace_is_vendor_vip($user_id);
+    $plan_status = propvendor_marketplace_get_vendor_listing_plan($user_id);
+    $expires_at = get_user_meta($user_id, 'propvendor_plan_expires_at', true);
+
+    $plan_badge_text = __('Free Plan', 'propvendor-marketplace');
+    $plan_slug = 'free';
+    $expiry_notice = '';
+
+    if ('vip' === $plan_status) {
+        $plan_badge_text = __('VIP Vendor', 'propvendor-marketplace');
+        $plan_slug = 'vip';
+        if (!empty($expires_at)) {
+            $ts = is_numeric($expires_at) ? (int) $expires_at : strtotime($expires_at);
+            if ($ts > 0) {
+                $expiry_notice = sprintf(__('VIP Active (valid until %s)', 'propvendor-marketplace'), date_i18n('j F Y', $ts));
+            }
+        } else {
+            $expiry_notice = __('VIP Active (no expiry set)', 'propvendor-marketplace');
+        }
+    } elseif ('expired_vip' === $plan_status) {
+        $plan_badge_text = __('VIP Plan Expired', 'propvendor-marketplace');
+        $plan_slug = 'expired';
+        if (!empty($expires_at)) {
+            $ts = is_numeric($expires_at) ? (int) $expires_at : strtotime($expires_at);
+            if ($ts > 0) {
+                $expiry_notice = sprintf(__('VIP Expired on %s — Free limits now apply. Your existing listings remain live.', 'propvendor-marketplace'), date_i18n('j F Y', $ts));
+            }
+        }
+    }
+
+    $remaining_slots = max(0, $limit - $active_count);
+    $is_over_limit = (!$is_vip && $active_count > $limit);
+
+    if ($is_vip) {
+        $counter_text = sprintf(__('%d (Unlimited)', 'propvendor-marketplace'), $active_count);
+    } elseif ($is_over_limit) {
+        $counter_text = sprintf(__('%d of %d (over limit)', 'propvendor-marketplace'), $active_count, $limit);
+    } else {
+        $counter_text = sprintf(__('%d of %d', 'propvendor-marketplace'), $active_count, $limit);
+    }
+
+    $progress_pct = $is_vip ? 100 : min(100, round(($active_count / max(1, $limit)) * 100));
+
+    // Optional admin-configured upgrade destination / note
+    $upgrade_url = esc_url(get_option('propvendor_upgrade_info_url', ''));
+    $upgrade_msg = get_option('propvendor_upgrade_info_message', '');
+
+    $output = '<div class="propvendor-quota-card">';
+    $output .= '<div class="propvendor-quota-header">';
+    $output .= '<div class="propvendor-quota-title">';
+    $output .= '<span class="propvendor-quota-label">' . esc_html__('Listing Plan:', 'propvendor-marketplace') . '</span> ';
+    $output .= '<span class="propvendor-quota-badge propvendor-quota-badge-' . esc_attr($plan_slug) . '">' . esc_html($plan_badge_text) . '</span>';
+    $output .= '</div>';
+    if (!empty($expiry_notice)) {
+        $output .= '<div class="propvendor-quota-expiry">' . esc_html($expiry_notice) . '</div>';
+    }
+    $output .= '</div>';
+
+    $output .= '<div class="propvendor-quota-body">';
+    $output .= '<div class="propvendor-quota-stats">';
+    $output .= '<div class="propvendor-quota-stat-item">';
+    $output .= '<span class="propvendor-quota-stat-label">' . esc_html__('Active Listings:', 'propvendor-marketplace') . '</span> ';
+    $output .= '<strong class="propvendor-quota-stat-num">' . esc_html($counter_text) . '</strong>';
+    $output .= '</div>';
+    if (!$is_vip && !$is_over_limit) {
+        $output .= '<div class="propvendor-quota-stat-item">';
+        $output .= '<span class="propvendor-quota-stat-label">' . esc_html__('Remaining:', 'propvendor-marketplace') . '</span> ';
+        $output .= '<span class="propvendor-quota-stat-num">' . sprintf(_n('%d slot', '%d slots', $remaining_slots, 'propvendor-marketplace'), $remaining_slots) . '</span>';
+        $output .= '</div>';
+    }
+    $output .= '</div>';
+
+    if (!$is_vip) {
+        $is_full = ($active_count >= $limit);
+        $output .= '<div class="propvendor-quota-progress" role="progressbar" aria-valuenow="' . esc_attr((string) $active_count) . '" aria-valuemin="0" aria-valuemax="' . esc_attr((string) $limit) . '" aria-label="' . esc_attr__('Active listing quota usage', 'propvendor-marketplace') . '">';
+        $output .= '<div class="propvendor-quota-progress-bar' . ($is_full ? ' full' : '') . '" style="width: ' . esc_attr((string) $progress_pct) . '%;"></div>';
+        $output .= '</div>';
+    }
+    $output .= '</div>';
+
+    if ($is_over_limit) {
+        $output .= '<div class="propvendor-quota-alert propvendor-quota-alert-warning">';
+        $output .= sprintf(
+            esc_html__('Your account has %d active listings, which exceeds the free limit of %d. Existing listings remain safe and editable, but new listing submissions are blocked until your active count is below %d or you upgrade to a VIP plan.', 'propvendor-marketplace'),
+            $active_count,
+            $limit,
+            $limit
+        );
+        $output .= '</div>';
+    } elseif (!$is_vip && $active_count >= $limit) {
+        $output .= '<div class="propvendor-quota-alert propvendor-quota-alert-warning">';
+        $output .= sprintf(
+            esc_html__('Active listing limit reached (%d of %d). To create new listings, remove or mark an existing listing as sold or unavailable, or contact a marketplace administrator to upgrade to a VIP plan.', 'propvendor-marketplace'),
+            $active_count,
+            $limit
+        );
+        $output .= '</div>';
+    } elseif (!$is_vip) {
+        $output .= '<div class="propvendor-quota-info-note">';
+        if (!empty($upgrade_msg)) {
+            $output .= esc_html($upgrade_msg);
+        } else {
+            $output .= sprintf(
+                esc_html__('Free vendors may have up to %d active listings across Property, Land, and Vehicle categories. Need more listing slots? Contact an administrator to upgrade to a VIP plan for unlimited listings.', 'propvendor-marketplace'),
+                $limit
+            );
+        }
+        if (!empty($upgrade_url)) {
+            $output .= ' <a href="' . $upgrade_url . '" class="propvendor-btn-upgrade">' . esc_html__('Upgrade Information', 'propvendor-marketplace') . ' &rarr;</a>';
+        }
+        $output .= '</div>';
+    }
+
+    $output .= '</div>';
+    return $output;
+}
+
+/**
+ * =========================================================================
+ * DYNAMIC CATEGORY SCHEMAS & ATTRIBUTE HELPERS
+ * =========================================================================
+ */
+
+function propvendor_marketplace_get_property_subtypes() {
+    return array(
+        'Flat / Apartment',
+        'Detached House',
+        'Semi-Detached Duplex',
+        'Terraced Duplex',
+        'Maisonette',
+        'Bungalow',
+        'Penthouse',
+        'Commercial Space',
+        'Office',
+        'Shop',
+        'Warehouse',
+        'Other',
+    );
+}
+
+function propvendor_marketplace_get_property_purposes() {
+    return array(
+        'Sale',
+        'Rent',
+        'Short-Let',
+    );
+}
+
+function propvendor_marketplace_get_furnishing_options() {
+    return array(
+        'Furnished',
+        'Semi-Furnished',
+        'Unfurnished',
+    );
+}
+
+function propvendor_marketplace_get_title_documents() {
+    return array(
+        'Certificate of Occupancy (C of O)',
+        "Governor's Consent",
+        'Gazette',
+        'Deed of Assignment',
+        'Excision',
+        'Survey Plan',
+        'Court Judgment',
+        'Registered Conveyance',
+        'Other / In Process',
+    );
+}
+
+function propvendor_marketplace_get_land_uses() {
+    return array(
+        'Residential',
+        'Commercial',
+        'Industrial',
+        'Agricultural',
+        'Mixed Use',
+    );
+}
+
+function propvendor_marketplace_get_vehicle_subtypes() {
+    return array(
+        'Car / Sedan',
+        'SUV',
+        'Truck / Pickup',
+        'Van / Bus',
+        'Motorcycle',
+        'Commercial Vehicle',
+        'Other',
+    );
+}
+
+function propvendor_marketplace_get_vehicle_transmissions() {
+    return array(
+        'Automatic',
+        'Manual',
+        'CVT',
+    );
+}
+
+function propvendor_marketplace_get_vehicle_conditions() {
+    return array(
+        'Brand New',
+        'Foreign Used / Tokunbo',
+        'Nigerian Used',
+    );
+}
+
+function propvendor_marketplace_get_vehicle_fuel_types() {
+    return array(
+        'Petrol',
+        'Diesel',
+        'Hybrid',
+        'Electric',
+    );
+}
+
+/**
+ * Return allowlist of all 37 Nigerian States (including FCT - Abuja).
+ *
+ * @return string[]
+ */
+function propvendor_marketplace_get_nigerian_states() {
+    return array(
+        'Abia',
+        'Adamawa',
+        'Akwa Ibom',
+        'Anambra',
+        'Bauchi',
+        'Bayelsa',
+        'Benue',
+        'Borno',
+        'Cross River',
+        'Delta',
+        'Ebonyi',
+        'Edo',
+        'Ekiti',
+        'Enugu',
+        'FCT - Abuja',
+        'Gombe',
+        'Imo',
+        'Jigawa',
+        'Kaduna',
+        'Kano',
+        'Katsina',
+        'Kebbi',
+        'Kogi',
+        'Kwara',
+        'Lagos',
+        'Nasarawa',
+        'Niger',
+        'Ogun',
+        'Ondo',
+        'Osun',
+        'Oyo',
+        'Plateau',
+        'Rivers',
+        'Sokoto',
+        'Taraba',
+        'Yobe',
+        'Zamfara',
+    );
+}
+
+/**
+ * Normalize and match a state string to canonical Nigerian state allowlist.
+ *
+ * @param string $state
+ * @return string Canonical state name or empty string if not recognized.
+ */
+function propvendor_marketplace_normalize_nigerian_state($state) {
+    if (!is_string($state)) {
+        return '';
+    }
+    $trimmed = trim($state);
+    if ('' === $trimmed) {
+        return '';
+    }
+
+    $states = propvendor_marketplace_get_nigerian_states();
+    // 1. Direct case-insensitive match
+    foreach ($states as $s) {
+        if (0 === strcasecmp($s, $trimmed)) {
+            return $s;
+        }
+    }
+
+    // 2. Common aliases & abbreviations
+    $lower = strtolower($trimmed);
+    if ('abuja' === $lower || 'fct' === $lower || 'abuja fct' === $lower || 'fct abuja' === $lower || 'federal capital territory' === $lower) {
+        return 'FCT - Abuja';
+    }
+    if ('akwa ibom' === $lower || 'akwa-ibom' === $lower || 'akwaibom' === $lower) {
+        return 'Akwa Ibom';
+    }
+    if ('cross river' === $lower || 'cross-river' === $lower || 'crossriver' === $lower) {
+        return 'Cross River';
+    }
+
+    // Common legacy Nigerian cities to states
+    $city_map = array(
+        'ikeja'           => 'Lagos',
+        'lekki'           => 'Lagos',
+        'victoria island' => 'Lagos',
+        'ikoyi'           => 'Lagos',
+        'yaba'            => 'Lagos',
+        'surulere'        => 'Lagos',
+        'ibadan'          => 'Oyo',
+        'abeokuta'        => 'Ogun',
+        'port harcourt'   => 'Rivers',
+        'calabar'         => 'Cross River',
+        'warri'           => 'Delta',
+        'asaba'           => 'Delta',
+        'benin city'      => 'Edo',
+        'ilorin'          => 'Kwara',
+        'owerri'          => 'Imo',
+        'uyo'             => 'Akwa Ibom',
+        'maiduguri'       => 'Borno',
+    );
+    if (isset($city_map[$lower])) {
+        return $city_map[$lower];
+    }
+
+    // 3. Substring / legacy address match (e.g., "Ikeja, Lagos", "Ilorin, Kwara State")
+    foreach ($states as $s) {
+        if ('FCT - Abuja' === $s) {
+            if (preg_match('/\b(abuja|fct)\b/i', $lower)) {
+                return 'FCT - Abuja';
+            }
+        } else {
+            $s_esc = preg_quote($s, '/');
+            if (preg_match('/\b' . $s_esc . '\b/i', $lower)) {
+                return $s;
+            }
+        }
+    }
+
+    return '';
+}
+
+/**
+ * Return allowed plot size units with canonical keys and human-readable labels.
+ *
+ * @return array<string, string>
+ */
+function propvendor_marketplace_get_plot_size_units() {
+    return array(
+        'sqm'      => 'Sqm (Square Meters)',
+        'plots'    => 'Plots',
+        'acres'    => 'Acres',
+        'hectares' => 'Hectares',
+        'sqft'     => 'Sqft (Square Feet)',
+    );
+}
+
+/**
+ * Normalize a plot size unit input to canonical unit key.
+ *
+ * @param string $unit
+ * @return string
+ */
+function propvendor_marketplace_normalize_plot_size_unit($unit) {
+    if (!is_string($unit)) {
+        return '';
+    }
+    $trimmed = strtolower(trim($unit));
+    $units = propvendor_marketplace_get_plot_size_units();
+    if (isset($units[$trimmed])) {
+        return $trimmed;
+    }
+    foreach ($units as $key => $label) {
+        if (strtolower($label) === $trimmed || 0 === strcasecmp($label, $unit)) {
+            return $key;
+        }
+    }
+    if (strpos($trimmed, 'sqm') !== false || strpos($trimmed, 'square meter') !== false || strpos($trimmed, 'm²') !== false) {
+        return 'sqm';
+    }
+    if (strpos($trimmed, 'plot') !== false) {
+        return 'plots';
+    }
+    if (strpos($trimmed, 'acre') !== false) {
+        return 'acres';
+    }
+    if (strpos($trimmed, 'hectare') !== false) {
+        return 'hectares';
+    }
+    if (strpos($trimmed, 'sqft') !== false || strpos($trimmed, 'square feet') !== false || strpos($trimmed, 'ft²') !== false) {
+        return 'sqft';
+    }
+    return '';
+}
+
+/**
+ * Get display label for a plot size unit.
+ *
+ * @param string $unit
+ * @return string
+ */
+function propvendor_marketplace_get_plot_size_unit_label($unit) {
+    $normalized = propvendor_marketplace_normalize_plot_size_unit($unit);
+    $units = propvendor_marketplace_get_plot_size_units();
+    return $units[$normalized] ?? $unit;
+}
+
+/**
+ * Return allowed category-specific meta keys for a listing post type.
+ *
+ * @param string $listing_type
+ * @return string[]
+ */
+function propvendor_marketplace_get_category_meta_keys($listing_type) {
+    switch ($listing_type) {
+        case 'property_listing':
+            return array(
+                'propvendor_property_subtype',
+                'propvendor_purpose',
+                'propvendor_bedrooms',
+                'propvendor_bathrooms',
+                'propvendor_furnishing',
+                'propvendor_title_document',
+                'propvendor_floor_area',
+                'propvendor_floor_area_unit',
+                'propvendor_plot_size',
+                'propvendor_plot_size_unit',
+            );
+        case 'land_listing':
+            return array(
+                'propvendor_plot_size',
+                'propvendor_plot_size_unit',
+                'propvendor_land_use',
+                'propvendor_title_document',
+                'propvendor_land_length',
+                'propvendor_land_width',
+                'propvendor_dimension_unit',
+                'propvendor_frontage',
+            );
+        case 'vehicle_listing':
+            return array(
+                'propvendor_vehicle_subtype',
+                'propvendor_vehicle_make',
+                'propvendor_vehicle_model',
+                'propvendor_vehicle_year',
+                'propvendor_condition',
+                'propvendor_transmission',
+                'propvendor_mileage',
+                'propvendor_fuel_type',
+                'propvendor_engine_size',
+            );
+        default:
+            return array();
+    }
+}
+
+/**
+ * Return all category-specific meta keys across all listing types.
+ *
+ * @return string[]
+ */
+function propvendor_marketplace_get_all_category_meta_keys() {
+    $keys = array_merge(
+        propvendor_marketplace_get_category_meta_keys('property_listing'),
+        propvendor_marketplace_get_category_meta_keys('land_listing'),
+        propvendor_marketplace_get_category_meta_keys('vehicle_listing')
+    );
+    return array_values(array_unique($keys));
+}
+
+
 function propvendor_marketplace_register_role() {
     $vendor_caps = array(
         'read' => true,
@@ -365,7 +1190,14 @@ function propvendor_marketplace_enqueue_assets() {
         'propvendor-marketplace',
         plugins_url('assets/css/front-end.css', __FILE__),
         array(),
-        '0.4.0'
+        '0.5.0'
+    );
+    wp_enqueue_script(
+        'propvendor-marketplace-frontend',
+        plugins_url('assets/js/front-end.js', __FILE__),
+        array(),
+        '0.5.0',
+        true
     );
 }
 add_action('wp_enqueue_scripts', 'propvendor_marketplace_enqueue_assets');
@@ -576,7 +1408,28 @@ function propvendor_marketplace_get_listing_for_attachment($attachment_id) {
         )
     );
 
-    return !empty($listing_ids) ? get_post($listing_ids[0]) : null;
+    if (!empty($listing_ids)) {
+        return get_post($listing_ids[0]);
+    }
+
+    $gallery_listings = get_posts(
+        array(
+            'post_type' => propvendor_marketplace_get_listing_post_types(),
+            'post_status' => array('publish', 'pending', 'draft', 'private', 'trash'),
+            'posts_per_page' => 1,
+            'fields' => 'ids',
+            'meta_query' => array(
+                array(
+                    'key' => '_propvendor_gallery_image_ids',
+                    'value' => (string) $attachment->ID,
+                    'compare' => 'LIKE',
+                ),
+            ),
+            'no_found_rows' => true,
+        )
+    );
+
+    return !empty($gallery_listings) ? get_post($gallery_listings[0]) : null;
 }
 
 function propvendor_marketplace_get_private_listing_image_root() {
@@ -848,6 +1701,26 @@ function propvendor_marketplace_listings_query($count = 6) {
     return $query->posts;
 }
 
+/**
+ * Render Universal Anti-Advance-Fee Trust & Safety Notice.
+ *
+ * @return string HTML
+ */
+function propvendor_marketplace_render_anti_fraud_notice() {
+    $notice_text = '⚠️ Never pay inspection fees, commitment fees, or transport money before seeing this vehicle or property in person. PropVendor will never ask you to transfer money to an agent beforehand.';
+    return '<div class="propvendor-safety-notice-card" style="margin: 1.25rem 0; padding: 1rem 1.25rem; background: #fff8e6; border: 1px solid #ffd591; border-left: 4px solid #fa8c16; border-radius: 6px; color: #873800; font-size: 0.92rem; line-height: 1.5; font-weight: 500;">' . esc_html($notice_text) . '</div>';
+}
+
+/**
+ * Render Vehicle Purchase CMRIS & Customs Legal Notice.
+ *
+ * @return string HTML
+ */
+function propvendor_marketplace_render_vehicle_legal_notice() {
+    $notice_text = '⚠️ Vehicle Purchase Notice: PropVendor is an advertising platform. Buyers are strongly advised to independently verify the VIN (Chassis Number) with the Nigeria Police Central Motor Registry (CMRIS), confirm plate registration with FRSC, and demand genuine Nigeria Customs duty clearance before purchase.';
+    return '<div class="propvendor-vehicle-legal-notice-card" style="margin: 1.25rem 0; padding: 1rem 1.25rem; background: #f0f5ff; border: 1px solid #adc6ff; border-left: 4px solid #2f54eb; border-radius: 6px; color: #10239e; font-size: 0.92rem; line-height: 1.5; font-weight: 500;">' . esc_html($notice_text) . '</div>';
+}
+
 function propvendor_marketplace_render_listing_cards($listings, $title = 'Listings') {
     if (empty($listings)) {
         return '<p class="propvendor-empty">No listings are available to display right now.</p>';
@@ -874,11 +1747,17 @@ function propvendor_marketplace_render_listing_cards($listings, $title = 'Listin
             }
         }
 
+        $is_direct_owner = get_post_meta($listing->ID, '_propvendor_is_direct_owner', true);
+        $direct_owner_status = get_post_meta($listing->ID, '_propvendor_direct_owner_status', true);
+
         $output .= '<article class="propvendor-card">';
         if ($image) {
             $output .= '<a class="propvendor-card-image-link" href="' . esc_url(get_permalink($listing)) . '" aria-label="' . esc_attr(sprintf('View details for %s', get_the_title($listing))) . '">' . $image . '</a>';
         }
         $output .= '<div class="propvendor-badge">' . esc_html($type_label[$post_type] ?? 'Listing') . '</div>';
+        if ('1' === (string) $is_direct_owner && 'approved' === (string) $direct_owner_status) {
+            $output .= '<div class="propvendor-badge propvendor-badge-direct-owner" style="background: #0a8a4f; color: #fff; font-weight: 600;">Direct from Owner — Zero Agent Fee</div>';
+        }
         if (!empty($category_labels)) {
             $output .= '<p class="propvendor-card-category">' . esc_html(implode(', ', $category_labels)) . '</p>';
         }
@@ -921,59 +1800,142 @@ function propvendor_marketplace_render_listing_details($content) {
     }
 
     $location = get_post_meta($post->ID, 'propvendor_location', true);
+    $full_address = get_post_meta($post->ID, 'propvendor_full_address', true);
     $price = get_post_meta($post->ID, 'propvendor_price', true);
     $details = array(
         'Listing type' => $type_label,
         'Category' => !empty($category_names) ? implode(', ', $category_names) : '',
-        'Location' => $location,
-        'Price' => is_numeric($price) && (float) $price > 0 ? '₦ ' . number_format((float) $price, 2) : 'Price on request',
+        'State' => $location,
     );
+    if (!empty($full_address)) {
+        $details['Address'] = $full_address;
+    }
+    $details['Price'] = is_numeric($price) && (float) $price > 0 ? '₦ ' . number_format((float) $price, 2) : 'Price on request';
 
     if ('property_listing' === $post->post_type) {
+        $subtype = get_post_meta($post->ID, 'propvendor_property_subtype', true);
+        if ($subtype) {
+            $details['Property type'] = $subtype;
+        }
+        $purpose = get_post_meta($post->ID, 'propvendor_purpose', true);
+        if ($purpose) {
+            $details['Purpose'] = $purpose;
+        }
         $bedrooms = get_post_meta($post->ID, 'propvendor_bedrooms', true);
         $bathrooms = get_post_meta($post->ID, 'propvendor_bathrooms', true);
-        if ('' !== $bedrooms) {
+        if ('' !== $bedrooms && null !== $bedrooms) {
             $details['Bedrooms'] = absint($bedrooms);
         }
-        if ('' !== $bathrooms) {
+        if ('' !== $bathrooms && null !== $bathrooms) {
             $details['Bathrooms'] = absint($bathrooms);
         }
-    } elseif ('land_listing' === $post->post_type) {
+        $furnishing = get_post_meta($post->ID, 'propvendor_furnishing', true);
+        if ($furnishing) {
+            $details['Furnishing'] = $furnishing;
+        }
+        $floor_area = get_post_meta($post->ID, 'propvendor_floor_area', true);
+        $floor_area_unit = get_post_meta($post->ID, 'propvendor_floor_area_unit', true) ?: 'sqm';
+        if ($floor_area) {
+            $details['Floor area'] = esc_html($floor_area . ' ' . $floor_area_unit);
+        }
         $plot_size = get_post_meta($post->ID, 'propvendor_plot_size', true);
-        if ('' !== $plot_size) {
-            $details['Land size'] = $plot_size;
+        $plot_size_unit = get_post_meta($post->ID, 'propvendor_plot_size_unit', true);
+        if ($plot_size) {
+            $unit_label = propvendor_marketplace_get_plot_size_unit_label($plot_size_unit);
+            $details['Plot size'] = esc_html($plot_size . ($unit_label ? ' ' . $unit_label : ''));
+        }
+        $title_doc = get_post_meta($post->ID, 'propvendor_title_document', true);
+        if ($title_doc) {
+            $details['Title document'] = $title_doc;
+        }
+    } elseif ('land_listing' === $post->post_type) {
+        $land_use = get_post_meta($post->ID, 'propvendor_land_use', true);
+        if ($land_use) {
+            $details['Land use'] = $land_use;
+        }
+        $plot_size = get_post_meta($post->ID, 'propvendor_plot_size', true);
+        $plot_size_unit = get_post_meta($post->ID, 'propvendor_plot_size_unit', true);
+        if ('' !== $plot_size && null !== $plot_size) {
+            $unit_label = propvendor_marketplace_get_plot_size_unit_label($plot_size_unit);
+            $details['Land size'] = esc_html($plot_size . ($unit_label ? ' ' . $unit_label : ''));
+        }
+        $length = get_post_meta($post->ID, 'propvendor_land_length', true);
+        $width = get_post_meta($post->ID, 'propvendor_land_width', true);
+        $dim_unit = get_post_meta($post->ID, 'propvendor_dimension_unit', true) ?: 'm';
+        if ($length || $width) {
+            $details['Dimensions'] = esc_html(($length ?: '-') . ' x ' . ($width ?: '-') . ' ' . $dim_unit);
+        }
+        $frontage = get_post_meta($post->ID, 'propvendor_frontage', true);
+        if ($frontage) {
+            $details['Road frontage'] = $frontage;
+        }
+        $title_doc = get_post_meta($post->ID, 'propvendor_title_document', true);
+        if ($title_doc) {
+            $details['Title document'] = $title_doc;
         }
     } elseif ('vehicle_listing' === $post->post_type) {
+        $veh_subtype = get_post_meta($post->ID, 'propvendor_vehicle_subtype', true);
+        if ($veh_subtype) {
+            $details['Vehicle type'] = $veh_subtype;
+        }
+        $make = get_post_meta($post->ID, 'propvendor_vehicle_make', true);
+        $model = get_post_meta($post->ID, 'propvendor_vehicle_model', true);
+        if ($make || $model) {
+            $details['Make / Model'] = trim($make . ' ' . $model);
+        }
+        $year = get_post_meta($post->ID, 'propvendor_vehicle_year', true);
+        if ($year) {
+            $details['Year'] = absint($year);
+        }
         $condition = get_post_meta($post->ID, 'propvendor_condition', true);
-        if ('' !== $condition) {
+        if ('' !== $condition && null !== $condition) {
             $details['Condition'] = $condition;
         }
+        $trans = get_post_meta($post->ID, 'propvendor_transmission', true);
+        if ($trans) {
+            $details['Transmission'] = $trans;
+        }
+        $mileage = get_post_meta($post->ID, 'propvendor_mileage', true);
+        if ('' !== $mileage && null !== $mileage) {
+            $details['Mileage'] = number_format(absint($mileage)) . ' km';
+        }
+        $fuel = get_post_meta($post->ID, 'propvendor_fuel_type', true);
+        if ($fuel) {
+            $details['Fuel type'] = $fuel;
+        }
+        $engine = get_post_meta($post->ID, 'propvendor_engine_size', true);
+        if ($engine) {
+            $details['Engine size'] = $engine;
+        }
+    }
+
+    $is_direct_owner = get_post_meta($post->ID, '_propvendor_is_direct_owner', true);
+    $direct_owner_status = get_post_meta($post->ID, '_propvendor_direct_owner_status', true);
+    $has_owner_direct_badge = ('1' === (string) $is_direct_owner && 'approved' === (string) $direct_owner_status);
+
+    if ($has_owner_direct_badge) {
+        $details['Ownership'] = 'Direct from Owner — Zero Agent Fee';
     }
 
     $output = '<section class="propvendor-listing-detail" aria-label="' . esc_attr($type_label . ' listing details') . '">';
     $output .= '<div class="propvendor-detail-top"><a class="propvendor-detail-back" href="' . esc_url(home_url('/browse-listings/')) . '">&larr; Browse Listings</a></div>';
+
+    if ($has_owner_direct_badge) {
+        $output .= '<div class="propvendor-detail-owner-badge" style="margin: 0.5rem 0 1rem 0;"><span class="propvendor-badge propvendor-badge-direct-owner" style="display: inline-block; padding: 6px 14px; background: #0a8a4f; color: #fff; font-size: 0.95rem; font-weight: 700; border-radius: 4px;">Direct from Owner — Zero Agent Fee</span></div>';
+    }
+
+    // Stage 2: Universal Anti-Advance-Fee Trust & Safety Notice
+    $output .= propvendor_marketplace_render_anti_fraud_notice();
+
+    // Stage 2: Vehicle-Specific CMRIS & Customs Legal Notice
+    if ('vehicle_listing' === $post->post_type) {
+        $output .= propvendor_marketplace_render_vehicle_legal_notice();
+    }
+
     $output .= '<div class="propvendor-detail-layout"><div class="propvendor-detail-main">';
 
-    $image_ids = array();
-    $thumbnail_id = get_post_thumbnail_id($post->ID);
-    if ($thumbnail_id) {
-        $image_ids[] = $thumbnail_id;
-    }
-    $attached_images = get_posts(
-        array(
-            'post_parent' => $post->ID,
-            'post_type' => 'attachment',
-            'post_status' => 'inherit',
-            'post_mime_type' => 'image',
-            'posts_per_page' => 12,
-            'orderby' => 'menu_order ID',
-            'order' => 'ASC',
-            'fields' => 'ids',
-            'exclude' => $image_ids,
-            'no_found_rows' => true,
-        )
-    );
-    $image_ids = array_merge($image_ids, $attached_images);
+    $image_ids = propvendor_marketplace_get_listing_image_ids($post->ID);
+
 
     $output .= '<div class="propvendor-detail-gallery">';
     if (!empty($image_ids)) {
@@ -1300,37 +2262,294 @@ function propvendor_marketplace_submit_listing_form_shortcode() {
 
     $notice = propvendor_marketplace_get_notice_message();
     $listing = null;
-    $edit_id = isset($_GET['propvendor_edit_listing']) ? absint($_GET['propvendor_edit_listing']) : 0;
+    $edit_id = 0;
+    foreach (array('propvendor_edit_listing', 'edit_listing', 'listing_id', 'edit') as $param) {
+        if (isset($_GET[$param]) && absint($_GET[$param]) > 0) {
+            $edit_id = absint($_GET[$param]);
+            break;
+        }
+    }
     if ($edit_id) {
         $listing = get_post($edit_id);
-        if ($listing && (int) $listing->post_author !== get_current_user_id()) {
+        if ($listing && (int) $listing->post_author !== get_current_user_id() && !current_user_can('manage_options')) {
             $listing = null;
         }
+    }
+
+    $current_user_id = get_current_user_id();
+
+    // Stage 3 Quota Check:
+    $free_limit = propvendor_marketplace_get_free_listing_limit();
+    if (!$listing && !propvendor_marketplace_vendor_can_create_listing($current_user_id, 0)) {
+        $active_count = propvendor_marketplace_get_vendor_active_listing_count($current_user_id);
+        $dash_url = home_url('/vendor-dashboard/');
+        return '<div class="propvendor-form-box propvendor-quota-exceeded-box">'
+            . '<h3>Listing Quota Reached</h3>'
+            . '<p>Free vendor accounts are limited to a maximum of <strong>' . absint($free_limit) . ' active listings</strong> across Property, Land, and Vehicle categories.</p>'
+            . '<p>You currently have <strong>' . absint($active_count) . ' of ' . absint($free_limit) . '</strong> active listings in your account (published or awaiting review).</p>'
+            . '<p>To publish a new listing, remove or mark an existing listing as sold or unavailable from your <a href="' . esc_url($dash_url) . '">Vendor Dashboard</a>.</p>'
+            . '<p class="propvendor-field-hint" style="margin-top: 15px;">To list unlimited properties, lands, and vehicles without quota restrictions, contact our marketplace administrators to upgrade your account to a VIP plan.</p>'
+            . '<div style="margin-top: 20px;"><a href="' . esc_url($dash_url) . '" class="button button-primary" style="display:inline-block; padding:10px 20px; background:#2563eb; color:#fff; text-decoration:none; border-radius:4px; font-weight:600;">Return to Vendor Dashboard</a></div>'
+            . '</div>';
+    }
+
+    $listing_owner_id = $listing ? (int) $listing->post_author : $current_user_id;
+    if ($listing && !propvendor_marketplace_vendor_can_create_listing($listing_owner_id, $listing->ID, $current_user_id)) {
+        $active_count = propvendor_marketplace_get_vendor_active_listing_count($listing_owner_id, $listing->ID);
+        $notice .= '<div class="propvendor-quota-alert propvendor-quota-alert-warning" style="margin-bottom: 20px;">'
+            . sprintf(
+                esc_html__('Notice: This listing is currently inactive. Updating it will submit it for review and attempt to return it to your active listing pool, but your account is at or over the free active listing limit (%d of %d active). To reactivate this listing upon submission, first remove or mark another listing as sold or unavailable, or contact an administrator to upgrade to a VIP plan.', 'propvendor-marketplace'),
+                $active_count,
+                $free_limit
+            )
+            . '</div>';
     }
 
     $form_title = $listing ? 'Edit listing' : 'Submit a listing';
     $action = $listing ? 'propvendor_update_listing' : 'propvendor_submit_listing';
     $hidden_id = $listing ? '<input type="hidden" name="propvendor_listing_id" value="' . esc_attr((string) $listing->ID) . '" />' : '';
     $type_value = $listing ? get_post_type($listing) : 'property_listing';
-    $title_value = $listing ? get_the_title($listing) : '';
+    $title_value = $listing ? (!empty($listing->post_title) ? $listing->post_title : get_the_title($listing->ID)) : '';
     $price_value = $listing ? get_post_meta($listing->ID, 'propvendor_price', true) : '';
     $location_value = $listing ? get_post_meta($listing->ID, 'propvendor_location', true) : '';
+    $full_address_value = $listing ? get_post_meta($listing->ID, 'propvendor_full_address', true) : '';
+    $selected_state = propvendor_marketplace_normalize_nigerian_state($location_value);
+    $has_unmatched_legacy_location = ($listing && !empty($location_value) && empty($selected_state));
     $description_value = $listing ? $listing->post_content : '';
-    $bedrooms_value = $listing ? get_post_meta($listing->ID, 'propvendor_bedrooms', true) : '';
-    $bathrooms_value = $listing ? get_post_meta($listing->ID, 'propvendor_bathrooms', true) : '';
-    $condition_value = $listing ? get_post_meta($listing->ID, 'propvendor_condition', true) : '';
-    $plot_size_value = $listing ? get_post_meta($listing->ID, 'propvendor_plot_size', true) : '';
+    $is_direct_owner_value = $listing ? get_post_meta($listing->ID, '_propvendor_is_direct_owner', true) : '0';
+
+    // Property fields
+    $property_subtype_val = $listing ? get_post_meta($listing->ID, 'propvendor_property_subtype', true) : '';
+    $purpose_val          = $listing ? get_post_meta($listing->ID, 'propvendor_purpose', true) : 'Sale';
+    $bedrooms_val         = $listing ? get_post_meta($listing->ID, 'propvendor_bedrooms', true) : '';
+    $bathrooms_val        = $listing ? get_post_meta($listing->ID, 'propvendor_bathrooms', true) : '';
+    $furnishing_val       = $listing ? get_post_meta($listing->ID, 'propvendor_furnishing', true) : '';
+    $prop_title_doc_val   = $listing ? get_post_meta($listing->ID, 'propvendor_title_document', true) : '';
+    $floor_area_val       = $listing ? get_post_meta($listing->ID, 'propvendor_floor_area', true) : '';
+    $floor_area_unit_val  = $listing ? (get_post_meta($listing->ID, 'propvendor_floor_area_unit', true) ?: 'sqm') : 'sqm';
+    $prop_plot_size_val   = $listing ? get_post_meta($listing->ID, 'propvendor_plot_size', true) : '';
+    $prop_plot_unit_val   = $listing ? (get_post_meta($listing->ID, 'propvendor_plot_size_unit', true) ?: 'sqm') : 'sqm';
+
+    // Land fields
+    $land_use_val         = $listing ? get_post_meta($listing->ID, 'propvendor_land_use', true) : '';
+    $land_plot_size_val   = $listing ? get_post_meta($listing->ID, 'propvendor_plot_size', true) : '';
+    $land_plot_unit_val   = $listing ? (get_post_meta($listing->ID, 'propvendor_plot_size_unit', true) ?: 'plots') : 'plots';
+    $land_title_doc_val   = $listing ? get_post_meta($listing->ID, 'propvendor_title_document', true) : '';
+    $land_length_val      = $listing ? get_post_meta($listing->ID, 'propvendor_land_length', true) : '';
+    $land_width_val       = $listing ? get_post_meta($listing->ID, 'propvendor_land_width', true) : '';
+    $land_dim_unit_val    = $listing ? (get_post_meta($listing->ID, 'propvendor_dimension_unit', true) ?: 'm') : 'm';
+    $land_frontage_val    = $listing ? get_post_meta($listing->ID, 'propvendor_frontage', true) : '';
+
+    // Vehicle fields
+    $veh_subtype_val      = $listing ? get_post_meta($listing->ID, 'propvendor_vehicle_subtype', true) : '';
+    $veh_make_val         = $listing ? get_post_meta($listing->ID, 'propvendor_vehicle_make', true) : '';
+    $veh_model_val        = $listing ? get_post_meta($listing->ID, 'propvendor_vehicle_model', true) : '';
+    $veh_year_val         = $listing ? get_post_meta($listing->ID, 'propvendor_vehicle_year', true) : '';
+    $veh_condition_val    = $listing ? get_post_meta($listing->ID, 'propvendor_condition', true) : '';
+    $veh_trans_val        = $listing ? get_post_meta($listing->ID, 'propvendor_transmission', true) : '';
+    $veh_mileage_val      = $listing ? get_post_meta($listing->ID, 'propvendor_mileage', true) : '';
+    $veh_fuel_val         = $listing ? get_post_meta($listing->ID, 'propvendor_fuel_type', true) : '';
+    $veh_engine_val       = $listing ? get_post_meta($listing->ID, 'propvendor_engine_size', true) : '';
+
+    // Existing images
+    $existing_images = $listing ? propvendor_marketplace_get_listing_image_ids($listing->ID) : array();
+    $thumbnail_id = $listing ? absint(get_post_thumbnail_id($listing->ID)) : 0;
 
     $fields = '<div class="propvendor-form-box"><h3>' . esc_html($form_title) . '</h3>' . $notice . '<form class="propvendor-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '" enctype="multipart/form-data">';
     $fields .= '<input type="hidden" name="action" value="' . esc_attr($action) . '" />';
     $fields .= wp_nonce_field('propvendor_listing_nonce', 'propvendor_listing_nonce', true, false);
     $fields .= $hidden_id;
-    $fields .= '<div class="propvendor-form-grid"><label>Listing Type<select name="propvendor_listing_type"><option value="property_listing" ' . selected($type_value, 'property_listing', false) . '>Property</option><option value="land_listing" ' . selected($type_value, 'land_listing', false) . '>Land</option><option value="vehicle_listing" ' . selected($type_value, 'vehicle_listing', false) . '>Vehicle</option></select></label><label>Listing Title<input type="text" name="propvendor_title" value="' . esc_attr($title_value) . '" required /></label></div>';
-    $fields .= '<div class="propvendor-form-grid"><label>Price (NGN)<input type="number" name="propvendor_price" value="' . esc_attr((string) $price_value) . '" min="0" step="1000" required /></label><label>Location<input type="text" name="propvendor_location" value="' . esc_attr($location_value) . '" required /></label></div>';
-    $fields .= '<div class="propvendor-form-grid"><label>Bedrooms<input type="number" name="propvendor_bedrooms" min="0" value="' . esc_attr((string) $bedrooms_value) . '" /></label><label>Bathrooms<input type="number" name="propvendor_bathrooms" min="0" value="' . esc_attr((string) $bathrooms_value) . '" /></label></div>';
-    $fields .= '<div class="propvendor-form-grid"><label>Condition<input type="text" name="propvendor_condition" value="' . esc_attr($condition_value) . '" /></label><label>Plot Size<input type="text" name="propvendor_plot_size" value="' . esc_attr($plot_size_value) . '" /></label></div>';
-    $fields .= '<label>Listing Details<textarea name="propvendor_description" rows="6" required>' . esc_textarea($description_value) . '</textarea></label>';
-    $fields .= '<label>Primary Listing Image<input type="file" name="propvendor_listing_image" ' . ($listing ? '' : 'required') . ' accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" /></label>';
+
+    // Common fields: Listing Type & Title
+    $title_placeholder = 'e.g., Luxury 4 Bedroom Detached Duplex with Swimming Pool';
+    if ('land_listing' === $type_value) {
+        $title_placeholder = 'e.g., 2 Plots of Dry Commercial Land along Express Road';
+    } elseif ('vehicle_listing' === $type_value) {
+        $title_placeholder = 'e.g., Clean Tokunbo 2020 Toyota Camry XLE';
+    }
+
+    $fields .= '<div class="propvendor-form-grid"><label>Listing Type<select name="propvendor_listing_type">';
+    $fields .= '<option value="property_listing" ' . selected($type_value, 'property_listing', false) . '>Property</option>';
+    $fields .= '<option value="land_listing" ' . selected($type_value, 'land_listing', false) . '>Land</option>';
+    $fields .= '<option value="vehicle_listing" ' . selected($type_value, 'vehicle_listing', false) . '>Vehicle</option>';
+    $fields .= '</select></label><label>Listing Title<span class="propvendor-field-hint">Give your listing a clear, descriptive heading</span><input type="text" name="propvendor_title" value="' . esc_attr($title_value) . '" placeholder="' . esc_attr($title_placeholder) . '" required /></label></div>';
+
+    // Common fields: Price & State
+    $fields .= '<div class="propvendor-form-grid"><label>Price (NGN)<input type="number" name="propvendor_price" value="' . esc_attr((string) $price_value) . '" min="0" step="1000" placeholder="e.g., 45000000" required /></label>';
+    $fields .= '<label for="propvendor_location">State<select name="propvendor_location" id="propvendor_location" required>';
+    $fields .= '<option value="">Select State</option>';
+    if ($has_unmatched_legacy_location) {
+        $fields .= '<option value="" disabled selected>-- Select State (Legacy: ' . esc_html($location_value) . ') --</option>';
+    }
+    foreach (propvendor_marketplace_get_nigerian_states() as $st) {
+        $fields .= '<option value="' . esc_attr($st) . '" ' . selected($selected_state, $st, false) . '>' . esc_html($st) . '</option>';
+    }
+    $fields .= '</select>';
+    if ($has_unmatched_legacy_location) {
+        $fields .= '<span class="propvendor-legacy-warning" style="display:block; color:#b7791f; font-size:0.85rem; margin-top:4px;">Legacy location "' . esc_html($location_value) . '" must be updated to a recognized Nigerian State before saving.</span>';
+    }
+    $fields .= '</label></div>';
+
+    // Common fields: Full Address / Specific Location
+    $address_required = ('vehicle_listing' === $type_value) ? '' : 'required';
+    $address_label = ('vehicle_listing' === $type_value) ? 'Specific Location / Landmark' : 'Full Address';
+    $address_placeholder = ('vehicle_listing' === $type_value) ? 'e.g., Victoria Island, Lagos (or specific showroom/landmark)' : 'e.g., House 14, Admiralty Way, Lekki Phase 1';
+    $address_req_star = ('vehicle_listing' === $type_value) ? 'style="display:none;"' : '';
+    $fields .= '<div class="propvendor-form-row" style="margin-bottom: 1rem;"><label for="propvendor_full_address" id="propvendor_full_address_label"><span class="propvendor-address-label-text">' . esc_html($address_label) . '</span><span class="propvendor-address-required-mark" style="color:#d9363e;" ' . $address_req_star . '> *</span><span class="propvendor-field-hint">Street, area, estate, or landmark details</span><input type="text" id="propvendor_full_address" name="propvendor_full_address" value="' . esc_attr($full_address_value) . '" maxlength="255" placeholder="' . esc_attr($address_placeholder) . '" ' . $address_required . ' /></label></div>';
+
+    // 1. PROPERTY FIELDS CONTAINER
+    $prop_display = ('property_listing' === $type_value) ? 'block' : 'none';
+    $prop_disabled = ('property_listing' === $type_value) ? '' : ' disabled';
+    $fields .= '<div class="propvendor-category-fields" id="propvendor-fields-property" style="display: ' . $prop_display . ';">';
+    $fields .= '<h4>Property Details</h4>';
+    $fields .= '<div class="propvendor-form-grid-3">';
+    $fields .= '<label>Property Subtype<select name="propvendor_property_subtype"' . $prop_disabled . '><option value="">Select Property Subtype</option>';
+    foreach (propvendor_marketplace_get_property_subtypes() as $opt) {
+        $fields .= '<option value="' . esc_attr($opt) . '" ' . selected($property_subtype_val, $opt, false) . '>' . esc_html($opt) . '</option>';
+    }
+    $fields .= '</select></label>';
+    $fields .= '<label>Purpose<select name="propvendor_purpose"' . $prop_disabled . '>';
+    foreach (propvendor_marketplace_get_property_purposes() as $opt) {
+        $fields .= '<option value="' . esc_attr($opt) . '" ' . selected($purpose_val, $opt, false) . '>' . esc_html($opt) . '</option>';
+    }
+    $fields .= '</select></label>';
+    $fields .= '<label>Bedrooms<input type="number" name="propvendor_bedrooms" min="0" value="' . esc_attr((string) $bedrooms_val) . '" placeholder="e.g., 4"' . $prop_disabled . ' /></label>';
+    $fields .= '<label>Bathrooms<input type="number" name="propvendor_bathrooms" min="0" value="' . esc_attr((string) $bathrooms_val) . '" placeholder="e.g., 5"' . $prop_disabled . ' /></label>';
+    $fields .= '<label>Furnishing<select name="propvendor_furnishing"' . $prop_disabled . '><option value="">Select Furnishing</option>';
+    foreach (propvendor_marketplace_get_furnishing_options() as $opt) {
+        $fields .= '<option value="' . esc_attr($opt) . '" ' . selected($furnishing_val, $opt, false) . '>' . esc_html($opt) . '</option>';
+    }
+    $fields .= '</select></label>';
+    $fields .= '<label>Title Document<select name="propvendor_title_document"' . $prop_disabled . '><option value="">Select Title Document</option>';
+    foreach (propvendor_marketplace_get_title_documents() as $opt) {
+        $fields .= '<option value="' . esc_attr($opt) . '" ' . selected($prop_title_doc_val, $opt, false) . '>' . esc_html($opt) . '</option>';
+    }
+    $fields .= '</select></label>';
+    $fields .= '</div>';
+    $fields .= '<div class="propvendor-form-grid-3">';
+    $fields .= '<label>Floor Area (Interior Space)<span class="propvendor-field-hint">Total indoor living or usable space</span><input type="number" step="any" name="propvendor_floor_area" value="' . esc_attr((string) $floor_area_val) . '" placeholder="e.g., 350"' . $prop_disabled . ' /></label>';
+    $fields .= '<label>Floor Area Unit<select name="propvendor_floor_area_unit"' . $prop_disabled . '>';
+    foreach (propvendor_marketplace_get_plot_size_units() as $u_key => $u_label) {
+        $fields .= '<option value="' . esc_attr($u_key) . '" ' . selected(propvendor_marketplace_normalize_plot_size_unit($floor_area_unit_val), $u_key, false) . '>' . esc_html($u_label) . '</option>';
+    }
+    $fields .= '</select></label>';
+    $fields .= '<label>Plot Size / Compound Size (Optional)<span class="propvendor-field-hint">Total compound or land area the property sits on</span><input type="text" name="propvendor_plot_size" value="' . esc_attr((string) $prop_plot_size_val) . '" placeholder="e.g., 2"' . $prop_disabled . ' /></label>';
+    $fields .= '<label>Plot Size Unit<select name="propvendor_plot_size_unit"' . $prop_disabled . '>';
+    foreach (propvendor_marketplace_get_plot_size_units() as $u_key => $u_label) {
+        $fields .= '<option value="' . esc_attr($u_key) . '" ' . selected(propvendor_marketplace_normalize_plot_size_unit($prop_plot_unit_val), $u_key, false) . '>' . esc_html($u_label) . '</option>';
+    }
+    $fields .= '</select></label>';
+    $fields .= '</div>';
+    $fields .= '</div>';
+
+    // 2. LAND FIELDS CONTAINER
+    $land_display = ('land_listing' === $type_value) ? 'block' : 'none';
+    $land_disabled = ('land_listing' === $type_value) ? '' : ' disabled';
+    $land_plot_req = ('land_listing' === $type_value) ? ' required' : '';
+    $fields .= '<div class="propvendor-category-fields" id="propvendor-fields-land" style="display: ' . $land_display . ';">';
+    $fields .= '<h4>Land Details</h4>';
+    $fields .= '<div class="propvendor-form-grid-3">';
+    $fields .= '<label>Land Type / Use<select name="propvendor_land_use"' . $land_disabled . '><option value="">Select Land Use</option>';
+    foreach (propvendor_marketplace_get_land_uses() as $opt) {
+        $fields .= '<option value="' . esc_attr($opt) . '" ' . selected($land_use_val, $opt, false) . '>' . esc_html($opt) . '</option>';
+    }
+    $fields .= '</select></label>';
+    $fields .= '<label>Plot Size<span class="propvendor-field-hint">Total land area</span><input type="text" name="propvendor_plot_size" value="' . esc_attr((string) $land_plot_size_val) . '" placeholder="e.g., 2"' . $land_disabled . $land_plot_req . ' /></label>';
+    $fields .= '<label>Plot Size Unit<select name="propvendor_plot_size_unit"' . $land_disabled . '>';
+    foreach (propvendor_marketplace_get_plot_size_units() as $u_key => $u_label) {
+        $fields .= '<option value="' . esc_attr($u_key) . '" ' . selected(propvendor_marketplace_normalize_plot_size_unit($land_plot_unit_val), $u_key, false) . '>' . esc_html($u_label) . '</option>';
+    }
+    $fields .= '</select></label>';
+    $fields .= '<label>Title Document<select name="propvendor_title_document"' . $land_disabled . '><option value="">Select Title Document</option>';
+    foreach (propvendor_marketplace_get_title_documents() as $opt) {
+        $fields .= '<option value="' . esc_attr($opt) . '" ' . selected($land_title_doc_val, $opt, false) . '>' . esc_html($opt) . '</option>';
+    }
+    $fields .= '</select></label>';
+    $fields .= '</div>';
+    $fields .= '<div class="propvendor-form-grid-3">';
+    $fields .= '<label>Length<input type="text" name="propvendor_land_length" value="' . esc_attr((string) $land_length_val) . '" placeholder="e.g., 100"' . $land_disabled . ' /></label>';
+    $fields .= '<label>Width<input type="text" name="propvendor_land_width" value="' . esc_attr((string) $land_width_val) . '" placeholder="e.g., 60"' . $land_disabled . ' /></label>';
+    $fields .= '<label>Dimension Unit<select name="propvendor_dimension_unit"' . $land_disabled . '><option value="m" ' . selected($land_dim_unit_val, 'm', false) . '>Meters (m)</option><option value="ft" ' . selected($land_dim_unit_val, 'ft', false) . '>Feet (ft)</option></select></label>';
+    $fields .= '<label>Road Frontage<input type="text" name="propvendor_frontage" value="' . esc_attr((string) $land_frontage_val) . '" placeholder="e.g., 50m frontage"' . $land_disabled . ' /></label>';
+    $fields .= '</div>';
+    $fields .= '</div>';
+
+    // 3. VEHICLE FIELDS CONTAINER
+    $veh_display = ('vehicle_listing' === $type_value) ? 'block' : 'none';
+    $veh_disabled = ('vehicle_listing' === $type_value) ? '' : ' disabled';
+    $fields .= '<div class="propvendor-category-fields" id="propvendor-fields-vehicle" style="display: ' . $veh_display . ';">';
+    $fields .= '<h4>Vehicle Details</h4>';
+    $fields .= '<div class="propvendor-form-grid-3">';
+    $fields .= '<label>Vehicle Type / Subtype<select name="propvendor_vehicle_subtype"' . $veh_disabled . '><option value="">Select Vehicle Type</option>';
+    foreach (propvendor_marketplace_get_vehicle_subtypes() as $opt) {
+        $fields .= '<option value="' . esc_attr($opt) . '" ' . selected($veh_subtype_val, $opt, false) . '>' . esc_html($opt) . '</option>';
+    }
+    $fields .= '</select></label>';
+    $fields .= '<label>Make<input type="text" name="propvendor_vehicle_make" value="' . esc_attr((string) $veh_make_val) . '" placeholder="e.g., Toyota"' . $veh_disabled . ' /></label>';
+    $fields .= '<label>Model<input type="text" name="propvendor_vehicle_model" value="' . esc_attr((string) $veh_model_val) . '" placeholder="e.g., Camry"' . $veh_disabled . ' /></label>';
+    $fields .= '<label>Year of Manufacture<input type="number" name="propvendor_vehicle_year" min="1900" max="' . (date('Y') + 2) . '" value="' . esc_attr((string) $veh_year_val) . '" placeholder="e.g., 2020"' . $veh_disabled . ' /></label>';
+    $fields .= '<label>Condition<select name="propvendor_condition"' . $veh_disabled . '><option value="">Select Condition</option>';
+    foreach (propvendor_marketplace_get_vehicle_conditions() as $opt) {
+        $fields .= '<option value="' . esc_attr($opt) . '" ' . selected($veh_condition_val, $opt, false) . '>' . esc_html($opt) . '</option>';
+    }
+    $fields .= '</select></label>';
+    $fields .= '<label>Transmission<select name="propvendor_transmission"' . $veh_disabled . '><option value="">Select Transmission</option>';
+    foreach (propvendor_marketplace_get_vehicle_transmissions() as $opt) {
+        $fields .= '<option value="' . esc_attr($opt) . '" ' . selected($veh_trans_val, $opt, false) . '>' . esc_html($opt) . '</option>';
+    }
+    $fields .= '</select></label>';
+    $fields .= '<label>Mileage (km)<span class="propvendor-field-hint">Current odometer reading in kilometers</span><input type="number" name="propvendor_mileage" min="0" value="' . esc_attr((string) $veh_mileage_val) . '" placeholder="e.g., 45000"' . $veh_disabled . ' /></label>';
+    $fields .= '<label>Fuel Type<select name="propvendor_fuel_type"' . $veh_disabled . '><option value="">Select Fuel Type</option>';
+    foreach (propvendor_marketplace_get_vehicle_fuel_types() as $opt) {
+        $fields .= '<option value="' . esc_attr($opt) . '" ' . selected($veh_fuel_val, $opt, false) . '>' . esc_html($opt) . '</option>';
+    }
+    $fields .= '</select></label>';
+    $fields .= '<label>Engine Size<input type="text" name="propvendor_engine_size" value="' . esc_attr((string) $veh_engine_val) . '" placeholder="e.g. 2.4L I4"' . $veh_disabled . ' /></label>';
+    $fields .= '</div>';
+    $fields .= '</div>';
+
+    // Description
+    $fields .= '<label>Description<textarea name="propvendor_description" rows="6" placeholder="Describe the features, condition, and any other important details..." required>' . esc_textarea($description_value) . '</textarea></label>';
+
+    // Existing Images Management (Edit Mode)
+    if (!empty($existing_images)) {
+        $fields .= '<div class="propvendor-existing-images-box">';
+        $fields .= '<h4>Current Images (' . count($existing_images) . ' of 10)</h4>';
+        $fields .= '<div class="propvendor-existing-images-grid">';
+        foreach ($existing_images as $img_id) {
+            $is_primary = ($img_id === $thumbnail_id);
+            $img_tag = wp_get_attachment_image($img_id, 'thumbnail');
+            $fields .= '<div class="propvendor-existing-image-card">';
+            if ($is_primary) {
+                $fields .= '<span class="propvendor-image-primary-badge">Primary</span>';
+            }
+            $fields .= $img_tag;
+            $fields .= '<div class="propvendor-existing-image-actions">';
+            $fields .= '<label class="propvendor-action-main"><input type="radio" name="propvendor_primary_image_id" value="' . esc_attr((string) $img_id) . '" ' . checked($is_primary, true, false) . ' /> Main</label>';
+            $fields .= '<label class="propvendor-action-delete"><input type="checkbox" class="propvendor-remove-image-checkbox" name="propvendor_delete_images[]" value="' . esc_attr((string) $img_id) . '" /> Delete</label>';
+            $fields .= '</div>';
+            $fields .= '</div>';
+        }
+        $fields .= '</div>';
+        $fields .= '</div>';
+    }
+
+    // New Multiple Images Upload
+    $img_required = ($listing && !empty($existing_images)) ? '' : 'required';
+    $fields .= '<div class="propvendor-image-upload-wrap">';
+    $fields .= '<label for="propvendor_listing_images">Listing Images (Up to 10 images total, max 4MB each, JPG/PNG/WebP)</label>';
+    $fields .= '<input type="file" name="propvendor_listing_images[]" id="propvendor_listing_images" multiple accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" ' . $img_required . ' />';
+    $fields .= '<div id="propvendor-image-preview-grid" class="propvendor-image-preview-grid"></div>';
+    $fields .= '</div>';
+
+    // Owner-Direct Checkbox
+    $fields .= '<div class="propvendor-form-checkbox-row" style="margin: 1rem 0; padding: 0.85rem 1rem; background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 4px;">';
+    $fields .= '<label style="font-weight: 600; color: #135200; display: flex; align-items: center; gap: 0.6rem; cursor: pointer; font-size: 0.95rem;">';
+    $fields .= '<input type="checkbox" name="propvendor_is_direct_owner" value="1" ' . checked('1', (string) $is_direct_owner_value, false) . ' /> ';
+    $fields .= 'I am the direct owner of this property/vehicle (No Agent Fee / Direct Owner).';
+    $fields .= '</label>';
+    $fields .= '</div>';
+
     $fields .= '<button type="submit">' . ($listing ? 'Update Listing' : 'Submit for Review') . '</button>';
     $fields .= '</form></div>';
 
@@ -1412,6 +2631,9 @@ function propvendor_marketplace_vendor_dashboard_shortcode() {
         )
     );
 
+    // Stage 3: Vendor Listing Quota Card
+    $output .= propvendor_marketplace_render_vendor_quota_card($user_id);
+
     $output .= '<div class="propvendor-dashboard-header"><div><h2 id="propvendor-dashboard-title">My listings</h2><p>Manage and track your marketplace submissions.</p></div><a class="propvendor-dashboard-add" href="' . esc_url(home_url('/submit-a-listing/')) . '">Add New Listing</a></div>';
     if (empty($listings)) {
         $output .= '<div class="propvendor-dashboard-empty"><p class="propvendor-empty">You have no listings yet. Add your first listing to get started.</p><a class="propvendor-dashboard-add" href="' . esc_url(home_url('/submit-a-listing/')) . '">Add your first listing</a></div>';
@@ -1480,10 +2702,17 @@ function propvendor_marketplace_vendor_dashboard_shortcode() {
         $output .= '</tbody></table></div>';
     }
 
-    if (isset($_GET['propvendor_edit_listing'])) {
-        $edit_id = absint($_GET['propvendor_edit_listing']);
+    $edit_id = 0;
+    foreach (array('propvendor_edit_listing', 'edit_listing', 'listing_id', 'edit') as $param) {
+        if (isset($_GET[$param]) && absint($_GET[$param]) > 0) {
+            $edit_id = absint($_GET[$param]);
+            break;
+        }
+    }
+
+    if ($edit_id > 0) {
         $edit_listing = get_post($edit_id);
-        if ($edit_listing && in_array($edit_listing->post_type, propvendor_marketplace_get_listing_post_types(), true) && (int) $edit_listing->post_author === $user_id) {
+        if ($edit_listing && in_array($edit_listing->post_type, propvendor_marketplace_get_listing_post_types(), true) && ((int) $edit_listing->post_author === $user_id || current_user_can('manage_options'))) {
             $output .= propvendor_marketplace_submit_listing_form_shortcode();
         }
     }
@@ -1558,12 +2787,111 @@ function propvendor_marketplace_handle_vendor_registration() {
 add_action('admin_post_nopriv_propvendor_register_vendor', 'propvendor_marketplace_handle_vendor_registration');
 add_action('admin_post_propvendor_register_vendor', 'propvendor_marketplace_handle_vendor_registration');
 
-function propvendor_marketplace_handle_listing_image_upload($post_id, $file) {
-    if (empty($file['name'])) {
-        return new WP_Error('missing_image', 'Please upload a primary listing image.');
+/**
+ * Get all image attachment IDs for a marketplace listing.
+ *
+ * @param int $post_id
+ * @return int[]
+ */
+function propvendor_marketplace_get_listing_image_ids($post_id) {
+    $post_id = absint($post_id);
+    if (!$post_id) {
+        return array();
     }
 
-    if (!isset($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
+    $image_ids = array();
+    $thumbnail_id = absint(get_post_thumbnail_id($post_id));
+    if ($thumbnail_id) {
+        $image_ids[] = $thumbnail_id;
+    }
+
+    $meta_ids = get_post_meta($post_id, '_propvendor_gallery_image_ids', true);
+    if (is_array($meta_ids)) {
+        foreach ($meta_ids as $mid) {
+            $mid = absint($mid);
+            if ($mid && !in_array($mid, $image_ids, true)) {
+                $image_ids[] = $mid;
+            }
+        }
+    }
+
+    $attached = get_posts(array(
+        'post_parent'    => $post_id,
+        'post_type'      => 'attachment',
+        'post_status'    => 'inherit',
+        'post_mime_type' => 'image',
+        'posts_per_page' => 50,
+        'orderby'        => 'menu_order ID',
+        'order'          => 'ASC',
+        'fields'         => 'ids',
+        'no_found_rows'  => true,
+    ));
+    if (is_array($attached)) {
+        foreach ($attached as $aid) {
+            $aid = absint($aid);
+            if ($aid && !in_array($aid, $image_ids, true)) {
+                $image_ids[] = $aid;
+            }
+        }
+    }
+
+    $valid_ids = array();
+    foreach ($image_ids as $id) {
+        if (get_post($id)) {
+            $valid_ids[] = $id;
+        }
+    }
+
+    return $valid_ids;
+}
+
+/**
+ * Normalize single or multiple $_FILES entries into a uniform list of file arrays.
+ *
+ * @param array|null $file_entry
+ * @return array[]
+ */
+function propvendor_marketplace_normalize_uploaded_files($file_entry) {
+    $normalized = array();
+    if (empty($file_entry) || !isset($file_entry['name'])) {
+        return $normalized;
+    }
+
+    if (is_array($file_entry['name'])) {
+        $count = count($file_entry['name']);
+        for ($i = 0; $i < $count; $i++) {
+            if (!empty($file_entry['name'][$i]) && (!isset($file_entry['error'][$i]) || UPLOAD_ERR_NO_FILE !== $file_entry['error'][$i])) {
+                $normalized[] = array(
+                    'name'     => $file_entry['name'][$i],
+                    'type'     => $file_entry['type'][$i] ?? '',
+                    'tmp_name' => $file_entry['tmp_name'][$i] ?? '',
+                    'error'    => $file_entry['error'][$i] ?? 0,
+                    'size'     => $file_entry['size'][$i] ?? 0,
+                );
+            }
+        }
+    } else {
+        if (!empty($file_entry['name']) && (!isset($file_entry['error']) || UPLOAD_ERR_NO_FILE !== $file_entry['error'])) {
+            $normalized[] = $file_entry;
+        }
+    }
+
+    return $normalized;
+}
+
+/**
+ * Handle a single image upload to protected listing storage.
+ *
+ * @param int $post_id
+ * @param array $file
+ * @return int|WP_Error
+ */
+function propvendor_marketplace_handle_single_listing_image_upload($post_id, $file) {
+    if (empty($file['name'])) {
+        return new WP_Error('missing_image', 'Please upload a valid listing image.');
+    }
+
+    if (!isset($file['tmp_name']) || !file_exists($file['tmp_name'])) {
         return new WP_Error('invalid_uploaded_file', 'The uploaded image is not valid.');
     }
 
@@ -1582,9 +2910,13 @@ function propvendor_marketplace_handle_listing_image_upload($post_id, $file) {
         return $private_root;
     }
 
+    require_once ABSPATH . 'wp-admin/includes/image.php';
+    require_once ABSPATH . 'wp-admin/includes/file.php';
+    require_once ABSPATH . 'wp-admin/includes/media.php';
+
     add_filter('upload_dir', 'propvendor_marketplace_use_private_listing_upload_directory');
     try {
-        $attachment_id = media_handle_upload('propvendor_listing_image', $post_id);
+        $attachment_id = media_handle_sideload($file, $post_id);
     } finally {
         remove_filter('upload_dir', 'propvendor_marketplace_use_private_listing_upload_directory');
     }
@@ -1603,8 +2935,89 @@ function propvendor_marketplace_handle_listing_image_upload($post_id, $file) {
         return new WP_Error('propvendor_image_not_protected', 'The uploaded image could not be stored securely.');
     }
 
-    set_post_thumbnail($post_id, $attachment_id);
     return $attachment_id;
+}
+
+/**
+ * Handle listing image upload (single/legacy entry).
+ *
+ * @param int $post_id
+ * @param array $file
+ * @return int|WP_Error
+ */
+function propvendor_marketplace_handle_listing_image_upload($post_id, $file) {
+    $attachment_id = propvendor_marketplace_handle_single_listing_image_upload($post_id, $file);
+    if (!is_wp_error($attachment_id)) {
+        set_post_thumbnail($post_id, $attachment_id);
+    }
+    return $attachment_id;
+}
+
+/**
+ * Safely delete an image attached to a listing.
+ *
+ * @param int $post_id
+ * @param int $attachment_id
+ * @param int $current_user_id
+ * @return bool
+ */
+function propvendor_marketplace_delete_listing_image($post_id, $attachment_id, $current_user_id) {
+    $post_id = absint($post_id);
+    $attachment_id = absint($attachment_id);
+    if (!$post_id || !$attachment_id) {
+        return false;
+    }
+
+    $listing = get_post($post_id);
+    if (!$listing) {
+        return false;
+    }
+
+    if ((int) $listing->post_author !== (int) $current_user_id && !user_can($current_user_id, 'manage_options')) {
+        return false;
+    }
+
+    $attachment = get_post($attachment_id);
+    if (!$attachment || 'attachment' !== $attachment->post_type) {
+        return false;
+    }
+
+    $gallery_ids = (array) get_post_meta($post_id, '_propvendor_gallery_image_ids', true);
+    $is_parent = ((int) $attachment->post_parent === $post_id);
+    $is_thumb = ((int) get_post_thumbnail_id($post_id) === $attachment_id);
+    $is_in_gallery = in_array($attachment_id, $gallery_ids, true);
+
+    if (!$is_parent && !$is_thumb && !$is_in_gallery) {
+        return false;
+    }
+
+    $other_usage = get_posts(array(
+        'post_type'      => 'any',
+        'exclude'        => array($post_id),
+        'meta_key'       => '_thumbnail_id',
+        'meta_value'     => $attachment_id,
+        'posts_per_page' => 1,
+        'fields'         => 'ids',
+        'no_found_rows'  => true,
+    ));
+
+    if (empty($other_usage) && $is_parent) {
+        wp_delete_attachment($attachment_id, true);
+    }
+
+    $gallery_ids = array_values(array_diff($gallery_ids, array($attachment_id)));
+    update_post_meta($post_id, '_propvendor_gallery_image_ids', $gallery_ids);
+
+    if ($is_thumb) {
+        delete_post_thumbnail($post_id);
+        $remaining = propvendor_marketplace_get_listing_image_ids($post_id);
+        $remaining = array_values(array_diff($remaining, array($attachment_id)));
+        if (!empty($remaining)) {
+            set_post_thumbnail($post_id, $remaining[0]);
+        }
+    }
+
+    return true;
 }
 
 function propvendor_marketplace_process_listing_submission($data, $files, $current_user_id, $existing_post_id = 0) {
@@ -1622,7 +3035,7 @@ function propvendor_marketplace_process_listing_submission($data, $files, $curre
         if (!$existing_listing) {
             return new WP_Error('invalid_listing', 'The listing could not be found.');
         }
-        if ((int) $existing_listing->post_author !== (int) $current_user_id) {
+        if ((int) $existing_listing->post_author !== (int) $current_user_id && !user_can($current_user_id, 'manage_options')) {
             return new WP_Error('not_owner', 'You may only edit your own listings.');
         }
         $listing_type = get_post_type($existing_listing);
@@ -1637,26 +3050,94 @@ function propvendor_marketplace_process_listing_submission($data, $files, $curre
         return new WP_Error('insufficient_permissions', 'Your account does not have permission to submit or edit listings.');
     }
 
+    $owner_id = ($existing_post_id > 0 && isset($existing_listing) && $existing_listing) ? (int) $existing_listing->post_author : (int) $current_user_id;
+    if (!$existing_post_id && user_can($current_user_id, 'manage_options') && !empty($data['post_author'])) {
+        $owner_id = absint($data['post_author']);
+    }
+
+    // Stage 3: Early Quota & Reactivation Check
+    if (!propvendor_marketplace_vendor_can_create_listing($owner_id, $existing_post_id, $current_user_id)) {
+        $free_limit = propvendor_marketplace_get_free_listing_limit();
+        return new WP_Error(
+            'quota_exceeded',
+            sprintf(
+                __('You have reached the maximum limit of %d active listings for free vendor accounts. Upgrade to VIP for unlimited listings or remove an existing listing.', 'propvendor-marketplace'),
+                $free_limit
+            )
+        );
+    }
+
     $title = sanitize_text_field(wp_unslash($data['propvendor_title'] ?? ''));
-    $location = sanitize_text_field(wp_unslash($data['propvendor_location'] ?? ''));
+    $location_raw = sanitize_text_field(wp_unslash($data['propvendor_location'] ?? ''));
+    $full_address = sanitize_text_field(wp_unslash($data['propvendor_full_address'] ?? ''));
     $description = wp_kses_post(wp_unslash($data['propvendor_description'] ?? ''));
     $price = floatval($data['propvendor_price'] ?? 0);
-    $bedrooms = isset($data['propvendor_bedrooms']) ? absint($data['propvendor_bedrooms']) : 0;
-    $bathrooms = isset($data['propvendor_bathrooms']) ? absint($data['propvendor_bathrooms']) : 0;
-    $condition = sanitize_text_field(wp_unslash($data['propvendor_condition'] ?? ''));
-    $plot_size = sanitize_text_field(wp_unslash($data['propvendor_plot_size'] ?? ''));
 
-    if (empty($title) || empty($location) || empty($description) || $price <= 0) {
-        return new WP_Error('missing_required_fields', 'Please provide a title, location, description, and a valid price.');
+    if (empty($title) || empty($description) || $price <= 0) {
+        return new WP_Error('missing_required_fields', 'Please provide a title, description, and a valid price.');
     }
 
-    if (!$existing_post_id && (empty($files['propvendor_listing_image']) || empty($files['propvendor_listing_image']['name']))) {
-        return new WP_Error('missing_image', 'Please upload a primary listing image.');
+    $state = propvendor_marketplace_normalize_nigerian_state($location_raw);
+    if (empty($state)) {
+        return new WP_Error('invalid_location_state', 'Please select a valid Nigerian State from the list.');
     }
 
-    if ($existing_post_id > 0) {
-        $existing_listing = get_post($existing_post_id);
+    if (!isset($data['propvendor_full_address']) && !empty($location_raw)) {
+        $full_address = $location_raw;
+    } elseif (empty($full_address)) {
+        if (!empty($location_raw) && 0 !== strcasecmp($location_raw, $state)) {
+            $full_address = $location_raw;
+        }
     }
+
+    if (in_array($listing_type, array('property_listing', 'land_listing'), true) && '' === trim($full_address)) {
+        return new WP_Error('missing_address', 'Please provide a full address or specific property location.');
+    }
+
+    if (mb_strlen($full_address) > 255) {
+        return new WP_Error('address_too_long', 'The full address must not exceed 255 characters.');
+    }
+
+    // 1. Check existing images and planned deletions
+    $current_image_ids = ($existing_post_id > 0) ? propvendor_marketplace_get_listing_image_ids($existing_post_id) : array();
+    $to_delete = array();
+    if ($existing_post_id > 0 && !empty($data['propvendor_delete_images'])) {
+        $to_delete = array_map('absint', (array) $data['propvendor_delete_images']);
+    }
+
+    // 2. Normalize and check incoming uploaded files
+    $uploaded_files = array();
+    if (!empty($files['propvendor_listing_images'])) {
+        $uploaded_files = propvendor_marketplace_normalize_uploaded_files($files['propvendor_listing_images']);
+    } elseif (!empty($files['propvendor_listing_image'])) {
+        $uploaded_files = propvendor_marketplace_normalize_uploaded_files($files['propvendor_listing_image']);
+    }
+
+    $remaining_existing = array_diff($current_image_ids, $to_delete);
+    $total_images_count = count($remaining_existing) + count($uploaded_files);
+
+    if ($existing_post_id > 0 && !empty($to_delete) && $total_images_count === 0) {
+        return new WP_Error('missing_image', 'Every listing must have at least one image. Please upload a replacement image before deleting all existing images.');
+    }
+
+    if (!$existing_post_id && $total_images_count === 0) {
+        return new WP_Error('missing_image', 'Please upload at least one listing image.');
+    }
+
+    if ($total_images_count > 10) {
+        return new WP_Error('too_many_images', 'You may have a maximum of 10 images per listing.');
+    }
+
+    // 3. Process deletions safely now that at least one image is guaranteed to remain
+    if ($existing_post_id > 0 && !empty($to_delete)) {
+        foreach ($to_delete as $del_id) {
+            if ($del_id > 0) {
+                propvendor_marketplace_delete_listing_image($existing_post_id, $del_id, $current_user_id);
+            }
+        }
+    }
+
+    $current_image_ids = ($existing_post_id > 0) ? propvendor_marketplace_get_listing_image_ids($existing_post_id) : array();
 
     $post_status = 'pending';
     $listing_status = 'Pending review';
@@ -1669,43 +3150,320 @@ function propvendor_marketplace_process_listing_submission($data, $files, $curre
     }
 
     $post_args = array(
-        'post_title' => $title,
+        'post_title'   => $title,
         'post_content' => $description,
-        'post_author' => $current_user_id,
-        'post_status' => $post_status,
+        'post_author'  => $owner_id,
+        'post_status'  => $post_status,
     );
 
-    if ($existing_post_id > 0) {
-        $post_args['ID'] = absint($existing_post_id);
-        $post_args['post_type'] = get_post_type($existing_post_id);
-    } else {
-        $post_args['post_type'] = $listing_type;
+    // Stage 3: Atomic locking for new listing creation or reactivation
+    $lock_acquired = false;
+    $lock_name = 'pv_listing_quota_' . $owner_id;
+
+    if ($existing_post_id === 0 || !propvendor_marketplace_is_listing_active($existing_post_id)) {
+        if (!user_can($current_user_id, 'manage_options') && !propvendor_marketplace_is_vendor_vip($owner_id)) {
+            global $wpdb;
+            $lock_res = $wpdb->get_var($wpdb->prepare("SELECT GET_LOCK(%s, 10)", $lock_name));
+            if ('1' !== (string) $lock_res) {
+                return new WP_Error('quota_lock_failed', __('The server is currently busy processing another listing for your account. Please wait a few seconds and try again.', 'propvendor-marketplace'));
+            }
+            $lock_acquired = true;
+
+            // Re-verify quota under lock to prevent concurrent race-condition bypass
+            if (!propvendor_marketplace_vendor_can_create_listing($owner_id, $existing_post_id, $current_user_id)) {
+                $wpdb->query($wpdb->prepare("SELECT RELEASE_LOCK(%s)", $lock_name));
+                $lock_acquired = false;
+                $free_limit = propvendor_marketplace_get_free_listing_limit();
+                return new WP_Error(
+                    'quota_exceeded',
+                    sprintf(
+                        __('You have reached the maximum limit of %d active listings for free vendor accounts. Upgrade to VIP for unlimited listings or remove an existing listing.', 'propvendor-marketplace'),
+                        $free_limit
+                    )
+                );
+            }
+        }
     }
 
-    $post_id = wp_insert_post($post_args, true);
+    try {
+        if ($existing_post_id > 0) {
+            $post_args['ID'] = absint($existing_post_id);
+            $post_args['post_type'] = get_post_type($existing_post_id);
+            $post_id = wp_update_post($post_args, true);
+        } else {
+            $post_args['post_type'] = $listing_type;
+            $post_id = wp_insert_post($post_args, true);
+        }
+    } finally {
+        if ($lock_acquired) {
+            global $wpdb;
+            $wpdb->query($wpdb->prepare("SELECT RELEASE_LOCK(%s)", $lock_name));
+            $lock_acquired = false;
+        }
+    }
+
     if (is_wp_error($post_id)) {
         return $post_id;
     }
 
-    if (isset($files['propvendor_listing_image'])) {
-        $image_result = propvendor_marketplace_handle_listing_image_upload($post_id, $files['propvendor_listing_image']);
-        if (is_wp_error($image_result)) {
-            wp_delete_post($post_id, true);
-            return $image_result;
+    // 3. Process new image uploads safely
+    $new_attachment_ids = array();
+    if (!empty($uploaded_files)) {
+        foreach ($uploaded_files as $ufile) {
+            $upload_res = propvendor_marketplace_handle_single_listing_image_upload($post_id, $ufile);
+            if (is_wp_error($upload_res)) {
+                foreach ($new_attachment_ids as $clean_id) {
+                    wp_delete_attachment($clean_id, true);
+                }
+                if (!$existing_post_id) {
+                    wp_delete_post($post_id, true);
+                }
+                return $upload_res;
+            }
+            wp_update_post(array('ID' => $upload_res, 'post_parent' => $post_id));
+            $new_attachment_ids[] = absint($upload_res);
         }
-    } elseif (!$existing_post_id) {
-        return new WP_Error('missing_image', 'Please upload a primary listing image.');
     }
 
+    // 4. Update gallery image IDs and primary thumbnail
+    $all_image_ids = array_values(array_unique(array_merge($current_image_ids, $new_attachment_ids)));
+    update_post_meta($post_id, '_propvendor_gallery_image_ids', $all_image_ids);
+
+    $primary_id = !empty($data['propvendor_primary_image_id']) ? absint($data['propvendor_primary_image_id']) : 0;
+    if ($primary_id > 0 && in_array($primary_id, $all_image_ids, true)) {
+        set_post_thumbnail($post_id, $primary_id);
+    } else {
+        $current_thumb = (int) get_post_thumbnail_id($post_id);
+        if (!$current_thumb || !in_array($current_thumb, $all_image_ids, true)) {
+            if (!empty($all_image_ids)) {
+                set_post_thumbnail($post_id, $all_image_ids[0]);
+            }
+        }
+    }
+
+    // 5. Save common metadata
     update_post_meta($post_id, 'propvendor_price', $price);
-    update_post_meta($post_id, 'propvendor_location', $location);
+    update_post_meta($post_id, 'propvendor_location', $state);
+    update_post_meta($post_id, 'propvendor_state', $state);
+    update_post_meta($post_id, 'propvendor_full_address', $full_address);
     update_post_meta($post_id, 'propvendor_listing_status', $listing_status);
     update_post_meta($post_id, 'propvendor_status', $listing_status);
-    update_post_meta($post_id, 'propvendor_bedrooms', $bedrooms);
-    update_post_meta($post_id, 'propvendor_bathrooms', $bathrooms);
-    update_post_meta($post_id, 'propvendor_condition', $condition);
-    update_post_meta($post_id, 'propvendor_plot_size', $plot_size);
     update_post_meta($post_id, 'propvendor_listing_type', $listing_type);
+
+    // 6. Save category-specific metadata and clean up obsolete cross-category metadata
+    $valid_cat_keys = propvendor_marketplace_get_category_meta_keys($listing_type);
+    $all_cat_keys   = propvendor_marketplace_get_all_category_meta_keys();
+    $obsolete_keys  = array_diff($all_cat_keys, $valid_cat_keys);
+
+    if ($existing_post_id > 0) {
+        foreach ($obsolete_keys as $obsolete_key) {
+            delete_post_meta($post_id, $obsolete_key);
+        }
+    }
+
+    if ('property_listing' === $listing_type) {
+        if (isset($data['propvendor_property_subtype'])) {
+            $val = sanitize_text_field(wp_unslash($data['propvendor_property_subtype']));
+            if (in_array($val, propvendor_marketplace_get_property_subtypes(), true)) {
+                update_post_meta($post_id, 'propvendor_property_subtype', $val);
+            } elseif ('' === $val) {
+                delete_post_meta($post_id, 'propvendor_property_subtype');
+            }
+        }
+        if (isset($data['propvendor_purpose'])) {
+            $val = sanitize_text_field(wp_unslash($data['propvendor_purpose']));
+            if (in_array($val, propvendor_marketplace_get_property_purposes(), true)) {
+                update_post_meta($post_id, 'propvendor_purpose', $val);
+            }
+        }
+        if (isset($data['propvendor_bedrooms'])) {
+            update_post_meta($post_id, 'propvendor_bedrooms', absint($data['propvendor_bedrooms']));
+        }
+        if (isset($data['propvendor_bathrooms'])) {
+            update_post_meta($post_id, 'propvendor_bathrooms', absint($data['propvendor_bathrooms']));
+        }
+        if (isset($data['propvendor_furnishing'])) {
+            $val = sanitize_text_field(wp_unslash($data['propvendor_furnishing']));
+            if (in_array($val, propvendor_marketplace_get_furnishing_options(), true)) {
+                update_post_meta($post_id, 'propvendor_furnishing', $val);
+            } elseif ('' === $val) {
+                delete_post_meta($post_id, 'propvendor_furnishing');
+            }
+        }
+        if (isset($data['propvendor_title_document'])) {
+            $val = sanitize_text_field(wp_unslash($data['propvendor_title_document']));
+            if (in_array($val, propvendor_marketplace_get_title_documents(), true)) {
+                update_post_meta($post_id, 'propvendor_title_document', $val);
+            } elseif ('' === $val) {
+                delete_post_meta($post_id, 'propvendor_title_document');
+            }
+        }
+        if (isset($data['propvendor_floor_area'])) {
+            $val = floatval($data['propvendor_floor_area']);
+            if ($val > 0) {
+                update_post_meta($post_id, 'propvendor_floor_area', $val);
+            } else {
+                delete_post_meta($post_id, 'propvendor_floor_area');
+            }
+        }
+        if (isset($data['propvendor_floor_area_unit'])) {
+            update_post_meta($post_id, 'propvendor_floor_area_unit', sanitize_text_field(wp_unslash($data['propvendor_floor_area_unit'])));
+        }
+        if (isset($data['propvendor_plot_size'])) {
+            $val = sanitize_text_field(wp_unslash($data['propvendor_plot_size']));
+            if ('' !== $val) {
+                update_post_meta($post_id, 'propvendor_plot_size', $val);
+            } else {
+                delete_post_meta($post_id, 'propvendor_plot_size');
+            }
+        }
+        if (isset($data['propvendor_plot_size_unit'])) {
+            $u_val = propvendor_marketplace_normalize_plot_size_unit(wp_unslash($data['propvendor_plot_size_unit']));
+            if (!empty($u_val)) {
+                update_post_meta($post_id, 'propvendor_plot_size_unit', $u_val);
+            } else {
+                delete_post_meta($post_id, 'propvendor_plot_size_unit');
+            }
+        }
+    } elseif ('land_listing' === $listing_type) {
+        if (isset($data['propvendor_land_use'])) {
+            $val = sanitize_text_field(wp_unslash($data['propvendor_land_use']));
+            if (in_array($val, propvendor_marketplace_get_land_uses(), true)) {
+                update_post_meta($post_id, 'propvendor_land_use', $val);
+            } elseif ('' === $val) {
+                delete_post_meta($post_id, 'propvendor_land_use');
+            }
+        }
+        if (isset($data['propvendor_plot_size'])) {
+            $val = sanitize_text_field(wp_unslash($data['propvendor_plot_size']));
+            if ('' !== $val) {
+                update_post_meta($post_id, 'propvendor_plot_size', $val);
+            } else {
+                delete_post_meta($post_id, 'propvendor_plot_size');
+            }
+        }
+        if (isset($data['propvendor_plot_size_unit'])) {
+            $u_val = propvendor_marketplace_normalize_plot_size_unit(wp_unslash($data['propvendor_plot_size_unit']));
+            if (!empty($u_val)) {
+                update_post_meta($post_id, 'propvendor_plot_size_unit', $u_val);
+            } else {
+                delete_post_meta($post_id, 'propvendor_plot_size_unit');
+            }
+        }
+        if (isset($data['propvendor_title_document'])) {
+            $val = sanitize_text_field(wp_unslash($data['propvendor_title_document']));
+            if (in_array($val, propvendor_marketplace_get_title_documents(), true)) {
+                update_post_meta($post_id, 'propvendor_title_document', $val);
+            } elseif ('' === $val) {
+                delete_post_meta($post_id, 'propvendor_title_document');
+            }
+        }
+        if (isset($data['propvendor_land_length'])) {
+            $val = sanitize_text_field(wp_unslash($data['propvendor_land_length']));
+            if ('' !== $val) {
+                update_post_meta($post_id, 'propvendor_land_length', $val);
+            } else {
+                delete_post_meta($post_id, 'propvendor_land_length');
+            }
+        }
+        if (isset($data['propvendor_land_width'])) {
+            $val = sanitize_text_field(wp_unslash($data['propvendor_land_width']));
+            if ('' !== $val) {
+                update_post_meta($post_id, 'propvendor_land_width', $val);
+            } else {
+                delete_post_meta($post_id, 'propvendor_land_width');
+            }
+        }
+        if (isset($data['propvendor_dimension_unit'])) {
+            update_post_meta($post_id, 'propvendor_dimension_unit', sanitize_text_field(wp_unslash($data['propvendor_dimension_unit'])));
+        }
+        if (isset($data['propvendor_frontage'])) {
+            $val = sanitize_text_field(wp_unslash($data['propvendor_frontage']));
+            if ('' !== $val) {
+                update_post_meta($post_id, 'propvendor_frontage', $val);
+            } else {
+                delete_post_meta($post_id, 'propvendor_frontage');
+            }
+        }
+    } elseif ('vehicle_listing' === $listing_type) {
+        if (isset($data['propvendor_vehicle_subtype'])) {
+            $val = sanitize_text_field(wp_unslash($data['propvendor_vehicle_subtype']));
+            if (in_array($val, propvendor_marketplace_get_vehicle_subtypes(), true)) {
+                update_post_meta($post_id, 'propvendor_vehicle_subtype', $val);
+            } elseif ('' === $val) {
+                delete_post_meta($post_id, 'propvendor_vehicle_subtype');
+            }
+        }
+        if (isset($data['propvendor_vehicle_make'])) {
+            $val = sanitize_text_field(wp_unslash($data['propvendor_vehicle_make']));
+            if ('' !== $val) {
+                update_post_meta($post_id, 'propvendor_vehicle_make', $val);
+            } else {
+                delete_post_meta($post_id, 'propvendor_vehicle_make');
+            }
+        }
+        if (isset($data['propvendor_vehicle_model'])) {
+            $val = sanitize_text_field(wp_unslash($data['propvendor_vehicle_model']));
+            if ('' !== $val) {
+                update_post_meta($post_id, 'propvendor_vehicle_model', $val);
+            } else {
+                delete_post_meta($post_id, 'propvendor_vehicle_model');
+            }
+        }
+        if (isset($data['propvendor_vehicle_year'])) {
+            $val = absint($data['propvendor_vehicle_year']);
+            if ($val >= 1900 && $val <= (int) date('Y') + 2) {
+                update_post_meta($post_id, 'propvendor_vehicle_year', $val);
+            } else {
+                delete_post_meta($post_id, 'propvendor_vehicle_year');
+            }
+        }
+        if (isset($data['propvendor_condition'])) {
+            $val = sanitize_text_field(wp_unslash($data['propvendor_condition']));
+            if (in_array($val, propvendor_marketplace_get_vehicle_conditions(), true)) {
+                update_post_meta($post_id, 'propvendor_condition', $val);
+            } elseif ('' === $val) {
+                delete_post_meta($post_id, 'propvendor_condition');
+            }
+        }
+        if (isset($data['propvendor_transmission'])) {
+            $val = sanitize_text_field(wp_unslash($data['propvendor_transmission']));
+            if (in_array($val, propvendor_marketplace_get_vehicle_transmissions(), true)) {
+                update_post_meta($post_id, 'propvendor_transmission', $val);
+            } elseif ('' === $val) {
+                delete_post_meta($post_id, 'propvendor_transmission');
+            }
+        }
+        if (isset($data['propvendor_mileage'])) {
+            update_post_meta($post_id, 'propvendor_mileage', absint($data['propvendor_mileage']));
+        }
+        if (isset($data['propvendor_fuel_type'])) {
+            $val = sanitize_text_field(wp_unslash($data['propvendor_fuel_type']));
+            if (in_array($val, propvendor_marketplace_get_vehicle_fuel_types(), true)) {
+                update_post_meta($post_id, 'propvendor_fuel_type', $val);
+            } elseif ('' === $val) {
+                delete_post_meta($post_id, 'propvendor_fuel_type');
+            }
+        }
+        if (isset($data['propvendor_engine_size'])) {
+            $val = sanitize_text_field(wp_unslash($data['propvendor_engine_size']));
+            if ('' !== $val) {
+                update_post_meta($post_id, 'propvendor_engine_size', $val);
+            } else {
+                delete_post_meta($post_id, 'propvendor_engine_size');
+            }
+        }
+    }
+
+    // 7. Stage 2: Owner-Direct Claim & Auto-Reset Revocation Handling
+    $is_direct_owner = (!empty($data['propvendor_is_direct_owner']) && '1' === (string) $data['propvendor_is_direct_owner']) ? '1' : '0';
+    update_post_meta($post_id, '_propvendor_is_direct_owner', $is_direct_owner);
+
+    if ('1' === $is_direct_owner) {
+        update_post_meta($post_id, '_propvendor_direct_owner_status', 'pending');
+    } else {
+        update_post_meta($post_id, '_propvendor_direct_owner_status', 'none');
+    }
 
     $category_name = ucfirst(str_replace('_', ' ', $listing_type));
     if (!term_exists($category_name, 'listing_category')) {
@@ -1741,7 +3499,15 @@ function propvendor_marketplace_handle_listing_update() {
     $user_id = get_current_user_id();
     $result = propvendor_marketplace_process_listing_submission($_POST, $_FILES, $user_id, $listing_id);
     if (is_wp_error($result)) {
-        propvendor_marketplace_redirect_with_notice('/vendor-dashboard/', 'error', $result->get_error_message());
+        $referer = wp_get_referer();
+        if ($referer && $listing_id > 0) {
+            $redirect_url = add_query_arg('propvendor_edit_listing', $listing_id, $referer);
+        } elseif ($listing_id > 0) {
+            $redirect_url = add_query_arg('propvendor_edit_listing', $listing_id, home_url('/vendor-dashboard/'));
+        } else {
+            $redirect_url = '/vendor-dashboard/';
+        }
+        propvendor_marketplace_redirect_with_notice($redirect_url, 'error', $result->get_error_message());
     }
 
     propvendor_marketplace_redirect_with_notice('/vendor-dashboard/', 'success', 'Listing updated successfully and returned to pending review for moderation.');
@@ -1776,39 +3542,220 @@ function propvendor_marketplace_render_meta_box($post) {
     wp_nonce_field('propvendor_listing_meta_nonce', 'propvendor_listing_meta_nonce');
     $price = get_post_meta($post->ID, 'propvendor_price', true);
     $location = get_post_meta($post->ID, 'propvendor_location', true);
+    $full_address = get_post_meta($post->ID, 'propvendor_full_address', true);
     $status = get_post_meta($post->ID, 'propvendor_listing_status', true);
-    $beds = get_post_meta($post->ID, 'propvendor_bedrooms', true);
-    $baths = get_post_meta($post->ID, 'propvendor_bathrooms', true);
-    $condition = get_post_meta($post->ID, 'propvendor_condition', true);
-    $plot_size = get_post_meta($post->ID, 'propvendor_plot_size', true);
     ?>
     <p>
-        <label for="propvendor_price">Price (NGN)</label>
+        <label for="propvendor_price"><strong>Price (NGN)</strong></label>
         <input type="number" id="propvendor_price" name="propvendor_price" value="<?php echo esc_attr($price); ?>" min="0" step="1000" class="widefat" />
     </p>
     <p>
-        <label for="propvendor_location">Location</label>
-        <input type="text" id="propvendor_location" name="propvendor_location" value="<?php echo esc_attr($location); ?>" class="widefat" />
+        <label for="propvendor_location"><strong>State</strong></label>
+        <select id="propvendor_location" name="propvendor_location" class="widefat">
+            <option value="">Select State</option>
+            <?php foreach (propvendor_marketplace_get_nigerian_states() as $st) : ?>
+                <option value="<?php echo esc_attr($st); ?>" <?php selected(propvendor_marketplace_normalize_nigerian_state($location), $st); ?>><?php echo esc_html($st); ?></option>
+            <?php endforeach; ?>
+        </select>
     </p>
     <p>
-        <label for="propvendor_bedrooms">Bedrooms</label>
-        <input type="number" id="propvendor_bedrooms" name="propvendor_bedrooms" value="<?php echo esc_attr($beds); ?>" min="0" class="widefat" />
+        <label for="propvendor_full_address"><strong>Full Address / Property Address</strong></label>
+        <input type="text" id="propvendor_full_address" name="propvendor_full_address" value="<?php echo esc_attr($full_address); ?>" maxlength="255" class="widefat" />
     </p>
-    <p>
-        <label for="propvendor_bathrooms">Bathrooms</label>
-        <input type="number" id="propvendor_bathrooms" name="propvendor_bathrooms" value="<?php echo esc_attr($baths); ?>" min="0" class="widefat" />
-    </p>
-    <p>
-        <label for="propvendor_condition">Condition</label>
-        <input type="text" id="propvendor_condition" name="propvendor_condition" value="<?php echo esc_attr($condition); ?>" class="widefat" />
-    </p>
-    <p>
-        <label for="propvendor_plot_size">Plot size</label>
-        <input type="text" id="propvendor_plot_size" name="propvendor_plot_size" value="<?php echo esc_attr($plot_size); ?>" class="widefat" />
-    </p>
+    <?php if ('property_listing' === $post->post_type) :
+        $subtype = get_post_meta($post->ID, 'propvendor_property_subtype', true);
+        $purpose = get_post_meta($post->ID, 'propvendor_purpose', true);
+        $beds = get_post_meta($post->ID, 'propvendor_bedrooms', true);
+        $baths = get_post_meta($post->ID, 'propvendor_bathrooms', true);
+        $furnishing = get_post_meta($post->ID, 'propvendor_furnishing', true);
+        $title_doc = get_post_meta($post->ID, 'propvendor_title_document', true);
+        $floor_area = get_post_meta($post->ID, 'propvendor_floor_area', true);
+        $floor_unit = get_post_meta($post->ID, 'propvendor_floor_area_unit', true) ?: 'sqm';
+        $plot_size = get_post_meta($post->ID, 'propvendor_plot_size', true);
+        $plot_unit = get_post_meta($post->ID, 'propvendor_plot_size_unit', true) ?: 'sqm';
+        ?>
+        <p>
+            <label for="propvendor_property_subtype">Property Subtype</label>
+            <select id="propvendor_property_subtype" name="propvendor_property_subtype" class="widefat">
+                <option value="">Select Subtype</option>
+                <?php foreach (propvendor_marketplace_get_property_subtypes() as $opt) : ?>
+                    <option value="<?php echo esc_attr($opt); ?>" <?php selected($subtype, $opt); ?>><?php echo esc_html($opt); ?></option>
+                <?php endforeach; ?>
+            </select>
+        </p>
+        <p>
+            <label for="propvendor_purpose">Purpose</label>
+            <select id="propvendor_purpose" name="propvendor_purpose" class="widefat">
+                <?php foreach (propvendor_marketplace_get_property_purposes() as $opt) : ?>
+                    <option value="<?php echo esc_attr($opt); ?>" <?php selected($purpose, $opt); ?>><?php echo esc_html($opt); ?></option>
+                <?php endforeach; ?>
+            </select>
+        </p>
+        <p>
+            <label for="propvendor_bedrooms">Bedrooms</label>
+            <input type="number" id="propvendor_bedrooms" name="propvendor_bedrooms" value="<?php echo esc_attr($beds); ?>" min="0" class="widefat" />
+        </p>
+        <p>
+            <label for="propvendor_bathrooms">Bathrooms</label>
+            <input type="number" id="propvendor_bathrooms" name="propvendor_bathrooms" value="<?php echo esc_attr($baths); ?>" min="0" class="widefat" />
+        </p>
+        <p>
+            <label for="propvendor_furnishing">Furnishing</label>
+            <select id="propvendor_furnishing" name="propvendor_furnishing" class="widefat">
+                <option value="">Select Furnishing</option>
+                <?php foreach (propvendor_marketplace_get_furnishing_options() as $opt) : ?>
+                    <option value="<?php echo esc_attr($opt); ?>" <?php selected($furnishing, $opt); ?>><?php echo esc_html($opt); ?></option>
+                <?php endforeach; ?>
+            </select>
+        </p>
+        <p>
+            <label for="propvendor_title_document">Title Document</label>
+            <select id="propvendor_title_document" name="propvendor_title_document" class="widefat">
+                <option value="">Select Document</option>
+                <?php foreach (propvendor_marketplace_get_title_documents() as $opt) : ?>
+                    <option value="<?php echo esc_attr($opt); ?>" <?php selected($title_doc, $opt); ?>><?php echo esc_html($opt); ?></option>
+                <?php endforeach; ?>
+            </select>
+        </p>
+        <p>
+            <label for="propvendor_floor_area">Floor Area (<?php echo esc_html($floor_unit); ?>)</label>
+            <input type="number" step="any" id="propvendor_floor_area" name="propvendor_floor_area" value="<?php echo esc_attr($floor_area); ?>" class="widefat" />
+        </p>
+        <p>
+            <label for="propvendor_plot_size">Plot Size</label>
+            <input type="text" id="propvendor_plot_size" name="propvendor_plot_size" value="<?php echo esc_attr($plot_size); ?>" class="widefat" />
+        </p>
+        <p>
+            <label for="propvendor_plot_size_unit">Plot Size Unit</label>
+            <select id="propvendor_plot_size_unit" name="propvendor_plot_size_unit" class="widefat">
+                <?php foreach (propvendor_marketplace_get_plot_size_units() as $u_key => $u_label) : ?>
+                    <option value="<?php echo esc_attr($u_key); ?>" <?php selected(propvendor_marketplace_normalize_plot_size_unit($plot_unit), $u_key); ?>><?php echo esc_html($u_label); ?></option>
+                <?php endforeach; ?>
+            </select>
+        </p>
+    <?php elseif ('land_listing' === $post->post_type) :
+        $land_use = get_post_meta($post->ID, 'propvendor_land_use', true);
+        $plot_size = get_post_meta($post->ID, 'propvendor_plot_size', true);
+        $plot_unit = get_post_meta($post->ID, 'propvendor_plot_size_unit', true) ?: 'plots';
+        $title_doc = get_post_meta($post->ID, 'propvendor_title_document', true);
+        $length = get_post_meta($post->ID, 'propvendor_land_length', true);
+        $width = get_post_meta($post->ID, 'propvendor_land_width', true);
+        $dim_unit = get_post_meta($post->ID, 'propvendor_dimension_unit', true) ?: 'm';
+        $frontage = get_post_meta($post->ID, 'propvendor_frontage', true);
+        ?>
+        <p>
+            <label for="propvendor_land_use">Land Use</label>
+            <select id="propvendor_land_use" name="propvendor_land_use" class="widefat">
+                <option value="">Select Land Use</option>
+                <?php foreach (propvendor_marketplace_get_land_uses() as $opt) : ?>
+                    <option value="<?php echo esc_attr($opt); ?>" <?php selected($land_use, $opt); ?>><?php echo esc_html($opt); ?></option>
+                <?php endforeach; ?>
+            </select>
+        </p>
+        <p>
+            <label for="propvendor_plot_size">Plot / Land Size</label>
+            <input type="text" id="propvendor_plot_size" name="propvendor_plot_size" value="<?php echo esc_attr($plot_size); ?>" class="widefat" />
+        </p>
+        <p>
+            <label for="propvendor_plot_size_unit">Plot Size Unit</label>
+            <select id="propvendor_plot_size_unit" name="propvendor_plot_size_unit" class="widefat">
+                <?php foreach (propvendor_marketplace_get_plot_size_units() as $u_key => $u_label) : ?>
+                    <option value="<?php echo esc_attr($u_key); ?>" <?php selected(propvendor_marketplace_normalize_plot_size_unit($plot_unit), $u_key); ?>><?php echo esc_html($u_label); ?></option>
+                <?php endforeach; ?>
+            </select>
+        </p>
+        <p>
+            <label for="propvendor_title_document">Title Document</label>
+            <select id="propvendor_title_document" name="propvendor_title_document" class="widefat">
+                <option value="">Select Document</option>
+                <?php foreach (propvendor_marketplace_get_title_documents() as $opt) : ?>
+                    <option value="<?php echo esc_attr($opt); ?>" <?php selected($title_doc, $opt); ?>><?php echo esc_html($opt); ?></option>
+                <?php endforeach; ?>
+            </select>
+        </p>
+        <p>
+            <label for="propvendor_land_length">Length (<?php echo esc_html($dim_unit); ?>)</label>
+            <input type="text" id="propvendor_land_length" name="propvendor_land_length" value="<?php echo esc_attr($length); ?>" class="widefat" />
+        </p>
+        <p>
+            <label for="propvendor_land_width">Width (<?php echo esc_html($dim_unit); ?>)</label>
+            <input type="text" id="propvendor_land_width" name="propvendor_land_width" value="<?php echo esc_attr($width); ?>" class="widefat" />
+        </p>
+        <p>
+            <label for="propvendor_frontage">Road Frontage</label>
+            <input type="text" id="propvendor_frontage" name="propvendor_frontage" value="<?php echo esc_attr($frontage); ?>" class="widefat" />
+        </p>
+    <?php elseif ('vehicle_listing' === $post->post_type) :
+        $veh_subtype = get_post_meta($post->ID, 'propvendor_vehicle_subtype', true);
+        $make = get_post_meta($post->ID, 'propvendor_vehicle_make', true);
+        $model = get_post_meta($post->ID, 'propvendor_vehicle_model', true);
+        $year = get_post_meta($post->ID, 'propvendor_vehicle_year', true);
+        $condition = get_post_meta($post->ID, 'propvendor_condition', true);
+        $trans = get_post_meta($post->ID, 'propvendor_transmission', true);
+        $mileage = get_post_meta($post->ID, 'propvendor_mileage', true);
+        $fuel = get_post_meta($post->ID, 'propvendor_fuel_type', true);
+        $engine = get_post_meta($post->ID, 'propvendor_engine_size', true);
+        ?>
+        <p>
+            <label for="propvendor_vehicle_subtype">Vehicle Subtype</label>
+            <select id="propvendor_vehicle_subtype" name="propvendor_vehicle_subtype" class="widefat">
+                <option value="">Select Subtype</option>
+                <?php foreach (propvendor_marketplace_get_vehicle_subtypes() as $opt) : ?>
+                    <option value="<?php echo esc_attr($opt); ?>" <?php selected($veh_subtype, $opt); ?>><?php echo esc_html($opt); ?></option>
+                <?php endforeach; ?>
+            </select>
+        </p>
+        <p>
+            <label for="propvendor_vehicle_make">Vehicle Make</label>
+            <input type="text" id="propvendor_vehicle_make" name="propvendor_vehicle_make" value="<?php echo esc_attr($make); ?>" class="widefat" />
+        </p>
+        <p>
+            <label for="propvendor_vehicle_model">Vehicle Model</label>
+            <input type="text" id="propvendor_vehicle_model" name="propvendor_vehicle_model" value="<?php echo esc_attr($model); ?>" class="widefat" />
+        </p>
+        <p>
+            <label for="propvendor_vehicle_year">Year</label>
+            <input type="number" id="propvendor_vehicle_year" name="propvendor_vehicle_year" value="<?php echo esc_attr($year); ?>" min="1900" max="<?php echo (int) date('Y') + 2; ?>" class="widefat" />
+        </p>
+        <p>
+            <label for="propvendor_condition">Vehicle Condition</label>
+            <select id="propvendor_condition" name="propvendor_condition" class="widefat">
+                <option value="">Select Condition</option>
+                <?php foreach (propvendor_marketplace_get_vehicle_conditions() as $opt) : ?>
+                    <option value="<?php echo esc_attr($opt); ?>" <?php selected($condition, $opt); ?>><?php echo esc_html($opt); ?></option>
+                <?php endforeach; ?>
+            </select>
+        </p>
+        <p>
+            <label for="propvendor_transmission">Transmission</label>
+            <select id="propvendor_transmission" name="propvendor_transmission" class="widefat">
+                <option value="">Select Transmission</option>
+                <?php foreach (propvendor_marketplace_get_vehicle_transmissions() as $opt) : ?>
+                    <option value="<?php echo esc_attr($opt); ?>" <?php selected($trans, $opt); ?>><?php echo esc_html($opt); ?></option>
+                <?php endforeach; ?>
+            </select>
+        </p>
+        <p>
+            <label for="propvendor_mileage">Mileage (km)</label>
+            <input type="number" id="propvendor_mileage" name="propvendor_mileage" value="<?php echo esc_attr($mileage); ?>" min="0" class="widefat" />
+        </p>
+        <p>
+            <label for="propvendor_fuel_type">Fuel Type</label>
+            <select id="propvendor_fuel_type" name="propvendor_fuel_type" class="widefat">
+                <option value="">Select Fuel Type</option>
+                <?php foreach (propvendor_marketplace_get_vehicle_fuel_types() as $opt) : ?>
+                    <option value="<?php echo esc_attr($opt); ?>" <?php selected($fuel, $opt); ?>><?php echo esc_html($opt); ?></option>
+                <?php endforeach; ?>
+            </select>
+        </p>
+        <p>
+            <label for="propvendor_engine_size">Engine Size</label>
+            <input type="text" id="propvendor_engine_size" name="propvendor_engine_size" value="<?php echo esc_attr($engine); ?>" class="widefat" />
+        </p>
+    <?php endif; ?>
     <?php if (current_user_can('manage_options')) : ?>
         <p>
-            <label for="propvendor_listing_status">Marketplace status</label>
+            <label for="propvendor_listing_status"><strong>Marketplace status</strong></label>
             <select id="propvendor_listing_status" name="propvendor_listing_status" class="widefat">
                 <?php
                 foreach (propvendor_marketplace_get_listing_status_choices() as $option) {
@@ -1831,6 +3778,12 @@ function propvendor_marketplace_render_moderation_meta_box($post) {
     if (empty($current_status)) {
         $current_status = $post->post_status === 'publish' ? 'Published' : 'Pending review';
     }
+
+    $is_direct_owner = get_post_meta($post->ID, '_propvendor_is_direct_owner', true);
+    $direct_owner_status = get_post_meta($post->ID, '_propvendor_direct_owner_status', true);
+    if (empty($direct_owner_status)) {
+        $direct_owner_status = ('1' === (string) $is_direct_owner) ? 'pending' : 'none';
+    }
     ?>
     <p>
         <label for="propvendor_moderation_status">Moderation status</label>
@@ -1844,6 +3797,26 @@ function propvendor_marketplace_render_moderation_meta_box($post) {
     </p>
     <p>
         <label><input type="checkbox" name="propvendor_remove_listing" value="1" /> Remove listing</label>
+    </p>
+    <hr style="margin: 15px 0; border: 0; border-top: 1px solid #ddd;" />
+    <p>
+        <strong>Owner-Direct Claim:</strong><br />
+        <?php if ('1' === (string) $is_direct_owner): ?>
+            <span style="color: #0a8a4f; font-weight: 600;">&#10003; Vendor claimed direct ownership</span>
+        <?php else: ?>
+            <span style="color: #64748b;">Vendor did not claim direct ownership</span>
+        <?php endif; ?>
+    </p>
+    <p>
+        <label for="propvendor_direct_owner_status"><strong>Owner-Direct Status:</strong></label>
+        <select id="propvendor_direct_owner_status" name="propvendor_direct_owner_status" class="widefat">
+            <option value="none" <?php selected($direct_owner_status, 'none'); ?>>None (No Claim)</option>
+            <option value="pending" <?php selected($direct_owner_status, 'pending'); ?>>Pending Review</option>
+            <option value="approved" <?php selected($direct_owner_status, 'approved'); ?>>Approved (Badge Displayed)</option>
+            <option value="rejected" <?php selected($direct_owner_status, 'rejected'); ?>>Rejected</option>
+            <option value="revoked" <?php selected($direct_owner_status, 'revoked'); ?>>Revoked</option>
+        </select>
+        <span class="description" style="display:block; margin-top:4px;">When Approved, public badge "Direct from Owner — Zero Agent Fee" is displayed.</span>
     </p>
     <?php
     wp_nonce_field('propvendor_moderation_nonce', 'propvendor_moderation_nonce');
@@ -1873,6 +3846,14 @@ function propvendor_marketplace_handle_admin_moderation_save($post_id) {
             error_log('PropVendor could not move listing ' . absint($post_id) . ' to the trash.');
         }
         return;
+    }
+
+    if (isset($_POST['propvendor_direct_owner_status'])) {
+        $submitted_do_status = sanitize_key(wp_unslash($_POST['propvendor_direct_owner_status']));
+        $allowed_do_statuses = array('none', 'pending', 'approved', 'rejected', 'revoked');
+        if (in_array($submitted_do_status, $allowed_do_statuses, true)) {
+            update_post_meta($post_id, '_propvendor_direct_owner_status', $submitted_do_status);
+        }
     }
 
     if (!isset($_POST['propvendor_moderation_status'])) {
@@ -1940,23 +3921,110 @@ function propvendor_marketplace_save_meta_boxes($post_id) {
     }
 
     if (isset($_POST['propvendor_location'])) {
-        update_post_meta($post_id, 'propvendor_location', sanitize_text_field(wp_unslash($_POST['propvendor_location'])));
+        $loc_raw = sanitize_text_field(wp_unslash($_POST['propvendor_location']));
+        $loc_norm = propvendor_marketplace_normalize_nigerian_state($loc_raw);
+        $final_state = !empty($loc_norm) ? $loc_norm : $loc_raw;
+        update_post_meta($post_id, 'propvendor_location', $final_state);
+        update_post_meta($post_id, 'propvendor_state', $final_state);
     }
 
-    if (isset($_POST['propvendor_bedrooms'])) {
-        update_post_meta($post_id, 'propvendor_bedrooms', absint($_POST['propvendor_bedrooms']));
+    if (isset($_POST['propvendor_full_address'])) {
+        $full_addr = sanitize_text_field(wp_unslash($_POST['propvendor_full_address']));
+        if (mb_strlen($full_addr) > 255) {
+            $full_addr = mb_substr($full_addr, 0, 255);
+        }
+        update_post_meta($post_id, 'propvendor_full_address', $full_addr);
     }
 
-    if (isset($_POST['propvendor_bathrooms'])) {
-        update_post_meta($post_id, 'propvendor_bathrooms', absint($_POST['propvendor_bathrooms']));
-    }
-
-    if (isset($_POST['propvendor_condition'])) {
-        update_post_meta($post_id, 'propvendor_condition', sanitize_text_field(wp_unslash($_POST['propvendor_condition'])));
-    }
-
-    if (isset($_POST['propvendor_plot_size'])) {
-        update_post_meta($post_id, 'propvendor_plot_size', sanitize_text_field(wp_unslash($_POST['propvendor_plot_size'])));
+    $post_type = get_post_type($post_id);
+    if ('property_listing' === $post_type) {
+        if (isset($_POST['propvendor_property_subtype'])) {
+            update_post_meta($post_id, 'propvendor_property_subtype', sanitize_text_field(wp_unslash($_POST['propvendor_property_subtype'])));
+        }
+        if (isset($_POST['propvendor_purpose'])) {
+            update_post_meta($post_id, 'propvendor_purpose', sanitize_text_field(wp_unslash($_POST['propvendor_purpose'])));
+        }
+        if (isset($_POST['propvendor_bedrooms'])) {
+            update_post_meta($post_id, 'propvendor_bedrooms', absint($_POST['propvendor_bedrooms']));
+        }
+        if (isset($_POST['propvendor_bathrooms'])) {
+            update_post_meta($post_id, 'propvendor_bathrooms', absint($_POST['propvendor_bathrooms']));
+        }
+        if (isset($_POST['propvendor_furnishing'])) {
+            update_post_meta($post_id, 'propvendor_furnishing', sanitize_text_field(wp_unslash($_POST['propvendor_furnishing'])));
+        }
+        if (isset($_POST['propvendor_title_document'])) {
+            update_post_meta($post_id, 'propvendor_title_document', sanitize_text_field(wp_unslash($_POST['propvendor_title_document'])));
+        }
+        if (isset($_POST['propvendor_floor_area'])) {
+            update_post_meta($post_id, 'propvendor_floor_area', floatval($_POST['propvendor_floor_area']));
+        }
+        if (isset($_POST['propvendor_plot_size'])) {
+            update_post_meta($post_id, 'propvendor_plot_size', sanitize_text_field(wp_unslash($_POST['propvendor_plot_size'])));
+        }
+        if (isset($_POST['propvendor_plot_size_unit'])) {
+            $u_val = propvendor_marketplace_normalize_plot_size_unit(sanitize_text_field(wp_unslash($_POST['propvendor_plot_size_unit'])));
+            if (!empty($u_val)) {
+                update_post_meta($post_id, 'propvendor_plot_size_unit', $u_val);
+            } else {
+                delete_post_meta($post_id, 'propvendor_plot_size_unit');
+            }
+        }
+    } elseif ('land_listing' === $post_type) {
+        if (isset($_POST['propvendor_land_use'])) {
+            update_post_meta($post_id, 'propvendor_land_use', sanitize_text_field(wp_unslash($_POST['propvendor_land_use'])));
+        }
+        if (isset($_POST['propvendor_plot_size'])) {
+            update_post_meta($post_id, 'propvendor_plot_size', sanitize_text_field(wp_unslash($_POST['propvendor_plot_size'])));
+        }
+        if (isset($_POST['propvendor_plot_size_unit'])) {
+            $u_val = propvendor_marketplace_normalize_plot_size_unit(sanitize_text_field(wp_unslash($_POST['propvendor_plot_size_unit'])));
+            if (!empty($u_val)) {
+                update_post_meta($post_id, 'propvendor_plot_size_unit', $u_val);
+            } else {
+                delete_post_meta($post_id, 'propvendor_plot_size_unit');
+            }
+        }
+        if (isset($_POST['propvendor_title_document'])) {
+            update_post_meta($post_id, 'propvendor_title_document', sanitize_text_field(wp_unslash($_POST['propvendor_title_document'])));
+        }
+        if (isset($_POST['propvendor_land_length'])) {
+            update_post_meta($post_id, 'propvendor_land_length', sanitize_text_field(wp_unslash($_POST['propvendor_land_length'])));
+        }
+        if (isset($_POST['propvendor_land_width'])) {
+            update_post_meta($post_id, 'propvendor_land_width', sanitize_text_field(wp_unslash($_POST['propvendor_land_width'])));
+        }
+        if (isset($_POST['propvendor_frontage'])) {
+            update_post_meta($post_id, 'propvendor_frontage', sanitize_text_field(wp_unslash($_POST['propvendor_frontage'])));
+        }
+    } elseif ('vehicle_listing' === $post_type) {
+        if (isset($_POST['propvendor_vehicle_subtype'])) {
+            update_post_meta($post_id, 'propvendor_vehicle_subtype', sanitize_text_field(wp_unslash($_POST['propvendor_vehicle_subtype'])));
+        }
+        if (isset($_POST['propvendor_vehicle_make'])) {
+            update_post_meta($post_id, 'propvendor_vehicle_make', sanitize_text_field(wp_unslash($_POST['propvendor_vehicle_make'])));
+        }
+        if (isset($_POST['propvendor_vehicle_model'])) {
+            update_post_meta($post_id, 'propvendor_vehicle_model', sanitize_text_field(wp_unslash($_POST['propvendor_vehicle_model'])));
+        }
+        if (isset($_POST['propvendor_vehicle_year'])) {
+            update_post_meta($post_id, 'propvendor_vehicle_year', absint($_POST['propvendor_vehicle_year']));
+        }
+        if (isset($_POST['propvendor_condition'])) {
+            update_post_meta($post_id, 'propvendor_condition', sanitize_text_field(wp_unslash($_POST['propvendor_condition'])));
+        }
+        if (isset($_POST['propvendor_transmission'])) {
+            update_post_meta($post_id, 'propvendor_transmission', sanitize_text_field(wp_unslash($_POST['propvendor_transmission'])));
+        }
+        if (isset($_POST['propvendor_mileage'])) {
+            update_post_meta($post_id, 'propvendor_mileage', absint($_POST['propvendor_mileage']));
+        }
+        if (isset($_POST['propvendor_fuel_type'])) {
+            update_post_meta($post_id, 'propvendor_fuel_type', sanitize_text_field(wp_unslash($_POST['propvendor_fuel_type'])));
+        }
+        if (isset($_POST['propvendor_engine_size'])) {
+            update_post_meta($post_id, 'propvendor_engine_size', sanitize_text_field(wp_unslash($_POST['propvendor_engine_size'])));
+        }
     }
 
     if (current_user_can('manage_options') && isset($_POST['propvendor_listing_status'])) {
@@ -2207,6 +4275,14 @@ function propvendor_marketplace_handle_profile_update() {
     update_user_meta($current_user_id, 'propvendor_show_email', $show_email);
     update_user_meta($current_user_id, 'propvendor_forward_enquiries', $forward_enquiries);
 
+    // Stage 2: State Regulatory Compliance Numbers
+    if (isset($_POST['propvendor_lasrera_number'])) {
+        update_user_meta($current_user_id, 'propvendor_lasrera_number', sanitize_text_field(wp_unslash($_POST['propvendor_lasrera_number'])));
+    }
+    if (isset($_POST['propvendor_agency_license'])) {
+        update_user_meta($current_user_id, 'propvendor_agency_license', sanitize_text_field(wp_unslash($_POST['propvendor_agency_license'])));
+    }
+
     if (isset($_POST['propvendor_remove_profile_image']) && '1' === $_POST['propvendor_remove_profile_image']) {
         $old_img = absint(get_user_meta($current_user_id, 'propvendor_profile_image_id', true));
         if ($old_img) {
@@ -2294,6 +4370,13 @@ function propvendor_marketplace_render_vendor_profile_form($user_id) {
     $html .= '<p class="propvendor-field-hint" style="margin: 0.35rem 0 0 1.55rem; color: #234b6e; font-size: 0.85rem; line-height: 1.45;">When enabled, enquiries submitted through your listing pages are immediately forwarded to your contact email (or your registered account email if no public email is provided). Your private account email is kept confidential and never displayed publicly.</p>';
     $html .= '</div>';
 
+    // Stage 2: Regulatory Compliance Fields
+    $lasrera_number = get_user_meta($user_id, 'propvendor_lasrera_number', true);
+    $agency_license = get_user_meta($user_id, 'propvendor_agency_license', true);
+    $html .= '<div class="propvendor-form-section-divider"><h4>State Regulatory Compliance &amp; Licensing</h4><p class="propvendor-field-hint">Provide your registration details to qualify for the State-Registered Professional verified shield badge.</p></div>';
+    $html .= '<label>LASRERA Registration Number (Lagos Agents)<input type="text" name="propvendor_lasrera_number" value="' . esc_attr($lasrera_number) . '" placeholder="e.g. LASRERA/AGT/12345" /></label>';
+    $html .= '<label>Real Estate Board / REDAN License Number (Abuja &amp; Other States)<input type="text" name="propvendor_agency_license" value="' . esc_attr($agency_license) . '" placeholder="e.g. REDAN/ABJ/2026/098" /></label>';
+
     $html .= '<div class="propvendor-form-actions">';
     $html .= '<button type="submit">Save Profile Changes</button>';
     $html .= ' <a class="propvendor-btn secondary" href="' . esc_url(home_url('/vendor-dashboard/')) . '">Cancel</a>';
@@ -2374,7 +4457,28 @@ function propvendor_marketplace_add_admin_user_profile_fields($user) {
             if (empty($vendor_plan)) {
                 $vendor_plan = 'free';
             }
+            $lasrera_number = get_user_meta($user->ID, 'propvendor_lasrera_number', true);
+            $agency_license = get_user_meta($user->ID, 'propvendor_agency_license', true);
+            $regulatory_verified = get_user_meta($user->ID, 'propvendor_regulatory_verified', true);
         ?>
+        <tr>
+            <th><label for="propvendor_lasrera_number">LASRERA Registration Number</label></th>
+            <td><input type="text" name="propvendor_lasrera_number" id="propvendor_lasrera_number" value="<?php echo esc_attr($lasrera_number); ?>" class="regular-text" /></td>
+        </tr>
+        <tr>
+            <th><label for="propvendor_agency_license">Agency / REDAN License Number</label></th>
+            <td><input type="text" name="propvendor_agency_license" id="propvendor_agency_license" value="<?php echo esc_attr($agency_license); ?>" class="regular-text" /></td>
+        </tr>
+        <tr>
+            <th><label for="propvendor_regulatory_verified">State Regulatory Verification</label></th>
+            <td>
+                <select name="propvendor_regulatory_verified" id="propvendor_regulatory_verified">
+                    <option value="0" <?php selected((string) $regulatory_verified, '0'); ?>>Unverified (No Badge)</option>
+                    <option value="1" <?php selected((string) $regulatory_verified, '1'); ?>>Verified (Shield Badge Displayed)</option>
+                </select>
+                <p class="description">Only administrators with manage_options may modify this verification status.</p>
+            </td>
+        </tr>
         <tr>
             <th><label for="propvendor_vendor_plan">PropVendor Plan Tier</label></th>
             <td>
@@ -2383,6 +4487,28 @@ function propvendor_marketplace_add_admin_user_profile_fields($user) {
                     <option value="premium" <?php selected(in_array($vendor_plan, array('premium', 'pro', 'unlocked'), true), true); ?>>Premium Vendor (Unlocked Direct Leads)</option>
                 </select>
                 <p class="description">Controls customer contact visibility in vendor lead views. Free vendors see masked phone/email with Pay-to-Unlock prompts; Premium vendors see direct contact info.</p>
+            </td>
+        </tr>
+        <?php
+            $listing_plan = get_user_meta($user->ID, 'propvendor_listing_plan', true);
+            $listing_plan = ('vip' === strtolower(trim((string) $listing_plan))) ? 'vip' : 'free';
+            $plan_expires_at = get_user_meta($user->ID, 'propvendor_plan_expires_at', true);
+        ?>
+        <tr>
+            <th><label for="propvendor_listing_plan">Listing Quota Plan</label></th>
+            <td>
+                <select name="propvendor_listing_plan" id="propvendor_listing_plan">
+                    <option value="free" <?php selected($listing_plan, 'free'); ?>>Free (Max <?php echo absint(propvendor_marketplace_get_free_listing_limit()); ?> Active Listings)</option>
+                    <option value="vip" <?php selected($listing_plan, 'vip'); ?>>VIP Vendor (Unlimited Active Listings)</option>
+                </select>
+                <p class="description"><?php printf(esc_html__('Controls marketplace active listing limit across Property, Land, and Vehicle post types. Free vendors may have up to %d active listings; VIP vendors have unlimited listings.', 'propvendor-marketplace'), absint(propvendor_marketplace_get_free_listing_limit())); ?></p>
+            </td>
+        </tr>
+        <tr>
+            <th><label for="propvendor_plan_expires_at">VIP Plan Expiration Date</label></th>
+            <td>
+                <input type="date" name="propvendor_plan_expires_at" id="propvendor_plan_expires_at" value="<?php echo esc_attr($plan_expires_at); ?>" class="regular-text" />
+                <p class="description"><?php printf(esc_html__('Optional. Leave blank for lifetime/non-expiring VIP. If expired, the vendor automatically reverts to the free %d-listing quota for new submissions without deleting existing listings.', 'propvendor-marketplace'), absint(propvendor_marketplace_get_free_listing_limit())); ?></p>
             </td>
         </tr>
         <?php endif; ?>
@@ -2417,10 +4543,36 @@ function propvendor_marketplace_save_admin_user_profile_fields($user_id) {
     $forward_enquiries = (isset($_POST['propvendor_forward_enquiries']) && '1' === $_POST['propvendor_forward_enquiries']) ? '1' : '0';
     update_user_meta($user_id, 'propvendor_forward_enquiries', $forward_enquiries);
 
-    if (current_user_can('manage_options') && isset($_POST['propvendor_vendor_plan'])) {
-        $plan = sanitize_key(wp_unslash($_POST['propvendor_vendor_plan']));
-        if (in_array($plan, array('free', 'premium', 'pro', 'unlocked'), true)) {
-            update_user_meta($user_id, 'propvendor_vendor_plan', $plan);
+    if (current_user_can('manage_options')) {
+        if (isset($_POST['propvendor_lasrera_number'])) {
+            update_user_meta($user_id, 'propvendor_lasrera_number', sanitize_text_field(wp_unslash($_POST['propvendor_lasrera_number'])));
+        }
+        if (isset($_POST['propvendor_agency_license'])) {
+            update_user_meta($user_id, 'propvendor_agency_license', sanitize_text_field(wp_unslash($_POST['propvendor_agency_license'])));
+        }
+        if (isset($_POST['propvendor_regulatory_verified'])) {
+            $reg_val = ('1' === (string) $_POST['propvendor_regulatory_verified']) ? '1' : '0';
+            update_user_meta($user_id, 'propvendor_regulatory_verified', $reg_val);
+        }
+        if (isset($_POST['propvendor_vendor_plan'])) {
+            $plan = sanitize_key(wp_unslash($_POST['propvendor_vendor_plan']));
+            if (in_array($plan, array('free', 'premium', 'pro', 'unlocked'), true)) {
+                update_user_meta($user_id, 'propvendor_vendor_plan', $plan);
+            }
+        }
+        if (isset($_POST['propvendor_listing_plan'])) {
+            $lplan = sanitize_key(wp_unslash($_POST['propvendor_listing_plan']));
+            if (in_array($lplan, array('free', 'vip'), true)) {
+                update_user_meta($user_id, 'propvendor_listing_plan', $lplan);
+            }
+        }
+        if (isset($_POST['propvendor_plan_expires_at'])) {
+            $exp_val = sanitize_text_field(wp_unslash($_POST['propvendor_plan_expires_at']));
+            if ('' === $exp_val) {
+                delete_user_meta($user_id, 'propvendor_plan_expires_at');
+            } else {
+                update_user_meta($user_id, 'propvendor_plan_expires_at', $exp_val);
+            }
         }
     }
 }
@@ -2495,6 +4647,10 @@ function propvendor_marketplace_vendor_profile_shortcode($atts = array()) {
     $output .= '<div class="propvendor-vendor-title-row">';
     $output .= '<h1 class="propvendor-vendor-name">' . esc_html($display_title) . '</h1>';
     $output .= '<span class="propvendor-badge propvendor-badge-verified">Verified Vendor</span>';
+    $regulatory_verified = get_user_meta($vendor->ID, 'propvendor_regulatory_verified', true);
+    if ('1' === (string) $regulatory_verified) {
+        $output .= '<span class="propvendor-badge propvendor-badge-regulatory-verified" style="background: #0b5394; color: #fff; font-weight: 600;">🛡️ State-Registered Professional (Verified License)</span>';
+    }
     if (!empty($business_type)) {
         $output .= '<span class="propvendor-badge">' . esc_html($business_type) . '</span>';
     }
@@ -2505,6 +4661,16 @@ function propvendor_marketplace_vendor_profile_shortcode($atts = array()) {
         $output .= '<span class="propvendor-vendor-meta-item"><span class="dashicons dashicons-location"></span> ' . esc_html($location) . '</span>';
     }
     $output .= '<span class="propvendor-vendor-meta-item"><span class="dashicons dashicons-calendar-alt"></span> Member since ' . esc_html(date_i18n('F Y', strtotime($vendor->user_registered))) . '</span>';
+    if ('1' === (string) $regulatory_verified) {
+        $lasrera_num = get_user_meta($vendor->ID, 'propvendor_lasrera_number', true);
+        $agency_lic = get_user_meta($vendor->ID, 'propvendor_agency_license', true);
+        if (!empty($lasrera_num)) {
+            $output .= '<span class="propvendor-vendor-meta-item"><span class="dashicons dashicons-shield"></span> LASRERA: ' . esc_html($lasrera_num) . '</span>';
+        }
+        if (!empty($agency_lic)) {
+            $output .= '<span class="propvendor-vendor-meta-item"><span class="dashicons dashicons-shield"></span> License: ' . esc_html($agency_lic) . '</span>';
+        }
+    }
     $output .= '</div>';
 
     if (!empty($business_name) && !empty($vendor->display_name) && $business_name !== $vendor->display_name) {
@@ -2934,8 +5100,9 @@ function propvendor_marketplace_handle_enquiry_submission() {
     $customer_phone = sanitize_text_field(wp_unslash($_POST['customer_phone'] ?? ''));
     $message = sanitize_textarea_field(wp_unslash($_POST['customer_message'] ?? ''));
 
-    if (empty($customer_name) || mb_strlen($customer_name) < 2) {
-        propvendor_marketplace_redirect_with_notice($redirect_url, 'error', 'Please provide a valid name (at least 2 characters).');
+    $name_validation = propvendor_marketplace_validate_customer_name($customer_name);
+    if (is_wp_error($name_validation)) {
+        propvendor_marketplace_redirect_with_notice($redirect_url, 'error', $name_validation->get_error_message());
     }
 
     if (empty($customer_email) || !is_email($customer_email)) {
@@ -3060,15 +5227,34 @@ function propvendor_marketplace_handle_enquiry_submission() {
 
     // Send vendor notification ONLY after the enquiry has been successfully saved in the database
     if ($can_forward_vendor_email) {
+        // Remediate Finding 1: Evaluate vendor entitlement for lead contact details
+        $can_view_contact = propvendor_marketplace_vendor_can_view_contact_info($vendor_id, $thread_id);
+
         $subject = sprintf('[PropVendor Enquiry] %s (Ref: #%d)', get_the_title($listing), $listing_id);
         $email_body = "Hello,\n\nYou have received a new customer enquiry for your listing on PropVendor.\n\n";
         $email_body .= "Listing: " . get_the_title($listing) . "\n";
         $email_body .= "URL: " . get_permalink($listing) . "\n\n";
         $email_body .= "Customer Details:\n";
         $email_body .= "Name: " . $customer_name . "\n";
-        $email_body .= "Email: " . $customer_email . "\n";
-        $email_body .= "Phone: " . ($customer_phone ? $customer_phone : "Not provided") . "\n\n";
-        $email_body .= "Message:\n" . $message . "\n\n";
+
+        if ($can_view_contact) {
+            $email_body .= "Email: " . $customer_email . "\n";
+            $email_body .= "Phone: " . (!empty($customer_phone) ? $customer_phone : "Not provided") . "\n\n";
+        } else {
+            $masked_email = propvendor_marketplace_mask_email($customer_email);
+            if (empty($masked_email)) {
+                $masked_email = '[Protected Email]';
+            }
+            $masked_phone = !empty($customer_phone) ? propvendor_marketplace_mask_phone($customer_phone) : "Not provided";
+
+            $email_body .= "Email: " . $masked_email . " [Locked Lead]\n";
+            $email_body .= "Phone: " . $masked_phone . (!empty($customer_phone) ? " [Locked Lead]" : "") . "\n\n";
+            $email_body .= "Note: Direct customer contact details are locked. To reveal this customer's full phone number and email address, upgrade to PropVendor Premium or unlock this lead in your Vendor Dashboard:\n";
+            $email_body .= home_url('/vendor-dashboard/?view=inbox' . (!empty($thread_id) ? '&thread_id=' . $thread_id : '')) . "\n\n";
+        }
+
+        $display_message = $can_view_contact ? $message : propvendor_marketplace_mask_message_contact_info($message);
+        $email_body .= "Message:\n" . $display_message . "\n\n";
         if (!empty($thread_id)) {
             $email_body .= "View and respond via Vendor Dashboard:\n";
             $email_body .= home_url('/vendor-dashboard/?view=inbox&thread_id=' . $thread_id) . "\n\n";
@@ -3077,8 +5263,13 @@ function propvendor_marketplace_handle_enquiry_submission() {
 
         $headers = array(
             'From: PropVendor Marketplace <no-reply@' . wp_parse_url(home_url(), PHP_URL_HOST) . '>',
-            'Reply-To: ' . $customer_name . ' <' . $customer_email . '>',
         );
+
+        if ($can_view_contact) {
+            $headers[] = 'Reply-To: ' . $customer_name . ' <' . $customer_email . '>';
+        } else {
+            $headers[] = 'Reply-To: PropVendor Marketplace <no-reply@' . wp_parse_url(home_url(), PHP_URL_HOST) . '>';
+        }
 
         $sent = wp_mail($vendor_recipient, $subject, $email_body, $headers);
         if ($sent) {
@@ -3427,6 +5618,101 @@ function propvendor_marketplace_mask_email($email) {
 }
 
 /**
+ * Detect and mask email addresses and phone numbers in freeform message text.
+ *
+ * @param string $text
+ * @return string
+ */
+function propvendor_marketplace_mask_message_contact_info($text) {
+    if (empty($text) || !is_string($text)) {
+        return '';
+    }
+
+    // 1. Mask email addresses
+    $email_pattern = '/(?<![\w])\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/u';
+    $text = preg_replace($email_pattern, '[Protected Email]', $text);
+
+    // 2. Mask phone numbers (matches 7 to 15 digits with optional country/area codes and separators)
+    $phone_pattern = '/(?<![\w@])(?:\+?\d{1,4}[-.\s]*)?(?:\(\d{1,4}\)[-.\s]*)?(?:\d[-.\s()]*){6,14}\d(?![\w])/u';
+    $text = preg_replace_callback($phone_pattern, function($matches) {
+        $match = $matches[0];
+        $digits = preg_replace('/\D/', '', $match);
+        $len = strlen($digits);
+
+        if ($len >= 7 && $len <= 15) {
+            // Preserve common date formats like YYYY-MM-DD or DD/MM/YYYY
+            if (preg_match('/^\d{4}[-\/]\d{1,2}[-\/]\d{1,2}$/', trim($match)) ||
+                preg_match('/^\d{1,2}[-\/]\d{1,2}[-\/]\d{4}$/', trim($match))) {
+                return $match;
+            }
+            return '[Protected Phone]';
+        }
+        return $match;
+    }, $text);
+
+    return $text;
+}
+
+/**
+ * Validate customer name on submission to prevent contact smuggling.
+ *
+ * @param string $name
+ * @return true|WP_Error
+ */
+function propvendor_marketplace_validate_customer_name($name) {
+    $trimmed = trim((string) $name);
+    if (empty($trimmed) || mb_strlen($trimmed) < 2) {
+        return new WP_Error('invalid_name_length', 'Please provide a valid name (at least 2 characters).');
+    }
+
+    if (mb_strlen($trimmed) > 100) {
+        return new WP_Error('invalid_name_length', 'Name cannot exceed 100 characters.');
+    }
+
+    // Reject names containing email addresses or '@'
+    if (strpos($trimmed, '@') !== false || preg_match('/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/u', $trimmed)) {
+        return new WP_Error('invalid_name_email', 'Please provide a valid name. Names cannot contain email addresses.');
+    }
+
+    // Reject names containing phone numbers or numeric digits
+    if (preg_match('/\d/', $trimmed) || preg_match('/(?:\+?\d{1,3}[\s-]?)?\(?\d{2,4}\)?[\s-]?\d{3,}/u', $trimmed)) {
+        return new WP_Error('invalid_name_phone', 'Please provide a valid name. Names cannot contain phone numbers or numeric digits.');
+    }
+
+    // Enforce allowed name characters: Unicode letters, spaces, hyphens, apostrophes, and periods
+    if (!preg_match('/^[\p{L}\s\'\’\-\.]{2,100}$/u', $trimmed)) {
+        return new WP_Error('invalid_name_chars', 'Please provide a valid name (letters, spaces, hyphens, and apostrophes only).');
+    }
+
+    return true;
+}
+
+/**
+ * Safely format or mask customer name for display to vendors who do not have unlocked access.
+ *
+ * @param string $name
+ * @param bool $can_view_contact
+ * @return string
+ */
+function propvendor_marketplace_format_display_customer_name($name, $can_view_contact = true) {
+    $name = trim((string) $name);
+    if (empty($name)) {
+        return 'Customer';
+    }
+
+    if ($can_view_contact) {
+        return $name;
+    }
+
+    // For locked leads, if historical or malformed name contains email or phone, sanitize it
+    if (strpos($name, '@') !== false || preg_match('/\d{3,}/', $name)) {
+        return propvendor_marketplace_mask_message_contact_info($name);
+    }
+
+    return $name;
+}
+
+/**
  * Check if a vendor can view unmasked customer lead contact info.
  *
  * @param int $vendor_id
@@ -3439,8 +5725,13 @@ function propvendor_marketplace_vendor_can_view_contact_info($vendor_id, $thread
         $vendor_id = get_current_user_id();
     }
 
-    // 1. Administrator check
-    if (current_user_can('manage_options') || ($vendor_id > 0 && user_can($vendor_id, 'manage_options'))) {
+    // 1. Administrator check:
+    // If the target vendor itself is an Administrator:
+    if ($vendor_id > 0 && user_can($vendor_id, 'manage_options')) {
+        return true;
+    }
+    // If the active session is an Administrator viewing on-screen in their own/dashboard context:
+    if ($vendor_id === get_current_user_id() && current_user_can('manage_options')) {
         return true;
     }
 
@@ -3600,11 +5891,14 @@ function propvendor_marketplace_render_vendor_inbox($vendor_id) {
             $t->id
         ));
 
+        $thread_can_view = propvendor_marketplace_vendor_can_view_contact_info($vendor_id, $t->id);
         $latest_msg = $wpdb->get_row($wpdb->prepare(
             "SELECT message, created_at FROM {$table_messages} WHERE thread_id = %d ORDER BY created_at DESC LIMIT 1",
             $t->id
         ));
-        $snippet = $latest_msg ? wp_trim_words(esc_html($latest_msg->message), 8, '...') : '';
+        $raw_msg_text = $latest_msg ? $latest_msg->message : '';
+        $display_msg_text = $thread_can_view ? $raw_msg_text : propvendor_marketplace_mask_message_contact_info($raw_msg_text);
+        $snippet = $latest_msg ? wp_trim_words(esc_html($display_msg_text), 8, '...') : '';
         $time_diff = human_time_diff(strtotime($t->last_message_at), current_time('timestamp')) . ' ago';
 
         $listing = get_post($t->listing_id);
@@ -3620,7 +5914,7 @@ function propvendor_marketplace_render_vendor_inbox($vendor_id) {
         if ($unread_count > 0) {
             $output .= '<span class="pv-inbox-unread-dot" title="Unread messages"></span>';
         }
-        $output .= esc_html($t->customer_name);
+        $output .= esc_html(propvendor_marketplace_format_display_customer_name($t->customer_name, $thread_can_view));
         $output .= '</span>';
         $output .= '<span class="pv-inbox-thread-time">' . esc_html($time_diff) . '</span>';
         $output .= '</div>';
@@ -3667,7 +5961,8 @@ function propvendor_marketplace_render_vendor_inbox($vendor_id) {
         $output .= '<div>';
         $output .= '<h3 class="pv-inbox-header-title"><a href="' . esc_url($listing_url) . '" target="_blank" rel="noopener">' . esc_html($listing_title) . ' &#8599;</a></h3>';
         $output .= '<div class="pv-inbox-header-meta">';
-        $output .= '<span><strong>Customer:</strong> ' . esc_html($active_thread->customer_name) . '</span>';
+        $display_customer_name = propvendor_marketplace_format_display_customer_name($active_thread->customer_name, $can_view_contact);
+        $output .= '<span><strong>Customer:</strong> ' . esc_html($display_customer_name) . '</span>';
         if ($can_view_contact) {
             $output .= '<span><strong>Email:</strong> <a href="mailto:' . esc_attr($active_thread->customer_email) . '">' . esc_html($active_thread->customer_email) . '</a></span>';
             if (!empty($customer_phone)) {
@@ -3694,6 +5989,9 @@ function propvendor_marketplace_render_vendor_inbox($vendor_id) {
             $active_thread_id
         ));
 
+        // Stage 2: Universal Anti-Advance-Fee Trust & Safety Notice
+        $output .= propvendor_marketplace_render_anti_fraud_notice();
+
         $output .= '<div class="pv-msg-stream" id="pv-msg-stream">';
         if (!empty($messages)) {
             foreach ($messages as $msg) {
@@ -3702,11 +6000,16 @@ function propvendor_marketplace_render_vendor_inbox($vendor_id) {
                 $is_customer = ('customer' === $role);
                 $row_class = 'pv-msg-row ' . ($is_vendor ? 'pv-msg-from-vendor pv-msg-vendor' : ($is_customer ? 'pv-msg-from-customer pv-msg-customer' : 'pv-msg-from-admin'));
 
-                $sender_label = $is_vendor ? 'You (Vendor)' : ($is_customer ? esc_html($active_thread->customer_name) : 'Administrator');
+                $sender_label = $is_vendor ? 'You (Vendor)' : ($is_customer ? esc_html($display_customer_name) : 'Administrator');
                 $msg_time = date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($msg->created_at));
 
+                $msg_content = $msg->message;
+                if (!$can_view_contact && 'customer' === $role) {
+                    $msg_content = propvendor_marketplace_mask_message_contact_info($msg_content);
+                }
+
                 $output .= '<div class="' . esc_attr($row_class) . '">';
-                $output .= '<div class="pv-msg-bubble">' . nl2br(esc_html($msg->message)) . '</div>';
+                $output .= '<div class="pv-msg-bubble">' . nl2br(esc_html($msg_content)) . '</div>';
                 $output .= '<div class="pv-msg-meta">' . $sender_label . ' &bull; ' . esc_html($msg_time) . '</div>';
                 $output .= '</div>';
             }
@@ -3722,7 +6025,7 @@ function propvendor_marketplace_render_vendor_inbox($vendor_id) {
         $output .= '<input type="hidden" name="action" value="propvendor_send_inbox_reply" />';
         $output .= '<input type="hidden" name="thread_id" value="' . absint($active_thread_id) . '" />';
         $output .= '<input type="hidden" name="redirect_context" value="vendor" />';
-        $output .= '<textarea name="message_content" rows="3" required minlength="2" maxlength="5000" placeholder="Write your reply to ' . esc_attr($active_thread->customer_name) . '..."></textarea>';
+        $output .= '<textarea name="message_content" rows="3" required minlength="2" maxlength="5000" placeholder="Write your reply to ' . esc_attr($display_customer_name) . '..."></textarea>';
         $output .= '<button type="submit" class="propvendor-btn primary pv-reply-submit">Send Reply</button>';
         $output .= '</form>';
         $output .= '</div>';
@@ -3902,6 +6205,9 @@ function propvendor_marketplace_customer_inbox_shortcode() {
             "SELECT * FROM {$table_messages} WHERE thread_id = %d ORDER BY created_at ASC",
             $active_thread_id
         ));
+
+        // Stage 2: Universal Anti-Advance-Fee Trust & Safety Notice
+        $output .= propvendor_marketplace_render_anti_fraud_notice();
 
         $output .= '<div class="pv-msg-stream" id="pv-msg-stream-cust">';
         if (!empty($messages)) {
@@ -4235,10 +6541,14 @@ function propvendor_marketplace_handle_send_inbox_reply() {
         }
 
         if (!empty($vendor_email)) {
+            $can_view_contact = propvendor_marketplace_vendor_can_view_contact_info($thread->vendor_id, $thread_id);
+            $email_snippet = $can_view_contact ? $snippet : propvendor_marketplace_mask_message_contact_info($snippet);
+            $email_customer_name = propvendor_marketplace_format_display_customer_name($thread->customer_name, $can_view_contact);
+
             $subject = sprintf('New reply regarding %s', $listing_title);
             $body  = "Hello " . $vendor_name . ",\n\n";
-            $body .= $thread->customer_name . " has replied to your conversation regarding " . $listing_title . ":\n\n";
-            $body .= "\"" . $snippet . "\"\n\n";
+            $body .= $email_customer_name . " has replied to your conversation regarding " . $listing_title . ":\n\n";
+            $body .= "\"" . $email_snippet . "\"\n\n";
             $body .= "Log in to your vendor dashboard to view and respond: " . $vendor_inbox_link . "\n\n";
             $body .= "Regards,\nPropVendor Team";
 
