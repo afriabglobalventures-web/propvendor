@@ -1311,7 +1311,7 @@ add_action('init', 'propvendor_marketplace_ensure_customer_inbox_page');
 
 function propvendor_marketplace_public_listing_meta_query() {
     $moderation_keys = array('propvendor_listing_status', 'propvendor_status');
-    $unapproved_statuses = array('Pending review', 'Rejected', 'Unavailable', 'Expired');
+    $unapproved_statuses = array('Pending review', 'Rejected', 'Unavailable', 'Expired', 'Sold', 'Rented');
     $meta_query = array('relation' => 'AND');
 
     foreach ($moderation_keys as $meta_key) {
@@ -1648,8 +1648,13 @@ function propvendor_marketplace_filter_keyword_search($search, $query) {
 
     foreach ($terms as $term) {
         $like = '%' . $wpdb->esc_like($term) . '%';
-        $conditions[] = '((' . $wpdb->posts . '.post_title LIKE %s OR ' . $wpdb->posts . '.post_excerpt LIKE %s OR ' . $wpdb->posts . '.post_content LIKE %s) OR EXISTS (SELECT 1 FROM ' . $wpdb->postmeta . ' AS propvendor_search_location WHERE propvendor_search_location.post_id = ' . $wpdb->posts . '.ID AND propvendor_search_location.meta_key = %s AND propvendor_search_location.meta_value LIKE %s))';
-        $prepare_values = array_merge($prepare_values, array($like, $like, $like, 'propvendor_location', $like));
+        $conditions[] = '((' . $wpdb->posts . '.post_title LIKE %s OR ' . $wpdb->posts . '.post_excerpt LIKE %s OR ' . $wpdb->posts . '.post_content LIKE %s)
+            OR EXISTS (SELECT 1 FROM ' . $wpdb->postmeta . ' AS propvendor_search_location WHERE propvendor_search_location.post_id = ' . $wpdb->posts . '.ID AND propvendor_search_location.meta_key = %s AND propvendor_search_location.meta_value LIKE %s)
+            OR EXISTS (SELECT 1 FROM ' . $wpdb->postmeta . ' AS propvendor_search_addr WHERE propvendor_search_addr.post_id = ' . $wpdb->posts . '.ID AND propvendor_search_addr.meta_key IN (%s, %s, %s) AND propvendor_search_addr.meta_value LIKE %s))';
+        $prepare_values = array_merge(
+            $prepare_values,
+            array($like, $like, $like, 'propvendor_location', $like, 'propvendor_full_address', '_listing_full_address', 'full_address', $like)
+        );
     }
 
     if (empty($conditions)) {
@@ -2054,165 +2059,899 @@ function propvendor_marketplace_home_shortcode() {
 }
 add_shortcode('propvendor_home', 'propvendor_marketplace_home_shortcode');
 
-function propvendor_marketplace_browse_shortcode() {
-    $keyword = isset($_GET['pv_keyword']) ? sanitize_text_field(wp_unslash($_GET['pv_keyword'])) : '';
-    $keyword = substr($keyword, 0, 100);
-    $listing_type = isset($_GET['pv_type']) ? sanitize_key(wp_unslash($_GET['pv_type'])) : '';
-    $allowed_types = propvendor_marketplace_get_listing_post_types();
-    if (!in_array($listing_type, $allowed_types, true)) {
-        $listing_type = '';
+/**
+ * Build sanitized WP_Query arguments from search & filter parameters.
+ *
+ * @param array $params Optional GET or explicit parameters.
+ * @return array
+ */
+function propvendor_marketplace_get_search_query_args($params = array()) {
+    if (empty($params)) {
+        $params = $_GET;
     }
 
-    $category_id = isset($_GET['pv_category']) ? absint($_GET['pv_category']) : 0;
+    // 1. Keyword search (post_title, post_excerpt, post_content, location, and full_address)
+    $keyword = isset($params['pv_keyword']) ? sanitize_text_field(wp_unslash($params['pv_keyword'])) : '';
+    $keyword = trim(substr($keyword, 0, 150));
+
+    // 2. Listing Type / Category
+    $raw_type = isset($params['pv_type']) ? sanitize_key(wp_unslash($params['pv_type'])) : '';
+    $type_aliases = array(
+        'property' => 'property_listing',
+        'land'     => 'land_listing',
+        'vehicle'  => 'vehicle_listing',
+    );
+    if (isset($type_aliases[$raw_type])) {
+        $raw_type = $type_aliases[$raw_type];
+    }
+    $allowed_types = propvendor_marketplace_get_listing_post_types();
+    $listing_type  = in_array($raw_type, $allowed_types, true) ? $raw_type : '';
+
+    // 3. State (pv_state with pv_location fallback)
+    $state_param = isset($params['pv_state']) ? $params['pv_state'] : (isset($params['pv_location']) ? $params['pv_location'] : '');
+    $state       = propvendor_marketplace_normalize_nigerian_state(sanitize_text_field(wp_unslash($state_param)));
+
+    // 4. Price range
+    $min_price_raw = isset($params['pv_min_price']) ? sanitize_text_field(wp_unslash($params['pv_min_price'])) : '';
+    $max_price_raw = isset($params['pv_max_price']) ? sanitize_text_field(wp_unslash($params['pv_max_price'])) : '';
+    $min_price_raw = str_replace(array(',', ' '), '', $min_price_raw);
+    $max_price_raw = str_replace(array(',', ' '), '', $max_price_raw);
+    $min_price     = ('' !== $min_price_raw && is_numeric($min_price_raw) && (float) $min_price_raw >= 0) ? (float) $min_price_raw : '';
+    $max_price     = ('' !== $max_price_raw && is_numeric($max_price_raw) && (float) $max_price_raw >= 0) ? (float) $max_price_raw : '';
+    if ('' !== $min_price && '' !== $max_price && $min_price > $max_price) {
+        $temp      = $min_price;
+        $min_price = $max_price;
+        $max_price = $temp;
+    }
+
+    // 5. Title document (Property & Land)
+    $title_doc = isset($params['pv_title_doc']) ? sanitize_text_field(wp_unslash($params['pv_title_doc'])) : '';
+    $title_doc = trim($title_doc);
+
+    // 6. Property-specific
+    $property_subtype = isset($params['pv_property_subtype']) ? sanitize_text_field(wp_unslash($params['pv_property_subtype'])) : '';
+    $min_bedrooms     = isset($params['pv_min_bedrooms']) && '' !== trim((string)$params['pv_min_bedrooms']) && is_numeric($params['pv_min_bedrooms']) ? max(0, absint($params['pv_min_bedrooms'])) : '';
+    $min_bathrooms    = isset($params['pv_min_bathrooms']) && '' !== trim((string)$params['pv_min_bathrooms']) && is_numeric($params['pv_min_bathrooms']) ? max(0, absint($params['pv_min_bathrooms'])) : '';
+    $furnishing       = isset($params['pv_furnishing']) ? sanitize_text_field(wp_unslash($params['pv_furnishing'])) : '';
+
+    // 7. Land-specific
+    $land_use          = isset($params['pv_land_use']) ? sanitize_text_field(wp_unslash($params['pv_land_use'])) : '';
+    $min_plot_size_raw = isset($params['pv_min_plot_size']) ? sanitize_text_field(wp_unslash($params['pv_min_plot_size'])) : '';
+    $max_plot_size_raw = isset($params['pv_max_plot_size']) ? sanitize_text_field(wp_unslash($params['pv_max_plot_size'])) : '';
+    $min_plot_size     = ('' !== $min_plot_size_raw && is_numeric($min_plot_size_raw) && (float) $min_plot_size_raw >= 0) ? (float) $min_plot_size_raw : '';
+    $max_plot_size     = ('' !== $max_plot_size_raw && is_numeric($max_plot_size_raw) && (float) $max_plot_size_raw >= 0) ? (float) $max_plot_size_raw : '';
+    if ('' !== $min_plot_size && '' !== $max_plot_size && $min_plot_size > $max_plot_size) {
+        $temp          = $min_plot_size;
+        $min_plot_size = $max_plot_size;
+        $max_plot_size = $temp;
+    }
+    $plot_unit = isset($params['pv_plot_unit']) ? propvendor_marketplace_normalize_plot_size_unit(sanitize_text_field(wp_unslash($params['pv_plot_unit']))) : '';
+
+    // 8. Vehicle-specific
+    $vehicle_type = isset($params['pv_vehicle_type']) ? sanitize_text_field(wp_unslash($params['pv_vehicle_type'])) : '';
+    $make         = isset($params['pv_make']) ? sanitize_text_field(wp_unslash($params['pv_make'])) : '';
+    $model        = isset($params['pv_model']) ? sanitize_text_field(wp_unslash($params['pv_model'])) : '';
+    $min_year     = isset($params['pv_min_year']) && '' !== trim((string)$params['pv_min_year']) && is_numeric($params['pv_min_year']) ? absint($params['pv_min_year']) : '';
+    $max_year     = isset($params['pv_max_year']) && '' !== trim((string)$params['pv_max_year']) && is_numeric($params['pv_max_year']) ? absint($params['pv_max_year']) : '';
+    if ('' !== $min_year && '' !== $max_year && $min_year > $max_year) {
+        $temp     = $min_year;
+        $min_year = $max_year;
+        $max_year = $temp;
+    }
+    $condition    = isset($params['pv_condition']) ? sanitize_text_field(wp_unslash($params['pv_condition'])) : '';
+    $transmission = isset($params['pv_transmission']) ? sanitize_text_field(wp_unslash($params['pv_transmission'])) : '';
+
+    // 9. Sorting
+    $sort        = isset($params['pv_sort']) ? sanitize_key(wp_unslash($params['pv_sort'])) : 'date_desc';
+    $valid_sorts = array('date_desc', 'date_asc', 'price_asc', 'price_desc');
+    if (!in_array($sort, $valid_sorts, true)) {
+        $sort = 'date_desc';
+    }
+
+    // 10. Taxonomy category (pv_category)
+    $category_id = isset($params['pv_category']) ? absint($params['pv_category']) : 0;
     if ($category_id && !term_exists($category_id, 'listing_category')) {
         $category_id = 0;
     }
 
-    $location = isset($_GET['pv_location']) ? sanitize_text_field(wp_unslash($_GET['pv_location'])) : '';
-    $locations = propvendor_marketplace_get_public_locations();
-    if (!in_array($location, $locations, true)) {
-        $location = '';
-    }
+    // 11. Pagination
+    $paged          = max(1, absint(get_query_var('paged', 1)), isset($params['paged']) ? absint($params['paged']) : 1);
+    $posts_per_page = isset($params['posts_per_page']) ? max(1, absint($params['posts_per_page'])) : 9;
 
-    $min_price_raw = isset($_GET['pv_min_price']) ? sanitize_text_field(wp_unslash($_GET['pv_min_price'])) : '';
-    $max_price_raw = isset($_GET['pv_max_price']) ? sanitize_text_field(wp_unslash($_GET['pv_max_price'])) : '';
-    $min_price_raw = str_replace(',', '', $min_price_raw);
-    $max_price_raw = str_replace(',', '', $max_price_raw);
-    $min_price = '' !== $min_price_raw && is_numeric($min_price_raw) && (float) $min_price_raw >= 0 ? (float) $min_price_raw : '';
-    $max_price = '' !== $max_price_raw && is_numeric($max_price_raw) && (float) $max_price_raw >= 0 ? (float) $max_price_raw : '';
-    if ('' !== $min_price && '' !== $max_price && $min_price > $max_price) {
-        $min_price = '';
-        $max_price = '';
-    }
+    // Build meta_query
+    $meta_query = array('relation' => 'AND');
 
-    $query_args = array(
-        'post_type' => $listing_type ? $listing_type : $allowed_types,
-        'post_status' => 'publish',
-        'posts_per_page' => 9,
-        'paged' => max(1, absint(get_query_var('paged', 1)), isset($_GET['paged']) ? absint($_GET['paged']) : 1),
-        'orderby' => 'date',
-        'order' => 'DESC',
-        'meta_query' => propvendor_marketplace_public_listing_meta_query(),
-    );
-
-    if ($keyword) {
-        $query_args['s'] = $keyword;
-        $query_args['propvendor_keyword_search'] = $keyword;
-    }
-
-    if ($category_id) {
-        $query_args['tax_query'] = array(
+    // Active listing filter: Exclude 'Pending review', 'Rejected', 'Unavailable', 'Expired', 'Sold', 'Rented'
+    $inactive_statuses = array('Pending review', 'Rejected', 'Unavailable', 'Expired', 'Sold', 'Rented');
+    $moderation_keys   = array('propvendor_listing_status', 'propvendor_status');
+    foreach ($moderation_keys as $meta_key) {
+        $meta_query[] = array(
+            'relation' => 'OR',
             array(
-                'taxonomy' => 'listing_category',
-                'field' => 'term_id',
-                'terms' => $category_id,
+                'key'     => $meta_key,
+                'value'   => $inactive_statuses,
+                'compare' => 'NOT IN',
+            ),
+            array(
+                'key'     => $meta_key,
+                'compare' => 'NOT EXISTS',
             ),
         );
     }
 
-    if ($location) {
-        $query_args['meta_query'][] = array(
-            'key' => 'propvendor_location',
-            'value' => $location,
-            'compare' => '=',
+    // State filter (checks propvendor_location, _listing_location, location)
+    if (!empty($state)) {
+        $meta_query[] = array(
+            'relation' => 'OR',
+            array(
+                'key'     => 'propvendor_location',
+                'value'   => $state,
+                'compare' => 'LIKE',
+            ),
+            array(
+                'key'     => '_listing_location',
+                'value'   => $state,
+                'compare' => 'LIKE',
+            ),
+            array(
+                'key'     => 'location',
+                'value'   => $state,
+                'compare' => 'LIKE',
+            ),
         );
     }
 
+    // Price filter (checks propvendor_price, _listing_price, price)
+    $price_keys = array('propvendor_price', '_listing_price', 'price');
     if ('' !== $min_price && '' !== $max_price) {
-        $query_args['meta_query'][] = array(
-            'key' => 'propvendor_price',
-            'value' => array($min_price, $max_price),
-            'compare' => 'BETWEEN',
-            'type' => 'DECIMAL(14,2)',
-        );
+        $price_or = array('relation' => 'OR');
+        foreach ($price_keys as $pk) {
+            $price_or[] = array(
+                'key'     => $pk,
+                'value'   => array($min_price, $max_price),
+                'compare' => 'BETWEEN',
+                'type'    => 'NUMERIC',
+            );
+        }
+        $meta_query[] = $price_or;
     } elseif ('' !== $min_price) {
-        $query_args['meta_query'][] = array(
-            'key' => 'propvendor_price',
-            'value' => $min_price,
-            'compare' => '>=',
-            'type' => 'DECIMAL(14,2)',
-        );
+        $price_or = array('relation' => 'OR');
+        foreach ($price_keys as $pk) {
+            $price_or[] = array(
+                'key'     => $pk,
+                'value'   => $min_price,
+                'compare' => '>=',
+                'type'    => 'NUMERIC',
+            );
+        }
+        $meta_query[] = $price_or;
     } elseif ('' !== $max_price) {
-        $query_args['meta_query'][] = array(
-            'key' => 'propvendor_price',
-            'value' => $max_price,
-            'compare' => '<=',
-            'type' => 'DECIMAL(14,2)',
+        $price_or = array('relation' => 'OR');
+        foreach ($price_keys as $pk) {
+            $price_or[] = array(
+                'key'     => $pk,
+                'value'   => $max_price,
+                'compare' => '<=',
+                'type'    => 'NUMERIC',
+            );
+        }
+        $meta_query[] = $price_or;
+    }
+
+    // Title document filter (flexible matching for C of O / Certificate of Occupancy across keys)
+    if (!empty($title_doc)) {
+        $doc_keys = array('propvendor_title_document', '_listing_title_document', 'title_document');
+        $doc_or   = array('relation' => 'OR');
+        if (0 === strcasecmp($title_doc, 'C of O') || stripos($title_doc, 'Certificate of Occupancy') !== false) {
+            foreach ($doc_keys as $dk) {
+                $doc_or[] = array(
+                    'key'     => $dk,
+                    'value'   => 'Certificate of Occupancy (C of O)',
+                    'compare' => '=',
+                );
+                $doc_or[] = array(
+                    'key'     => $dk,
+                    'value'   => 'C of O',
+                    'compare' => 'LIKE',
+                );
+                $doc_or[] = array(
+                    'key'     => $dk,
+                    'value'   => 'Certificate of Occupancy',
+                    'compare' => 'LIKE',
+                );
+            }
+        } else {
+            foreach ($doc_keys as $dk) {
+                $doc_or[] = array(
+                    'key'     => $dk,
+                    'value'   => $title_doc,
+                    'compare' => 'LIKE',
+                );
+            }
+        }
+        $meta_query[] = $doc_or;
+    }
+
+    // Property-specific filters
+    if (!empty($property_subtype)) {
+        $meta_query[] = array(
+            'relation' => 'OR',
+            array(
+                'key'     => 'propvendor_property_subtype',
+                'value'   => $property_subtype,
+                'compare' => 'LIKE',
+            ),
+            array(
+                'key'     => '_listing_property_subtype',
+                'value'   => $property_subtype,
+                'compare' => 'LIKE',
+            ),
+        );
+    }
+    if ('' !== $min_bedrooms && $min_bedrooms > 0) {
+        $meta_query[] = array(
+            'relation' => 'OR',
+            array(
+                'key'     => 'propvendor_bedrooms',
+                'value'   => $min_bedrooms,
+                'compare' => '>=',
+                'type'    => 'NUMERIC',
+            ),
+            array(
+                'key'     => '_listing_bedrooms',
+                'value'   => $min_bedrooms,
+                'compare' => '>=',
+                'type'    => 'NUMERIC',
+            ),
+        );
+    }
+    if ('' !== $min_bathrooms && $min_bathrooms > 0) {
+        $meta_query[] = array(
+            'relation' => 'OR',
+            array(
+                'key'     => 'propvendor_bathrooms',
+                'value'   => $min_bathrooms,
+                'compare' => '>=',
+                'type'    => 'NUMERIC',
+            ),
+            array(
+                'key'     => '_listing_bathrooms',
+                'value'   => $min_bathrooms,
+                'compare' => '>=',
+                'type'    => 'NUMERIC',
+            ),
+        );
+    }
+    if (!empty($furnishing)) {
+        $meta_query[] = array(
+            'relation' => 'OR',
+            array(
+                'key'     => 'propvendor_furnishing',
+                'value'   => $furnishing,
+                'compare' => 'LIKE',
+            ),
+            array(
+                'key'     => '_listing_furnishing',
+                'value'   => $furnishing,
+                'compare' => 'LIKE',
+            ),
         );
     }
 
+    // Land-specific filters
+    if (!empty($land_use)) {
+        $meta_query[] = array(
+            'relation' => 'OR',
+            array(
+                'key'     => 'propvendor_land_use',
+                'value'   => $land_use,
+                'compare' => 'LIKE',
+            ),
+            array(
+                'key'     => '_listing_land_use',
+                'value'   => $land_use,
+                'compare' => 'LIKE',
+            ),
+        );
+    }
+    if ('' !== $min_plot_size && '' !== $max_plot_size) {
+        $meta_query[] = array(
+            'key'     => 'propvendor_plot_size',
+            'value'   => array($min_plot_size, $max_plot_size),
+            'compare' => 'BETWEEN',
+            'type'    => 'NUMERIC',
+        );
+    } elseif ('' !== $min_plot_size) {
+        $meta_query[] = array(
+            'key'     => 'propvendor_plot_size',
+            'value'   => $min_plot_size,
+            'compare' => '>=',
+            'type'    => 'NUMERIC',
+        );
+    } elseif ('' !== $max_plot_size) {
+        $meta_query[] = array(
+            'key'     => 'propvendor_plot_size',
+            'value'   => $max_plot_size,
+            'compare' => '<=',
+            'type'    => 'NUMERIC',
+        );
+    }
+    if (!empty($plot_unit)) {
+        $meta_query[] = array(
+            'relation' => 'OR',
+            array(
+                'key'     => 'propvendor_plot_size_unit',
+                'value'   => $plot_unit,
+                'compare' => '=',
+            ),
+            array(
+                'key'     => 'propvendor_plot_size_unit',
+                'value'   => propvendor_marketplace_get_plot_size_unit_label($plot_unit),
+                'compare' => '=',
+            ),
+            array(
+                'key'     => '_listing_plot_size_unit',
+                'value'   => $plot_unit,
+                'compare' => '=',
+            ),
+        );
+    }
+
+    // Vehicle-specific filters
+    if (!empty($vehicle_type)) {
+        $meta_query[] = array(
+            'relation' => 'OR',
+            array(
+                'key'     => 'propvendor_vehicle_subtype',
+                'value'   => $vehicle_type,
+                'compare' => 'LIKE',
+            ),
+            array(
+                'key'     => '_listing_vehicle_subtype',
+                'value'   => $vehicle_type,
+                'compare' => 'LIKE',
+            ),
+        );
+    }
+    if (!empty($make)) {
+        $meta_query[] = array(
+            'relation' => 'OR',
+            array(
+                'key'     => 'propvendor_vehicle_make',
+                'value'   => $make,
+                'compare' => 'LIKE',
+            ),
+            array(
+                'key'     => '_listing_make',
+                'value'   => $make,
+                'compare' => 'LIKE',
+            ),
+        );
+    }
+    if (!empty($model)) {
+        $meta_query[] = array(
+            'relation' => 'OR',
+            array(
+                'key'     => 'propvendor_vehicle_model',
+                'value'   => $model,
+                'compare' => 'LIKE',
+            ),
+            array(
+                'key'     => '_listing_model',
+                'value'   => $model,
+                'compare' => 'LIKE',
+            ),
+        );
+    }
+    if ('' !== $min_year && '' !== $max_year) {
+        $meta_query[] = array(
+            'key'     => 'propvendor_vehicle_year',
+            'value'   => array($min_year, $max_year),
+            'compare' => 'BETWEEN',
+            'type'    => 'NUMERIC',
+        );
+    } elseif ('' !== $min_year) {
+        $meta_query[] = array(
+            'key'     => 'propvendor_vehicle_year',
+            'value'   => $min_year,
+            'compare' => '>=',
+            'type'    => 'NUMERIC',
+        );
+    } elseif ('' !== $max_year) {
+        $meta_query[] = array(
+            'key'     => 'propvendor_vehicle_year',
+            'value'   => $max_year,
+            'compare' => '<=',
+            'type'    => 'NUMERIC',
+        );
+    }
+    if (!empty($condition)) {
+        $meta_query[] = array(
+            'relation' => 'OR',
+            array(
+                'key'     => 'propvendor_condition',
+                'value'   => $condition,
+                'compare' => 'LIKE',
+            ),
+            array(
+                'key'     => '_listing_condition',
+                'value'   => $condition,
+                'compare' => 'LIKE',
+            ),
+        );
+    }
+    if (!empty($transmission)) {
+        $meta_query[] = array(
+            'relation' => 'OR',
+            array(
+                'key'     => 'propvendor_transmission',
+                'value'   => $transmission,
+                'compare' => 'LIKE',
+            ),
+            array(
+                'key'     => '_listing_transmission',
+                'value'   => $transmission,
+                'compare' => 'LIKE',
+            ),
+        );
+    }
+
+    // Construct query_args
+    $query_args = array(
+        'post_type'      => !empty($listing_type) ? $listing_type : $allowed_types,
+        'post_status'    => 'publish',
+        'posts_per_page' => $posts_per_page,
+        'paged'          => $paged,
+        'meta_query'     => $meta_query,
+    );
+
+    // Sorting
+    switch ($sort) {
+        case 'date_asc':
+            $query_args['orderby'] = 'date';
+            $query_args['order']   = 'ASC';
+            break;
+        case 'price_asc':
+            $query_args['meta_key'] = 'propvendor_price';
+            $query_args['orderby']  = 'meta_value_num';
+            $query_args['order']    = 'ASC';
+            break;
+        case 'price_desc':
+            $query_args['meta_key'] = 'propvendor_price';
+            $query_args['orderby']  = 'meta_value_num';
+            $query_args['order']    = 'DESC';
+            break;
+        case 'date_desc':
+        default:
+            $query_args['orderby'] = 'date';
+            $query_args['order']   = 'DESC';
+            break;
+    }
+
+    // Keyword Search
+    if (!empty($keyword)) {
+        $query_args['s'] = $keyword;
+        $query_args['propvendor_keyword_search'] = $keyword;
+    }
+
+    // Category taxonomy
+    if (!empty($category_id)) {
+        $query_args['tax_query'] = array(
+            array(
+                'taxonomy' => 'listing_category',
+                'field'    => 'term_id',
+                'terms'    => $category_id,
+            ),
+        );
+    }
+
+    return $query_args;
+}
+
+/**
+ * Build and execute search query with keyword filter.
+ *
+ * @param array $params Optional GET or explicit parameters.
+ * @return WP_Query
+ */
+function propvendor_marketplace_build_search_query($params = array()) {
+    $query_args = propvendor_marketplace_get_search_query_args($params);
     add_filter('posts_search', 'propvendor_marketplace_filter_keyword_search', 10, 2);
     try {
         $query = new WP_Query($query_args);
     } finally {
         remove_filter('posts_search', 'propvendor_marketplace_filter_keyword_search', 10);
     }
+    return $query;
+}
 
-    $categories = get_terms(
+/**
+ * Render Stage 4 Search & Filter shortcode / component.
+ *
+ * @param array $atts
+ * @return string HTML
+ */
+function propvendor_marketplace_render_search_filters($atts = array()) {
+    $atts = shortcode_atts(
         array(
-            'taxonomy' => 'listing_category',
-            'hide_empty' => true,
-        )
+            'action_url' => '',
+            'layout'     => 'horizontal',
+            'show_title' => 'false',
+            'title'      => 'Search & Filter Listings',
+        ),
+        $atts,
+        'propvendor_search_filters'
     );
-    if (is_wp_error($categories)) {
-        $categories = array();
+
+    $action_url = !empty($atts['action_url']) ? $atts['action_url'] : '';
+    if (empty($action_url)) {
+        if (is_page()) {
+            $action_url = get_permalink();
+        } else {
+            $action_url = home_url('/browse-listings/');
+        }
     }
 
-    $output = '<section class="propvendor-browse" aria-labelledby="propvendor-browse-title"><h1 id="propvendor-browse-title">Browse Listings</h1>';
-    $output .= '<form class="propvendor-filter-form" method="get" action="' . esc_url(get_permalink()) . '">';
-    $output .= '<div class="propvendor-filter-grid">';
-    $output .= '<label for="pv-keyword">Keyword<input id="pv-keyword" type="search" name="pv_keyword" value="' . esc_attr($keyword) . '" maxlength="100" placeholder="Search titles, details, or location" /></label>';
-    $output .= '<label for="pv-type">Listing type<select id="pv-type" name="pv_type"><option value="">All types</option>';
-    $type_labels = array('property_listing' => 'Property', 'land_listing' => 'Land', 'vehicle_listing' => 'Vehicle');
-    foreach ($type_labels as $type_value => $type_label) {
-        $output .= '<option value="' . esc_attr($type_value) . '" ' . selected($listing_type, $type_value, false) . '>' . esc_html($type_label) . '</option>';
+    // Extract current GET params to persist in form
+    $p_keyword       = isset($_GET['pv_keyword']) ? sanitize_text_field(wp_unslash($_GET['pv_keyword'])) : '';
+    $p_type          = isset($_GET['pv_type']) ? sanitize_key(wp_unslash($_GET['pv_type'])) : '';
+    $p_state         = isset($_GET['pv_state']) ? sanitize_text_field(wp_unslash($_GET['pv_state'])) : (isset($_GET['pv_location']) ? sanitize_text_field(wp_unslash($_GET['pv_location'])) : '');
+    $p_state_norm    = propvendor_marketplace_normalize_nigerian_state($p_state);
+    $p_min_price     = isset($_GET['pv_min_price']) ? sanitize_text_field(wp_unslash($_GET['pv_min_price'])) : '';
+    $p_max_price     = isset($_GET['pv_max_price']) ? sanitize_text_field(wp_unslash($_GET['pv_max_price'])) : '';
+    $p_title_doc     = isset($_GET['pv_title_doc']) ? sanitize_text_field(wp_unslash($_GET['pv_title_doc'])) : '';
+    $p_prop_subtype  = isset($_GET['pv_property_subtype']) ? sanitize_text_field(wp_unslash($_GET['pv_property_subtype'])) : '';
+    $p_min_beds      = isset($_GET['pv_min_bedrooms']) ? sanitize_text_field(wp_unslash($_GET['pv_min_bedrooms'])) : '';
+    $p_min_baths     = isset($_GET['pv_min_bathrooms']) ? sanitize_text_field(wp_unslash($_GET['pv_min_bathrooms'])) : '';
+    $p_furnishing    = isset($_GET['pv_furnishing']) ? sanitize_text_field(wp_unslash($_GET['pv_furnishing'])) : '';
+    $p_land_use      = isset($_GET['pv_land_use']) ? sanitize_text_field(wp_unslash($_GET['pv_land_use'])) : '';
+    $p_min_plot_size = isset($_GET['pv_min_plot_size']) ? sanitize_text_field(wp_unslash($_GET['pv_min_plot_size'])) : '';
+    $p_max_plot_size = isset($_GET['pv_max_plot_size']) ? sanitize_text_field(wp_unslash($_GET['pv_max_plot_size'])) : '';
+    $p_plot_unit     = isset($_GET['pv_plot_unit']) ? sanitize_text_field(wp_unslash($_GET['pv_plot_unit'])) : '';
+    $p_veh_type      = isset($_GET['pv_vehicle_type']) ? sanitize_text_field(wp_unslash($_GET['pv_vehicle_type'])) : '';
+    $p_make          = isset($_GET['pv_make']) ? sanitize_text_field(wp_unslash($_GET['pv_make'])) : '';
+    $p_model         = isset($_GET['pv_model']) ? sanitize_text_field(wp_unslash($_GET['pv_model'])) : '';
+    $p_min_year      = isset($_GET['pv_min_year']) ? sanitize_text_field(wp_unslash($_GET['pv_min_year'])) : '';
+    $p_max_year      = isset($_GET['pv_max_year']) ? sanitize_text_field(wp_unslash($_GET['pv_max_year'])) : '';
+    $p_condition     = isset($_GET['pv_condition']) ? sanitize_text_field(wp_unslash($_GET['pv_condition'])) : '';
+    $p_transmission  = isset($_GET['pv_transmission']) ? sanitize_text_field(wp_unslash($_GET['pv_transmission'])) : '';
+    $p_sort          = isset($_GET['pv_sort']) ? sanitize_key(wp_unslash($_GET['pv_sort'])) : 'date_desc';
+
+    // Normalize category alias if user passed 'property', 'land', 'vehicle'
+    if ('property' === $p_type) $p_type = 'property_listing';
+    if ('land' === $p_type)     $p_type = 'land_listing';
+    if ('vehicle' === $p_type)  $p_type = 'vehicle_listing';
+
+    // Determine initial visibility
+    $is_prop = ('property_listing' === $p_type);
+    $is_land = ('land_listing' === $p_type);
+    $is_veh  = ('vehicle_listing' === $p_type);
+
+    $output  = '<div class="propvendor-search-card layout-' . esc_attr($atts['layout']) . '">';
+    if ('true' === $atts['show_title']) {
+        $output .= '<h3 class="propvendor-search-title">' . esc_html($atts['title']) . '</h3>';
     }
-    $output .= '</select></label>';
-    $output .= '<label for="pv-category">Category<select id="pv-category" name="pv_category"><option value="">All categories</option>';
-    foreach ($categories as $category) {
-        $output .= '<option value="' . esc_attr((string) $category->term_id) . '" ' . selected($category_id, (int) $category->term_id, false) . '>' . esc_html($category->name) . '</option>';
-    }
-    $output .= '</select></label>';
-    $output .= '<label for="pv-location">Location<select id="pv-location" name="pv_location"><option value="">All locations</option>';
-    foreach ($locations as $available_location) {
-        $output .= '<option value="' . esc_attr($available_location) . '" ' . selected($location, $available_location, false) . '>' . esc_html($available_location) . '</option>';
-    }
-    $output .= '</select></label>';
-    $output .= '<label for="pv-min-price">Minimum price (₦)<input id="pv-min-price" type="number" name="pv_min_price" value="' . esc_attr((string) $min_price_raw) . '" min="0" step="1000" inputmode="decimal" /></label>';
-    $output .= '<label for="pv-max-price">Maximum price (₦)<input id="pv-max-price" type="number" name="pv_max_price" value="' . esc_attr((string) $max_price_raw) . '" min="0" step="1000" inputmode="decimal" /></label>';
+
+    $output .= '<form class="propvendor-search-form" method="get" action="' . esc_url($action_url) . '">';
+
+    // Row 1: General Search Controls
+    $output .= '<div class="propvendor-filter-row propvendor-filter-row-primary">';
+
+    // Keyword
+    $output .= '<div class="propvendor-filter-group propvendor-filter-keyword">';
+    $output .= '<label for="pv_keyword">Keyword</label>';
+    $output .= '<input type="text" id="pv_keyword" name="pv_keyword" value="' . esc_attr($p_keyword) . '" placeholder="Search titles, description, or address..." maxlength="150" />';
     $output .= '</div>';
-    $output .= '<p class="propvendor-filter-note">Transaction-type filtering is unavailable because listings do not currently store sale, rent, lease, or hire values.</p>';
-    $output .= '<div class="propvendor-filter-actions"><button type="submit">Search Listings</button><a href="' . esc_url(get_permalink()) . '">Clear Filters</a></div>';
+
+    // Category / Listing Type
+    $output .= '<div class="propvendor-filter-group propvendor-filter-type">';
+    $output .= '<label for="pv_type">Category</label>';
+    $output .= '<select id="pv_type" name="pv_type" class="propvendor-search-type-select">';
+    $output .= '<option value="">All Categories</option>';
+    $output .= '<option value="property_listing"' . selected($p_type, 'property_listing', false) . '>Property</option>';
+    $output .= '<option value="land_listing"' . selected($p_type, 'land_listing', false) . '>Land</option>';
+    $output .= '<option value="vehicle_listing"' . selected($p_type, 'vehicle_listing', false) . '>Vehicle</option>';
+    $output .= '</select>';
+    $output .= '</div>';
+
+    // State
+    $output .= '<div class="propvendor-filter-group propvendor-filter-state">';
+    $output .= '<label for="pv_state">State</label>';
+    $output .= '<select id="pv_state" name="pv_state">';
+    $output .= '<option value="">All States</option>';
+    foreach (propvendor_marketplace_get_nigerian_states() as $st) {
+        $output .= '<option value="' . esc_attr($st) . '"' . selected($p_state_norm, $st, false) . '>' . esc_html($st) . '</option>';
+    }
+    $output .= '</select>';
+    $output .= '</div>';
+
+    // Price Range
+    $output .= '<div class="propvendor-filter-group propvendor-filter-price">';
+    $output .= '<label>Price Range (₦)</label>';
+    $output .= '<div class="propvendor-price-inputs">';
+    $output .= '<input type="number" id="pv_min_price" name="pv_min_price" value="' . esc_attr($p_min_price) . '" placeholder="Min Price (₦)" min="0" step="1000" />';
+    $output .= '<span class="propvendor-price-sep">-</span>';
+    $output .= '<input type="number" id="pv_max_price" name="pv_max_price" value="' . esc_attr($p_max_price) . '" placeholder="Max Price (₦)" min="0" step="1000" />';
+    $output .= '</div>';
+    $output .= '</div>';
+
+    $output .= '</div>'; // End Row 1
+
+    // Row 2: Category-Specific & Title Document Filters
+    $output .= '<div class="propvendor-filter-category-wrap">';
+
+    // Title Document Filter (Property & Land)
+    $title_docs = array(
+        'Certificate of Occupancy (C of O)',
+        "Governor's Consent",
+        'Gazette',
+        'Excision',
+        'Deed of Assignment',
+        'Survey Plan',
+        'Court Judgment',
+        'Registered Conveyance',
+        'Other / In Process',
+    );
+    $td_style = ($is_veh) ? ' style="display:none;"' : '';
+    $output .= '<div class="propvendor-filter-group propvendor-filter-title-doc"' . $td_style . '>';
+    $output .= '<label for="pv_title_doc">Title Document</label>';
+    $output .= '<select id="pv_title_doc" name="pv_title_doc">';
+    $output .= '<option value="">All Title Documents</option>';
+    foreach ($title_docs as $td) {
+        $td_selected = (0 === strcasecmp($p_title_doc, $td) || ($p_title_doc === 'C of O' && strpos($td, 'C of O') !== false));
+        $output .= '<option value="' . esc_attr($td) . '"' . ($td_selected ? ' selected="selected"' : '') . '>' . esc_html($td) . '</option>';
+    }
+    $output .= '</select>';
+    $output .= '</div>';
+
+    // Property-Specific Fields
+    $prop_subtypes = array(
+        'Flat / Apartment',
+        'Detached Duplex',
+        'Semi-Detached Duplex',
+        'Terraced House',
+        'Bungalow',
+        'Mansion',
+        'Commercial Property',
+        'Office Space',
+        'Shop / Retail',
+        'Warehouse',
+        'Shortlet / Serviced Apartment',
+        'Other',
+    );
+    $prop_style = ($is_prop || empty($p_type)) ? '' : ' style="display:none;"';
+    $output .= '<div class="propvendor-filter-row propvendor-filter-property-row"' . $prop_style . '>';
+
+    // Property Subtype
+    $output .= '<div class="propvendor-filter-group">';
+    $output .= '<label for="pv_property_subtype">Property Subtype</label>';
+    $output .= '<select id="pv_property_subtype" name="pv_property_subtype">';
+    $output .= '<option value="">All Property Types</option>';
+    foreach ($prop_subtypes as $stype) {
+        $output .= '<option value="' . esc_attr($stype) . '"' . selected($p_prop_subtype, $stype, false) . '>' . esc_html($stype) . '</option>';
+    }
+    $output .= '</select>';
+    $output .= '</div>';
+
+    // Min Bedrooms
+    $output .= '<div class="propvendor-filter-group">';
+    $output .= '<label for="pv_min_bedrooms">Min Bedrooms</label>';
+    $output .= '<select id="pv_min_bedrooms" name="pv_min_bedrooms">';
+    $output .= '<option value="">Any Bedrooms</option>';
+    for ($i = 1; $i <= 6; $i++) {
+        $val_str = (string) $i;
+        $output .= '<option value="' . $val_str . '"' . selected((string)$p_min_beds, $val_str, false) . '>' . $i . '+ Beds</option>';
+    }
+    $output .= '</select>';
+    $output .= '</div>';
+
+    // Min Bathrooms
+    $output .= '<div class="propvendor-filter-group">';
+    $output .= '<label for="pv_min_bathrooms">Min Bathrooms</label>';
+    $output .= '<select id="pv_min_bathrooms" name="pv_min_bathrooms">';
+    $output .= '<option value="">Any Bathrooms</option>';
+    for ($i = 1; $i <= 5; $i++) {
+        $val_str = (string) $i;
+        $output .= '<option value="' . $val_str . '"' . selected((string)$p_min_baths, $val_str, false) . '>' . $i . '+ Baths</option>';
+    }
+    $output .= '</select>';
+    $output .= '</div>';
+
+    // Furnishing
+    $furnishings = array('Furnished', 'Semi-Furnished', 'Unfurnished');
+    $output .= '<div class="propvendor-filter-group">';
+    $output .= '<label for="pv_furnishing">Furnishing</label>';
+    $output .= '<select id="pv_furnishing" name="pv_furnishing">';
+    $output .= '<option value="">All Furnishing</option>';
+    foreach ($furnishings as $f) {
+        $output .= '<option value="' . esc_attr($f) . '"' . selected($p_furnishing, $f, false) . '>' . esc_html($f) . '</option>';
+    }
+    $output .= '</select>';
+    $output .= '</div>';
+
+    $output .= '</div>'; // End Property Row
+
+    // Land-Specific Fields
+    $land_uses   = propvendor_marketplace_get_land_uses();
+    $land_style  = ($is_land || empty($p_type)) ? '' : ' style="display:none;"';
+    $output .= '<div class="propvendor-filter-row propvendor-filter-land-row"' . $land_style . '>';
+
+    // Land Use
+    $output .= '<div class="propvendor-filter-group">';
+    $output .= '<label for="pv_land_use">Land Use</label>';
+    $output .= '<select id="pv_land_use" name="pv_land_use">';
+    $output .= '<option value="">All Land Uses</option>';
+    foreach ($land_uses as $lu) {
+        $output .= '<option value="' . esc_attr($lu) . '"' . selected($p_land_use, $lu, false) . '>' . esc_html($lu) . '</option>';
+    }
+    $output .= '</select>';
+    $output .= '</div>';
+
+    // Plot Size Range
+    $output .= '<div class="propvendor-filter-group">';
+    $output .= '<label>Plot Size Range</label>';
+    $output .= '<div class="propvendor-price-inputs">';
+    $output .= '<input type="number" id="pv_min_plot_size" name="pv_min_plot_size" value="' . esc_attr($p_min_plot_size) . '" placeholder="Min Size" min="0" step="any" />';
+    $output .= '<span class="propvendor-price-sep">-</span>';
+    $output .= '<input type="number" id="pv_max_plot_size" name="pv_max_plot_size" value="' . esc_attr($p_max_plot_size) . '" placeholder="Max Size" min="0" step="any" />';
+    $output .= '</div>';
+    $output .= '</div>';
+
+    // Plot Unit
+    $plot_units       = propvendor_marketplace_get_plot_size_units();
+    $p_plot_unit_norm = propvendor_marketplace_normalize_plot_size_unit($p_plot_unit);
+    $output .= '<div class="propvendor-filter-group">';
+    $output .= '<label for="pv_plot_unit">Plot Unit</label>';
+    $output .= '<select id="pv_plot_unit" name="pv_plot_unit">';
+    $output .= '<option value="">All Units</option>';
+    foreach ($plot_units as $ukey => $ulabel) {
+        $output .= '<option value="' . esc_attr($ukey) . '"' . selected($p_plot_unit_norm, $ukey, false) . '>' . esc_html($ulabel) . '</option>';
+    }
+    $output .= '</select>';
+    $output .= '</div>';
+
+    $output .= '</div>'; // End Land Row
+
+    // Vehicle-Specific Fields
+    $veh_subtypes = propvendor_marketplace_get_vehicle_subtypes();
+    $veh_style    = ($is_veh) ? '' : ' style="display:none;"';
+    $output .= '<div class="propvendor-filter-row propvendor-filter-vehicle-row"' . $veh_style . '>';
+
+    // Vehicle Type
+    $output .= '<div class="propvendor-filter-group">';
+    $output .= '<label for="pv_vehicle_type">Vehicle Type</label>';
+    $output .= '<select id="pv_vehicle_type" name="pv_vehicle_type">';
+    $output .= '<option value="">All Vehicle Types</option>';
+    foreach ($veh_subtypes as $vt) {
+        $output .= '<option value="' . esc_attr($vt) . '"' . selected($p_veh_type, $vt, false) . '>' . esc_html($vt) . '</option>';
+    }
+    $output .= '</select>';
+    $output .= '</div>';
+
+    // Make
+    $output .= '<div class="propvendor-filter-group">';
+    $output .= '<label for="pv_make">Make</label>';
+    $output .= '<input type="text" id="pv_make" name="pv_make" value="' . esc_attr($p_make) . '" placeholder="e.g. Toyota, Honda, Lexus..." />';
+    $output .= '</div>';
+
+    // Model
+    $output .= '<div class="propvendor-filter-group">';
+    $output .= '<label for="pv_model">Model</label>';
+    $output .= '<input type="text" id="pv_model" name="pv_model" value="' . esc_attr($p_model) . '" placeholder="e.g. Camry, Corolla, RX 350..." />';
+    $output .= '</div>';
+
+    // Year Range
+    $output .= '<div class="propvendor-filter-group">';
+    $output .= '<label>Year Range</label>';
+    $output .= '<div class="propvendor-price-inputs">';
+    $output .= '<input type="number" id="pv_min_year" name="pv_min_year" value="' . esc_attr($p_min_year) . '" placeholder="Min Year" min="1970" max="2035" />';
+    $output .= '<span class="propvendor-price-sep">-</span>';
+    $output .= '<input type="number" id="pv_max_year" name="pv_max_year" value="' . esc_attr($p_max_year) . '" placeholder="Max Year" min="1970" max="2035" />';
+    $output .= '</div>';
+    $output .= '</div>';
+
+    // Condition
+    $conditions = array('Foreign Used (Tokunbo)', 'Nigerian Used', 'Brand New');
+    $output .= '<div class="propvendor-filter-group">';
+    $output .= '<label for="pv_condition">Condition</label>';
+    $output .= '<select id="pv_condition" name="pv_condition">';
+    $output .= '<option value="">All Conditions</option>';
+    foreach ($conditions as $c) {
+        $output .= '<option value="' . esc_attr($c) . '"' . selected($p_condition, $c, false) . '>' . esc_html($c) . '</option>';
+    }
+    $output .= '</select>';
+    $output .= '</div>';
+
+    // Transmission
+    $transmissions = array('Automatic', 'Manual');
+    $output .= '<div class="propvendor-filter-group">';
+    $output .= '<label for="pv_transmission">Transmission</label>';
+    $output .= '<select id="pv_transmission" name="pv_transmission">';
+    $output .= '<option value="">All Transmissions</option>';
+    foreach ($transmissions as $t) {
+        $output .= '<option value="' . esc_attr($t) . '"' . selected($p_transmission, $t, false) . '>' . esc_html($t) . '</option>';
+    }
+    $output .= '</select>';
+    $output .= '</div>';
+
+    $output .= '</div>'; // End Vehicle Row
+
+    $output .= '</div>'; // End Category Wrap
+
+    // Row 3: Sorting & Action Buttons
+    $output .= '<div class="propvendor-filter-row propvendor-sort-bar">';
+
+    // Sort By
+    $output .= '<div class="propvendor-filter-group propvendor-filter-sort">';
+    $output .= '<label for="pv_sort">Sort By</label>';
+    $output .= '<select id="pv_sort" name="pv_sort">';
+    $output .= '<option value="date_desc"' . selected($p_sort, 'date_desc', false) . '>Newest First</option>';
+    $output .= '<option value="date_asc"' . selected($p_sort, 'date_asc', false) . '>Oldest First</option>';
+    $output .= '<option value="price_asc"' . selected($p_sort, 'price_asc', false) . '>Price: Low to High</option>';
+    $output .= '<option value="price_desc"' . selected($p_sort, 'price_desc', false) . '>Price: High to Low</option>';
+    $output .= '</select>';
+    $output .= '</div>';
+
+    // Action Buttons
+    $reset_url = esc_url(remove_query_arg(array(
+        'pv_keyword', 'pv_type', 'pv_state', 'pv_location', 'pv_min_price', 'pv_max_price',
+        'pv_title_doc', 'pv_property_subtype', 'pv_min_bedrooms', 'pv_min_bathrooms',
+        'pv_furnishing', 'pv_land_use', 'pv_min_plot_size', 'pv_max_plot_size',
+        'pv_plot_unit', 'pv_vehicle_type', 'pv_make', 'pv_model', 'pv_min_year',
+        'pv_max_year', 'pv_condition', 'pv_transmission', 'pv_sort', 'paged',
+    ), $action_url));
+
+    $output .= '<div class="propvendor-filter-actions">';
+    $output .= '<button type="submit" class="propvendor-btn-search">Search Listings</button>';
+    $output .= '<a href="' . $reset_url . '" class="propvendor-btn-reset">Reset Filters</a>';
+    $output .= '</div>';
+
+    $output .= '</div>'; // End Row 3
+
     $output .= '</form>';
-    $output .= '<p class="propvendor-results-count" role="status">' . esc_html(sprintf(_n('%s matching listing', '%s matching listings', (int) $query->found_posts, 'propvendor-marketplace'), number_format_i18n((int) $query->found_posts))) . '</p>';
+    $output .= '</div>'; // End Card
+
+    return $output;
+}
+
+/**
+ * Shortcode handler for [propvendor_search_filters].
+ *
+ * @param array $atts
+ * @return string HTML
+ */
+function propvendor_marketplace_search_filters_shortcode($atts = array()) {
+    return propvendor_marketplace_render_search_filters($atts);
+}
+add_shortcode('propvendor_search_filters', 'propvendor_marketplace_search_filters_shortcode');
+
+function propvendor_marketplace_browse_shortcode() {
+    $query = propvendor_marketplace_build_search_query($_GET);
+
+    $output  = '<section class="propvendor-browse" aria-label="' . esc_attr__('Browse Listings', 'propvendor-marketplace') . '">';
+    $output .= propvendor_marketplace_render_search_filters(array('action_url' => get_permalink()));
+
+    $found_count = (int) $query->found_posts;
+    $output .= '<p class="propvendor-results-count" role="status">' . esc_html(sprintf(_n('%s matching listing', '%s matching listings', $found_count, 'propvendor-marketplace'), number_format_i18n($found_count))) . '</p>';
 
     if ($query->have_posts()) {
         $output .= propvendor_marketplace_render_listing_cards($query->posts, '');
     } else {
-        $output .= '<p class="propvendor-empty">No listings match your filters. Try changing your search or clearing the filters.</p>';
+        $output .= '<div class="propvendor-no-results"><p class="propvendor-empty">No listings match your search criteria. Try adjusting your filters or resetting to view all available listings.</p></div>';
     }
 
     if ($query->max_num_pages > 1) {
-        $pagination_args = array(
-            'pv_keyword' => $keyword,
-            'pv_type' => $listing_type,
-            'pv_category' => $category_id,
-            'pv_location' => $location,
-            'pv_min_price' => $min_price_raw,
-            'pv_max_price' => $max_price_raw,
-        );
-        $pagination_args = array_filter($pagination_args, function ($value) {
-            return '' !== $value && 0 !== $value;
-        });
+        $pagination_args = $_GET;
+        unset($pagination_args['paged']);
         $output .= '<nav class="propvendor-pagination" aria-label="Listing pages">';
         $output .= paginate_links(
             array(
-                'base' => add_query_arg('paged', '%#%', get_permalink()),
-                'format' => '',
-                'current' => (int) $query_args['paged'],
-                'total' => (int) $query->max_num_pages,
-                'add_args' => $pagination_args,
-                'type' => 'list',
+                'base'      => add_query_arg('paged', '%#%', get_permalink()),
+                'format'    => '',
+                'current'   => max(1, absint(get_query_var('paged', 1)), isset($_GET['paged']) ? absint($_GET['paged']) : 1),
+                'total'     => (int) $query->max_num_pages,
+                'add_args'  => $pagination_args,
+                'type'      => 'list',
                 'prev_text' => '&laquo; Previous',
                 'next_text' => 'Next &raquo;',
             )

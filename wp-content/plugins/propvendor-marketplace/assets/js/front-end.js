@@ -10,6 +10,7 @@
         initMultipleImageUploads();
         initExistingImageToggles();
         initFormValidationAndScroll();
+        initSearchFilters();
     });
 
     /**
@@ -329,6 +330,98 @@
                         return false;
                     }
                 }
+            });
+        });
+    }
+
+
+    /**
+     * 5. Dynamic Category Toggling in Search & Filter Bar
+     */
+    function initSearchFilters() {
+        var searchForms = document.querySelectorAll('.propvendor-search-form, .propvendor-search-card form');
+        if (!searchForms.length) {
+            return;
+        }
+
+        var processedForms = [];
+
+        searchForms.forEach(function(form) {
+            if (processedForms.indexOf(form) !== -1) {
+                return;
+            }
+            processedForms.push(form);
+
+            var typeSelect = form.querySelector('select[name="pv_type"]');
+            if (typeSelect) {
+                var propRows     = form.querySelectorAll('.propvendor-filter-property-row');
+                var landRows     = form.querySelectorAll('.propvendor-filter-land-row');
+                var vehRows      = form.querySelectorAll('.propvendor-filter-vehicle-row');
+                var titleDocWrap = form.querySelectorAll('.propvendor-filter-title-doc');
+
+                function updateSearchFilterVisibility() {
+                    var val = typeSelect.value;
+                    var isProp = (val === 'property_listing' || val === 'property');
+                    var isLand = (val === 'land_listing' || val === 'land');
+                    var isVeh  = (val === 'vehicle_listing' || val === 'vehicle');
+                    var isAll  = (!val || val === '');
+
+                    // Property fields
+                    propRows.forEach(function(el) {
+                        el.style.display = (isProp || isAll) ? '' : 'none';
+                    });
+
+                    // Land fields
+                    landRows.forEach(function(el) {
+                        el.style.display = (isLand || isAll) ? '' : 'none';
+                    });
+
+                    // Vehicle fields
+                    vehRows.forEach(function(el) {
+                        el.style.display = isVeh ? '' : 'none';
+                    });
+
+                    // Title Document (relevant to Property and Land, but hidden for Vehicle)
+                    titleDocWrap.forEach(function(el) {
+                        el.style.display = isVeh ? 'none' : '';
+                    });
+                }
+
+                typeSelect.addEventListener('change', updateSearchFilterVisibility);
+                updateSearchFilterVisibility();
+            }
+
+            // Clean URL Parameters: disable empty inputs before form submission
+            form.addEventListener('submit', function() {
+                var fields = form.querySelectorAll('input, select, textarea');
+                var disabledFields = [];
+
+                fields.forEach(function(field) {
+                    if (field.type === 'submit' || field.type === 'button' || field.type === 'reset') {
+                        return;
+                    }
+                    if (field.name && (field.value === '' || (typeof field.value === 'string' && field.value.trim() === ''))) {
+                        if (!field.disabled) {
+                            field.disabled = true;
+                            disabledFields.push(field);
+                        }
+                    }
+                });
+
+                // Re-enable disabled inputs shortly after if submission is cancelled or interrupted
+                setTimeout(function() {
+                    disabledFields.forEach(function(field) {
+                        field.disabled = false;
+                    });
+                }, 500);
+            });
+
+            // Restore inputs on back-forward cache navigation
+            window.addEventListener('pageshow', function() {
+                var fields = form.querySelectorAll('input, select, textarea');
+                fields.forEach(function(field) {
+                    field.disabled = false;
+                });
             });
         });
     }

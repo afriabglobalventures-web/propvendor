@@ -1935,3 +1935,232 @@ select.form-control {
     border-left: 4px solid #e11d48 !important;
 }
 
+/* ==========================================================================
+   Stage 4: Search & Discovery Filters Component
+   ========================================================================== */
+.propvendor-search-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 14px rgba(16, 28, 45, 0.05);
+}
+
+.propvendor-search-title {
+    margin: 0 0 1.25rem 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1e293b;
+    border-bottom: 2px solid #f1f5f9;
+    padding-bottom: 0.75rem;
+}
+
+.propvendor-search-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.propvendor-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-end;
+}
+
+.propvendor-filter-row-primary {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1.5fr;
+    gap: 1rem;
+}
+
+.propvendor-filter-category-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    background: #f8fafc;
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+}
+
+.propvendor-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    flex: 1 1 180px;
+}
+
+.propvendor-filter-group label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 0;
+}
+
+/* Strict height, line-height, and vertical alignment to prevent text clipping */
+.propvendor-search-card select,
+.propvendor-search-card input[type="text"],
+.propvendor-search-card input[type="number"],
+.propvendor-search-card input[type="search"] {
+    height: 44px !important;
+    min-height: 44px !important;
+    max-height: 44px !important;
+    line-height: 1.5 !important;
+    padding: 8px 12px !important;
+    vertical-align: middle !important;
+    box-sizing: border-box !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 6px !important;
+    font-size: 0.95rem !important;
+    color: #1e293b !important;
+    background-color: #ffffff !important;
+    width: 100% !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.propvendor-search-card select:focus,
+.propvendor-search-card input:focus {
+    outline: none !important;
+    border-color: #2563eb !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+}
+
+.propvendor-price-inputs {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+.propvendor-price-inputs input {
+    flex: 1 1 50%;
+}
+
+.propvendor-price-sep {
+    color: #94a3b8;
+    font-weight: 600;
+}
+
+.propvendor-sort-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.propvendor-filter-sort {
+    max-width: 240px;
+    flex: 0 0 240px;
+}
+
+.propvendor-filter-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-left: auto;
+}
+
+.propvendor-btn-search {
+    height: 44px;
+    padding: 0 1.5rem;
+    background: #0d5aa7;
+    color: #ffffff !important;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.15s ease, transform 0.15s ease;
+    white-space: nowrap;
+}
+
+.propvendor-btn-search:hover,
+.propvendor-btn-search:focus {
+    background: #094582;
+    transform: translateY(-1px);
+}
+
+.propvendor-btn-reset {
+    height: 44px;
+    padding: 0 1.25rem;
+    background: #f1f5f9;
+    color: #475569 !important;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    text-decoration: none !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.15s ease, color 0.15s ease;
+    white-space: nowrap;
+}
+
+.propvendor-btn-reset:hover,
+.propvendor-btn-reset:focus {
+    background: #e2e8f0;
+    color: #1e293b !important;
+}
+
+.propvendor-no-results {
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 8px;
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+    margin: 1.5rem 0;
+}
+
+.propvendor-no-results p {
+    margin: 0;
+    color: #64748b;
+    font-size: 1.05rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 992px) {
+    .propvendor-filter-row-primary {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .propvendor-filter-row-primary {
+        grid-template-columns: 1fr;
+    }
+
+    .propvendor-sort-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .propvendor-filter-sort {
+        max-width: 100%;
+        flex: 1 1 100%;
+    }
+
+    .propvendor-filter-actions {
+        margin-left: 0;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .propvendor-btn-search,
+    .propvendor-btn-reset {
+        width: 100%;
+    }
+}
+
