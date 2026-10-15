@@ -1182,6 +1182,7 @@ function propvendor_marketplace_activate() {
     propvendor_marketplace_register_role();
     propvendor_marketplace_create_default_pages();
     propvendor_marketplace_create_enquiries_table();
+    propvendor_marketplace_create_credit_ledger_table();
     flush_rewrite_rules();
 }
 
@@ -5522,6 +5523,42 @@ add_filter('document_title_parts', 'propvendor_marketplace_filter_vendor_documen
  * =========================================================================
  */
 
+/**
+ * =========================================================================
+ * STAGE 5: CREDIT LEDGER & MONETIZATION ENGINE SCHEMA
+ * =========================================================================
+ */
+
+function propvendor_marketplace_create_credit_ledger_table() {
+    global $wpdb;
+    $charset_collate = $wpdb->get_charset_collate();
+    $table_ledger    = $wpdb->prefix . 'propvendor_credit_ledger';
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+    $sql_ledger = "CREATE TABLE {$table_ledger} (
+        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+        vendor_id bigint(20) unsigned NOT NULL,
+        amount int(11) NOT NULL,
+        balance_after int(11) NOT NULL,
+        transaction_type varchar(50) NOT NULL,
+        reference varchar(100) DEFAULT '',
+        description varchar(255) DEFAULT '',
+        created_at datetime NOT NULL,
+        PRIMARY KEY  (id),
+        KEY vendor_id (vendor_id),
+        KEY transaction_type (transaction_type),
+        KEY reference (reference),
+        KEY vendor_ref (vendor_id, reference),
+        KEY created_at (created_at)
+    ) ENGINE=InnoDB {$charset_collate};";
+
+    dbDelta($sql_ledger);
+
+    // Ensure InnoDB engine for ACID transactions and row-level locking
+    $wpdb->query("ALTER TABLE {$table_ledger} ENGINE = InnoDB");
+}
+
 function propvendor_marketplace_create_enquiries_table() {
     global $wpdb;
     $charset_collate = $wpdb->get_charset_collate();
@@ -5599,7 +5636,10 @@ function propvendor_marketplace_create_enquiries_table() {
     ) {$charset_collate};";
     dbDelta($sql_messages);
 
-    // 4. Backfill existing enquiries (Fix 6)
+    // 4. Credit Ledger Table Schema (Stage 5)
+    propvendor_marketplace_create_credit_ledger_table();
+
+    // 5. Backfill existing enquiries (Fix 6)
     propvendor_marketplace_backfill_enquiries();
 }
 
@@ -5709,17 +5749,19 @@ function propvendor_marketplace_maybe_create_enquiries_table() {
     $table_enquiries = $wpdb->prefix . 'propvendor_enquiries';
     $table_threads   = $wpdb->prefix . 'propvendor_threads';
     $table_messages  = $wpdb->prefix . 'propvendor_messages';
+    $table_ledger    = $wpdb->prefix . 'propvendor_credit_ledger';
 
     $schema_version = get_option('propvendor_enquiry_schema_version', '1.0');
 
     if (
-        version_compare((string) $schema_version, '1.2', '<') ||
+        version_compare((string) $schema_version, '1.3', '<') ||
         $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_enquiries)) !== $table_enquiries ||
         $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_threads)) !== $table_threads ||
-        $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_messages)) !== $table_messages
+        $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_messages)) !== $table_messages ||
+        $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_ledger)) !== $table_ledger
     ) {
         propvendor_marketplace_create_enquiries_table();
-        update_option('propvendor_enquiry_schema_version', '1.2');
+        update_option('propvendor_enquiry_schema_version', '1.3');
     }
 }
 add_action('init', 'propvendor_marketplace_maybe_create_enquiries_table');
@@ -6452,6 +6494,398 @@ function propvendor_marketplace_format_display_customer_name($name, $can_view_co
 }
 
 /**
+ * =========================================================================
+ * STAGE 5: CREDIT LEDGER & LEAD MONETIZATION ENGINE
+ * =========================================================================
+ */
+
+/**
+ * Get available credit pack definitions.
+ *
+ * @return array
+ */
+function propvendor_marketplace_get_credit_packs() {
+    return array(
+        'starter' => array(
+            'credits'   => 5,
+            'price_ngn' => 5000,
+            'label'     => 'Starter (5 Credits)',
+        ),
+        'growth' => array(
+            'credits'   => 12,
+            'price_ngn' => 10000,
+            'label'     => 'Growth (12 Credits)',
+        ),
+        'pro' => array(
+            'credits'   => 28,
+            'price_ngn' => 20000,
+            'label'     => 'Pro (28 Credits)',
+        ),
+    );
+}
+
+/**
+ * Get the current credit balance for a vendor from the ledger.
+ *
+ * @param int $vendor_id
+ * @return int
+ */
+function propvendor_marketplace_get_vendor_credit_balance($vendor_id) {
+    $vendor_id = absint($vendor_id);
+    if ($vendor_id <= 0) {
+        return 0;
+    }
+
+    global $wpdb;
+    $table_ledger = $wpdb->prefix . 'propvendor_credit_ledger';
+    if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_ledger)) !== $table_ledger) {
+        propvendor_marketplace_create_credit_ledger_table();
+    }
+
+    $bal = $wpdb->get_var($wpdb->prepare(
+        "SELECT balance_after FROM {$table_ledger} WHERE vendor_id = %d ORDER BY id DESC LIMIT 1",
+        $vendor_id
+    ));
+
+    return (null !== $bal) ? (int) $bal : 0;
+}
+
+/**
+ * Add credits to a vendor's balance using atomic locking and InnoDB transaction.
+ *
+ * @param int $vendor_id
+ * @param int $amount
+ * @param string $transaction_type
+ * @param string $reference
+ * @param string $description
+ * @return int|WP_Error New balance or WP_Error on failure
+ */
+function propvendor_marketplace_add_vendor_credits($vendor_id, $amount, $transaction_type = 'pack_purchase', $reference = '', $description = '') {
+    $vendor_id = absint($vendor_id);
+    $amount    = (int) $amount;
+
+    if ($vendor_id <= 0) {
+        return new WP_Error('invalid_vendor', __('Invalid vendor ID.', 'propvendor-marketplace'));
+    }
+    if ($amount <= 0) {
+        return new WP_Error('invalid_amount', __('Credit addition amount must be greater than zero.', 'propvendor-marketplace'));
+    }
+
+    global $wpdb;
+    $table_ledger = $wpdb->prefix . 'propvendor_credit_ledger';
+    if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_ledger)) !== $table_ledger) {
+        propvendor_marketplace_create_credit_ledger_table();
+    }
+
+    $lock_name = 'pv_credit_ledger_' . $vendor_id;
+    $lock_res  = $wpdb->get_var($wpdb->prepare("SELECT GET_LOCK(%s, 10)", $lock_name));
+    if ('1' !== (string) $lock_res) {
+        return new WP_Error('lock_failed', __('Unable to acquire lock for credit transaction. Please try again.', 'propvendor-marketplace'));
+    }
+
+    try {
+        $wpdb->query('START TRANSACTION');
+
+        $last_balance = $wpdb->get_var($wpdb->prepare(
+            "SELECT balance_after FROM {$table_ledger} WHERE vendor_id = %d ORDER BY id DESC LIMIT 1 FOR UPDATE",
+            $vendor_id
+        ));
+        $current_balance = (null !== $last_balance) ? (int) $last_balance : 0;
+        $new_balance     = $current_balance + $amount;
+
+        $inserted = $wpdb->insert(
+            $table_ledger,
+            array(
+                'vendor_id'        => $vendor_id,
+                'amount'           => $amount,
+                'balance_after'    => $new_balance,
+                'transaction_type' => sanitize_key($transaction_type),
+                'reference'        => sanitize_text_field($reference),
+                'description'      => sanitize_text_field($description),
+                'created_at'       => current_time('mysql'),
+            ),
+            array('%d', '%d', '%d', '%s', '%s', '%s', '%s')
+        );
+
+        if (false === $inserted) {
+            $wpdb->query('ROLLBACK');
+            $wpdb->query($wpdb->prepare("SELECT RELEASE_LOCK(%s)", $lock_name));
+            return new WP_Error('insert_failed', __('Failed to record credit transaction in ledger.', 'propvendor-marketplace'));
+        }
+
+        $wpdb->query('COMMIT');
+        $wpdb->query($wpdb->prepare("SELECT RELEASE_LOCK(%s)", $lock_name));
+
+        return $new_balance;
+    } catch (Exception $e) {
+        $wpdb->query('ROLLBACK');
+        $wpdb->query($wpdb->prepare("SELECT RELEASE_LOCK(%s)", $lock_name));
+        return new WP_Error('exception', $e->getMessage());
+    }
+}
+
+/**
+ * Deduct credits from a vendor's balance atomically with row locking.
+ *
+ * @param int $vendor_id
+ * @param int $amount
+ * @param string $transaction_type
+ * @param string $reference
+ * @param string $description
+ * @return int|WP_Error New balance or WP_Error on failure/insufficient funds
+ */
+function propvendor_marketplace_deduct_vendor_credits($vendor_id, $amount, $transaction_type = 'lead_unlock', $reference = '', $description = '') {
+    $vendor_id = absint($vendor_id);
+    $amount    = (int) $amount;
+
+    if ($vendor_id <= 0) {
+        return new WP_Error('invalid_vendor', __('Invalid vendor ID.', 'propvendor-marketplace'));
+    }
+    if ($amount <= 0) {
+        return new WP_Error('invalid_amount', __('Deduction amount must be greater than zero.', 'propvendor-marketplace'));
+    }
+
+    global $wpdb;
+    $table_ledger = $wpdb->prefix . 'propvendor_credit_ledger';
+    if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_ledger)) !== $table_ledger) {
+        propvendor_marketplace_create_credit_ledger_table();
+    }
+
+    $lock_name = 'pv_credit_ledger_' . $vendor_id;
+    $lock_res  = $wpdb->get_var($wpdb->prepare("SELECT GET_LOCK(%s, 10)", $lock_name));
+    if ('1' !== (string) $lock_res) {
+        return new WP_Error('lock_failed', __('Unable to acquire lock for credit transaction. Please try again.', 'propvendor-marketplace'));
+    }
+
+    try {
+        $wpdb->query('START TRANSACTION');
+
+        $last_balance = $wpdb->get_var($wpdb->prepare(
+            "SELECT balance_after FROM {$table_ledger} WHERE vendor_id = %d ORDER BY id DESC LIMIT 1 FOR UPDATE",
+            $vendor_id
+        ));
+        $current_balance = (null !== $last_balance) ? (int) $last_balance : 0;
+
+        if ($current_balance < $amount) {
+            $wpdb->query('ROLLBACK');
+            $wpdb->query($wpdb->prepare("SELECT RELEASE_LOCK(%s)", $lock_name));
+            return new WP_Error(
+                'insufficient_credits',
+                sprintf(__('Insufficient credit balance. You have %d credits, but %d is required.', 'propvendor-marketplace'), $current_balance, $amount)
+            );
+        }
+
+        $new_balance = $current_balance - $amount;
+
+        $inserted = $wpdb->insert(
+            $table_ledger,
+            array(
+                'vendor_id'        => $vendor_id,
+                'amount'           => -$amount,
+                'balance_after'    => $new_balance,
+                'transaction_type' => sanitize_key($transaction_type),
+                'reference'        => sanitize_text_field($reference),
+                'description'      => sanitize_text_field($description),
+                'created_at'       => current_time('mysql'),
+            ),
+            array('%d', '%d', '%d', '%s', '%s', '%s', '%s')
+        );
+
+        if (false === $inserted) {
+            $wpdb->query('ROLLBACK');
+            $wpdb->query($wpdb->prepare("SELECT RELEASE_LOCK(%s)", $lock_name));
+            return new WP_Error('insert_failed', __('Failed to record credit deduction in ledger.', 'propvendor-marketplace'));
+        }
+
+        $wpdb->query('COMMIT');
+        $wpdb->query($wpdb->prepare("SELECT RELEASE_LOCK(%s)", $lock_name));
+
+        return $new_balance;
+    } catch (Exception $e) {
+        $wpdb->query('ROLLBACK');
+        $wpdb->query($wpdb->prepare("SELECT RELEASE_LOCK(%s)", $lock_name));
+        return new WP_Error('exception', $e->getMessage());
+    }
+}
+
+/**
+ * Add a predefined or custom credit pack to a vendor account.
+ *
+ * @param int $vendor_id
+ * @param string|int $pack_or_credits
+ * @param string $reference
+ * @return int|WP_Error
+ */
+function propvendor_marketplace_add_vendor_credit_pack($vendor_id, $pack_or_credits, $reference = '') {
+    $packs   = propvendor_marketplace_get_credit_packs();
+    $credits = 0;
+    $label   = '';
+
+    if (is_numeric($pack_or_credits)) {
+        $c = (int) $pack_or_credits;
+        foreach ($packs as $k => $p) {
+            if ($p['credits'] === $c) {
+                $credits = $c;
+                $label   = $p['label'];
+                break;
+            }
+        }
+        if ($credits === 0) {
+            $credits = $c;
+            $label   = sprintf('%d Credits Pack', $c);
+        }
+    } elseif (isset($packs[$pack_or_credits])) {
+        $credits = $packs[$pack_or_credits]['credits'];
+        $label   = $packs[$pack_or_credits]['label'];
+    } else {
+        return new WP_Error('invalid_pack', __('Invalid credit pack specified.', 'propvendor-marketplace'));
+    }
+
+    return propvendor_marketplace_add_vendor_credits(
+        $vendor_id,
+        $credits,
+        'pack_purchase',
+        $reference,
+        $label
+    );
+}
+
+/**
+ * Check if a specific lead thread is unlocked for a vendor.
+ *
+ * @param int $vendor_id
+ * @param int $thread_id
+ * @return bool
+ */
+function propvendor_marketplace_is_thread_unlocked($vendor_id, $thread_id) {
+    $vendor_id = absint($vendor_id);
+    $thread_id = absint($thread_id);
+
+    if ($vendor_id <= 0 || $thread_id <= 0) {
+        return false;
+    }
+
+    // 1. Check user meta (fast cached lookup)
+    $unlocked_threads = get_user_meta($vendor_id, 'propvendor_unlocked_thread_ids', true);
+    if (is_array($unlocked_threads) && in_array($thread_id, array_map('absint', $unlocked_threads), true)) {
+        return true;
+    }
+
+    // 2. Check credit ledger database table
+    global $wpdb;
+    $table_ledger = $wpdb->prefix . 'propvendor_credit_ledger';
+    if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_ledger)) === $table_ledger) {
+        $ref1 = 'thread_' . $thread_id;
+        $ref2 = (string) $thread_id;
+        $found = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$table_ledger} WHERE vendor_id = %d AND transaction_type = 'lead_unlock' AND (reference = %s OR reference = %s) LIMIT 1",
+            $vendor_id,
+            $ref1,
+            $ref2
+        ));
+        if ($found) {
+            // Self-heal: synchronize back to user meta
+            if (!is_array($unlocked_threads)) {
+                $unlocked_threads = array();
+            }
+            $unlocked_threads[] = $thread_id;
+            update_user_meta($vendor_id, 'propvendor_unlocked_thread_ids', array_values(array_unique(array_map('absint', $unlocked_threads))));
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Unlock a customer lead thread using credits idempotently.
+ *
+ * @param int $vendor_id
+ * @param int $thread_id
+ * @return array|WP_Error
+ */
+function propvendor_marketplace_unlock_thread_with_credits($vendor_id, $thread_id) {
+    $vendor_id = absint($vendor_id);
+    $thread_id = absint($thread_id);
+
+    if ($vendor_id <= 0) {
+        return new WP_Error('invalid_vendor', __('Invalid vendor ID.', 'propvendor-marketplace'));
+    }
+    if ($thread_id <= 0) {
+        return new WP_Error('invalid_thread', __('Invalid thread ID.', 'propvendor-marketplace'));
+    }
+
+    // 1. VIP bypass check: VIP vendors have automatic lead unlock entitlement
+    if (propvendor_marketplace_is_vendor_vip($vendor_id)) {
+        return array(
+            'success'          => true,
+            'already_unlocked' => false,
+            'vip_bypass'       => true,
+            'deducted'         => 0,
+            'balance'          => propvendor_marketplace_get_vendor_credit_balance($vendor_id),
+            'message'          => __('VIP vendors have automatic access to all lead contacts without credit deduction.', 'propvendor-marketplace'),
+        );
+    }
+
+    // 2. Fast check: is thread already unlocked?
+    if (propvendor_marketplace_is_thread_unlocked($vendor_id, $thread_id)) {
+        return array(
+            'success'          => true,
+            'already_unlocked' => true,
+            'vip_bypass'       => false,
+            'deducted'         => 0,
+            'balance'          => propvendor_marketplace_get_vendor_credit_balance($vendor_id),
+            'message'          => __('Thread contact details are already unlocked.', 'propvendor-marketplace'),
+        );
+    }
+
+    // 3. Thread verification: ensure thread exists and belongs to this vendor (if threads table exists)
+    global $wpdb;
+    $table_threads = $wpdb->prefix . 'propvendor_threads';
+    if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_threads)) === $table_threads) {
+        $thread = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table_threads} WHERE id = %d", $thread_id));
+        if ($thread) {
+            if ((int) $thread->vendor_id !== $vendor_id && !user_can($vendor_id, 'manage_options')) {
+                return new WP_Error('unauthorized_thread', __('You do not have permission to unlock this thread.', 'propvendor-marketplace'));
+            }
+        }
+    }
+
+    // 4. Deduct 1 credit atomically
+    $ref_str = 'thread_' . $thread_id;
+    $deduct_res = propvendor_marketplace_deduct_vendor_credits(
+        $vendor_id,
+        1,
+        'lead_unlock',
+        $ref_str,
+        sprintf(__('Lead contact unlock for thread #%d', 'propvendor-marketplace'), $thread_id)
+    );
+
+    if (is_wp_error($deduct_res)) {
+        return $deduct_res;
+    }
+
+    // 5. Synchronize to user meta for backward compatibility
+    $meta = get_user_meta($vendor_id, 'propvendor_unlocked_thread_ids', true);
+    if (!is_array($meta)) {
+        $meta = array();
+    }
+    if (!in_array($thread_id, array_map('absint', $meta), true)) {
+        $meta[] = $thread_id;
+        update_user_meta($vendor_id, 'propvendor_unlocked_thread_ids', array_values(array_unique(array_map('absint', $meta))));
+    }
+
+    return array(
+        'success'          => true,
+        'already_unlocked' => false,
+        'vip_bypass'       => false,
+        'deducted'         => 1,
+        'balance'          => (int) $deduct_res,
+        'message'          => __('Lead contact details successfully unlocked.', 'propvendor-marketplace'),
+    );
+}
+
+/**
  * Check if a vendor can view unmasked customer lead contact info.
  *
  * @param int $vendor_id
@@ -6485,9 +6919,16 @@ function propvendor_marketplace_vendor_can_view_contact_info($vendor_id, $thread
         return true;
     }
 
-    // 3. Unlocked specific thread check
+    // 3. Unlocked specific thread check (VIP Plan, Credit Ledger, or User Meta)
     $thread_id = absint($thread_id);
     if ($thread_id > 0) {
+        // Active VIP vendor has automatic access to lead contact info on threads
+        if (propvendor_marketplace_is_vendor_vip($vendor_id)) {
+            return true;
+        }
+        if (propvendor_marketplace_is_thread_unlocked($vendor_id, $thread_id)) {
+            return true;
+        }
         $unlocked_threads = get_user_meta($vendor_id, 'propvendor_unlocked_thread_ids', true);
         if (is_array($unlocked_threads) && in_array($thread_id, array_map('absint', $unlocked_threads), true)) {
             return true;
