@@ -1184,6 +1184,7 @@ function propvendor_marketplace_activate() {
     propvendor_marketplace_create_enquiries_table();
     propvendor_marketplace_create_credit_ledger_table();
     propvendor_marketplace_create_payment_tables();
+    propvendor_marketplace_create_notifications_table();
     flush_rewrite_rules();
 }
 
@@ -3723,6 +3724,63 @@ function propvendor_marketplace_normalize_uploaded_files($file_entry) {
 }
 
 /**
+ * Validate an uploaded file for security, MIME integrity, extension hardening, and size bounds.
+ *
+ * @param array $file $_FILES element array with keys: name, tmp_name, size, error.
+ * @param array $allowed_mimes Array of permitted MIME types.
+ * @param int $max_bytes Maximum allowed file size in bytes (default 4MB = 4194304).
+ * @return true|WP_Error Returns true if valid, or WP_Error on validation failure.
+ */
+function propvendor_marketplace_validate_secure_file_upload($file, $allowed_mimes = array('image/jpeg', 'image/png', 'image/webp'), $max_bytes = 4194304) {
+    if (empty($file) || !is_array($file) || empty($file['name'])) {
+        return new WP_Error('missing_image', __('Please upload a valid listing image.', 'propvendor-marketplace'));
+    }
+
+    if (!isset($file['tmp_name']) || !file_exists($file['tmp_name'])) {
+        return new WP_Error('invalid_uploaded_file', __('The uploaded image is not valid.', 'propvendor-marketplace'));
+    }
+
+    $file_size = isset($file['size']) ? (int) $file['size'] : 0;
+    if ($file_size <= 0 && file_exists($file['tmp_name'])) {
+        $file_size = @filesize($file['tmp_name']);
+    }
+
+    if ($file_size > $max_bytes) {
+        return new WP_Error('image_too_large', __('The listing image must be 4MB or smaller.', 'propvendor-marketplace'));
+    }
+
+    $filename = (string) $file['name'];
+
+    // Guard against null byte injection or path traversal
+    if (strpos($filename, "\0") !== false || strpos($filename, '../') !== false || strpos($filename, '..\\') !== false) {
+        return new WP_Error('invalid_file_type', __('The uploaded file contains unauthorized characters.', 'propvendor-marketplace'));
+    }
+
+    // Dangerous extension regex: blocks executable scripts, shell scripts, html/svg active vectors, and double extensions
+    $dangerous_extensions = '/\.(php[0-9]?|phtml|phar|exe|com|bat|cmd|scr|vbs|js|jar|py|pl|cgi|html?|shtml|svgz?|xhtml|aspx?|jspx?|cfm|htaccess|htpasswd)(\.|$)/i';
+    if (preg_match($dangerous_extensions, $filename)) {
+        return new WP_Error('dangerous_file_type', __('Upload rejected: The file extension is not permitted for security reasons.', 'propvendor-marketplace'));
+    }
+
+    $file_type = wp_check_filetype_and_ext($file['tmp_name'], $filename);
+    $detected_type = $file_type['type'];
+    if (false === $detected_type || !in_array($detected_type, $allowed_mimes, true)) {
+        return new WP_Error('invalid_file_type', __('Only JPEG, PNG, and WebP images are allowed.', 'propvendor-marketplace'));
+    }
+
+    // Deep content inspection for images
+    $image_mimes = array('image/jpeg', 'image/png', 'image/webp');
+    if (in_array($detected_type, $image_mimes, true) && function_exists('getimagesize')) {
+        $image_info = @getimagesize($file['tmp_name']);
+        if (false === $image_info || empty($image_info[0]) || empty($image_info[1])) {
+            return new WP_Error('invalid_file_type', __('The uploaded file is not a valid image.', 'propvendor-marketplace'));
+        }
+    }
+
+    return true;
+}
+
+/**
  * Handle a single image upload to protected listing storage.
  *
  * @param int $post_id
@@ -3734,18 +3792,9 @@ function propvendor_marketplace_handle_single_listing_image_upload($post_id, $fi
         return new WP_Error('missing_image', 'Please upload a valid listing image.');
     }
 
-    if (!isset($file['tmp_name']) || !file_exists($file['tmp_name'])) {
-        return new WP_Error('invalid_uploaded_file', 'The uploaded image is not valid.');
-    }
-
-    if ($file['size'] > 4 * 1024 * 1024) {
-        return new WP_Error('image_too_large', 'The listing image must be 4MB or smaller.');
-    }
-
-    $file_type = wp_check_filetype_and_ext($file['tmp_name'], $file['name']);
-    $allowed_mime_types = array('image/jpeg', 'image/png', 'image/webp');
-    if (false === $file_type['type'] || !in_array($file_type['type'], $allowed_mime_types, true)) {
-        return new WP_Error('invalid_file_type', 'Only JPEG, PNG, and WebP images are allowed.');
+    $validation = propvendor_marketplace_validate_secure_file_upload($file, array('image/jpeg', 'image/png', 'image/webp'), 4 * 1024 * 1024);
+    if (is_wp_error($validation)) {
+        return $validation;
     }
 
     $private_root = propvendor_marketplace_ensure_private_listing_storage();
@@ -4334,6 +4383,10 @@ add_action('admin_post_nopriv_propvendor_submit_listing', 'propvendor_marketplac
 add_action('admin_post_propvendor_submit_listing', 'propvendor_marketplace_handle_listing_submission');
 
 function propvendor_marketplace_handle_listing_update() {
+    if (!is_user_logged_in()) {
+        wp_die('Access denied.', '', array('response' => 401));
+    }
+
     if (!isset($_POST['propvendor_listing_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['propvendor_listing_nonce'])), 'propvendor_listing_nonce')) {
         wp_die('Security check failed.');
     }
@@ -4355,7 +4408,6 @@ function propvendor_marketplace_handle_listing_update() {
 
     propvendor_marketplace_redirect_with_notice('/vendor-dashboard/', 'success', 'Listing updated successfully and returned to pending review for moderation.');
 }
-add_action('admin_post_nopriv_propvendor_update_listing', 'propvendor_marketplace_handle_listing_update');
 add_action('admin_post_propvendor_update_listing', 'propvendor_marketplace_handle_listing_update');
 
 function propvendor_marketplace_add_listing_meta_boxes() {
@@ -5026,18 +5078,9 @@ function propvendor_marketplace_handle_vendor_profile_image_upload($user_id, $fi
         return 0;
     }
 
-    if (!isset($file['tmp_name']) || !file_exists($file['tmp_name'])) {
-        return new WP_Error('invalid_uploaded_file', 'The uploaded profile image is not valid.');
-    }
-
-    if ($file['size'] > 4 * 1024 * 1024) {
-        return new WP_Error('image_too_large', 'The profile image must be 4MB or smaller.');
-    }
-
-    $file_type = wp_check_filetype_and_ext($file['tmp_name'], $file['name']);
-    $allowed_mime_types = array('image/jpeg', 'image/png', 'image/webp');
-    if (false === $file_type['type'] || !in_array($file_type['type'], $allowed_mime_types, true)) {
-        return new WP_Error('invalid_file_type', 'Only JPEG, PNG, and WebP images are allowed.');
+    $validation = propvendor_marketplace_validate_secure_file_upload($file, array('image/jpeg', 'image/png', 'image/webp'), 4 * 1024 * 1024);
+    if (is_wp_error($validation)) {
+        return $validation;
     }
 
     $private_root = propvendor_marketplace_ensure_private_listing_storage();
@@ -5889,7 +5932,10 @@ function propvendor_marketplace_create_enquiries_table() {
     // 5. Payment & Order Schema (Phase 4B)
     propvendor_marketplace_create_payment_tables();
 
-    // 6. Backfill existing enquiries (Fix 6)
+    // 6. Notifications Schema (Phase 6A)
+    propvendor_marketplace_create_notifications_table();
+
+    // 7. Backfill existing enquiries (Fix 6)
     propvendor_marketplace_backfill_enquiries();
 }
 
@@ -6261,54 +6307,10 @@ function propvendor_marketplace_handle_enquiry_submission() {
         );
     }
 
-    // Send vendor notification ONLY after the enquiry has been successfully saved in the database
-    if ($can_forward_vendor_email) {
-        // Remediate Finding 1: Evaluate vendor entitlement for lead contact details
-        $can_view_contact = propvendor_marketplace_vendor_can_view_contact_info($vendor_id, $thread_id);
-
-        $subject = sprintf('[PropVendor Enquiry] %s (Ref: #%d)', get_the_title($listing), $listing_id);
-        $email_body = "Hello,\n\nYou have received a new customer enquiry for your listing on PropVendor.\n\n";
-        $email_body .= "Listing: " . get_the_title($listing) . "\n";
-        $email_body .= "URL: " . get_permalink($listing) . "\n\n";
-        $email_body .= "Customer Details:\n";
-        $email_body .= "Name: " . $customer_name . "\n";
-
-        if ($can_view_contact) {
-            $email_body .= "Email: " . $customer_email . "\n";
-            $email_body .= "Phone: " . (!empty($customer_phone) ? $customer_phone : "Not provided") . "\n\n";
-        } else {
-            $masked_email = propvendor_marketplace_mask_email($customer_email);
-            if (empty($masked_email)) {
-                $masked_email = '[Protected Email]';
-            }
-            $masked_phone = !empty($customer_phone) ? propvendor_marketplace_mask_phone($customer_phone) : "Not provided";
-
-            $email_body .= "Email: " . $masked_email . " [Locked Lead]\n";
-            $email_body .= "Phone: " . $masked_phone . (!empty($customer_phone) ? " [Locked Lead]" : "") . "\n\n";
-            $email_body .= "Note: Direct customer contact details are locked. To reveal this customer's full phone number and email address, upgrade to PropVendor Premium or unlock this lead in your Vendor Dashboard:\n";
-            $email_body .= home_url('/vendor-dashboard/?view=inbox' . (!empty($thread_id) ? '&thread_id=' . $thread_id : '')) . "\n\n";
-        }
-
-        $display_message = $can_view_contact ? $message : propvendor_marketplace_mask_message_contact_info($message);
-        $email_body .= "Message:\n" . $display_message . "\n\n";
-        if (!empty($thread_id)) {
-            $email_body .= "View and respond via Vendor Dashboard:\n";
-            $email_body .= home_url('/vendor-dashboard/?view=inbox&thread_id=' . $thread_id) . "\n\n";
-        }
-        $email_body .= "Regards,\nPropVendor Marketplace\n" . home_url();
-
-        $headers = array(
-            'From: PropVendor Marketplace <no-reply@' . wp_parse_url(home_url(), PHP_URL_HOST) . '>',
-        );
-
-        if ($can_view_contact) {
-            $headers[] = 'Reply-To: ' . $customer_name . ' <' . $customer_email . '>';
-        } else {
-            $headers[] = 'Reply-To: PropVendor Marketplace <no-reply@' . wp_parse_url(home_url(), PHP_URL_HOST) . '>';
-        }
-
-        $sent = wp_mail($vendor_recipient, $subject, $email_body, $headers);
-        if ($sent) {
+    // Phase 6A: Reliable, privacy-safe automated email notification to vendor
+    if ($enquiry_id > 0 && $thread_id > 0) {
+        $notif_res = propvendor_marketplace_send_new_enquiry_notification($enquiry_id, $thread_id);
+        if (!empty($notif_res['success']) && 'sent' === $notif_res['status']) {
             $vendor_email_sent = 1;
             $wpdb->update(
                 $table_name,
@@ -6424,6 +6426,14 @@ function propvendor_marketplace_add_admin_menu() {
         'manage_options',
         'propvendor-payments',
         'propvendor_marketplace_render_admin_payments_page'
+    );
+    add_submenu_page(
+        'propvendor-enquiries',
+        'Notification Logs',
+        'Notification Logs',
+        'manage_options',
+        'propvendor-notifications',
+        'propvendor_marketplace_render_admin_notifications_page'
     );
 }
 add_action('admin_menu', 'propvendor_marketplace_add_admin_menu');
@@ -8072,6 +8082,7 @@ function propvendor_marketplace_handle_send_inbox_reply() {
         error_log($wpdb->last_error);
         propvendor_marketplace_redirect_with_notice($redirect_url, 'error', 'Unable to send reply due to a database error. Please try again.');
     }
+    $message_id = $wpdb->insert_id;
 
     // Finding 3: Record rate limit and duplicate protection transients for 60 seconds
     set_transient($rate_transient_key, $current_rate_count + 1, 60);
@@ -8090,54 +8101,14 @@ function propvendor_marketplace_handle_send_inbox_reply() {
         array('%d')
     );
 
-    // 8. Safe Email Notification Alert (Finding 2)
+    // 8. Phase 6A: Safe Automated Email Notifications
     $listing = get_post($thread->listing_id);
     $listing_title = $listing ? get_the_title($listing) : ('Listing #' . $thread->listing_id);
     $snippet = wp_trim_words($reply_text, 25, '...');
 
-    if ('vendor' === $sender_role) {
-        // Vendor replied -> Alert customer
-        $vendor_user = get_user_by('id', $thread->vendor_id);
-        $vendor_name = $vendor_user ? $vendor_user->display_name : 'The vendor';
-
-        // Finding 2: Never expose a vendor's private account email; use configured public email or site default.
-        $public_email = get_user_meta($thread->vendor_id, 'propvendor_public_email', true);
-        if (!empty($public_email) && is_email($public_email)) {
-            $vendor_reply_to = sanitize_email($public_email);
-        } else {
-            $vendor_reply_to = 'no-reply@' . wp_parse_url(home_url(), PHP_URL_HOST);
-        }
-
-        $headers = array(
-            'From: PropVendor Marketplace <no-reply@' . wp_parse_url(home_url(), PHP_URL_HOST) . '>',
-            'Reply-To: ' . $vendor_reply_to,
-        );
-
-        $customer_email = $thread->customer_email;
-        if (!empty($customer_email) && is_email($customer_email)) {
-            $subject = sprintf('New reply regarding %s', $listing_title);
-
-            // Finding 2: Safe Guest Communication Workflow
-            if ((int) $thread->customer_user_id === 0) {
-                // Guest inquiry: do NOT link to customer inbox, append registration CTA
-                $register_link = wp_registration_url();
-                $body  = "Hello " . $thread->customer_name . ",\n\n";
-                $body .= $vendor_name . " has replied to your enquiry regarding " . $listing_title . ":\n\n";
-                $body .= "\"" . $snippet . "\"\n\n";
-                $body .= "Note: You submitted this inquiry as a guest. To view your full message history or chat live on PropVendor, register an account using this email address: " . $register_link . "\n\n";
-                $body .= "Regards,\nPropVendor Team";
-            } else {
-                // Registered customer: link to customer inbox
-                $customer_inbox_link = home_url('/customer-inbox/?thread_id=' . $thread_id);
-                $body  = "Hello " . $thread->customer_name . ",\n\n";
-                $body .= $vendor_name . " has replied to your enquiry regarding " . $listing_title . ":\n\n";
-                $body .= "\"" . $snippet . "\"\n\n";
-                $body .= "Log in to your account to view the full conversation: " . $customer_inbox_link . "\n\n";
-                $body .= "Regards,\nPropVendor Team";
-            }
-
-            wp_mail($customer_email, $subject, $body, $headers);
-        }
+    if ('vendor' === $sender_role || 'admin' === $sender_role) {
+        // Vendor or Admin replied -> Alert customer via Phase 6A Notification Service
+        propvendor_marketplace_send_vendor_reply_notification($message_id, $thread_id);
     } elseif ('customer' === $sender_role) {
         // Customer replied -> Alert vendor
         $vendor_user = get_user_by('id', $thread->vendor_id);
@@ -8791,7 +8762,7 @@ function propvendor_marketplace_register_payment_rest_routes() {
     register_rest_route('propvendor/v1', '/verify-payment', array(
         'methods'             => 'POST',
         'callback'            => 'propvendor_marketplace_handle_rest_verify_payment',
-        'permission_callback' => '__return_true',
+        'permission_callback' => 'is_user_logged_in',
     ));
 }
 add_action('rest_api_init', 'propvendor_marketplace_register_payment_rest_routes');
@@ -8843,6 +8814,10 @@ function propvendor_marketplace_handle_paystack_webhook(WP_REST_Request $request
  * @return WP_REST_Response
  */
 function propvendor_marketplace_handle_rest_verify_payment(WP_REST_Request $request) {
+    if (!is_user_logged_in()) {
+        return new WP_REST_Response(array('success' => false, 'message' => __('Authentication required.', 'propvendor-marketplace')), 401);
+    }
+
     $params = $request->get_json_params();
     $reference = isset($params['reference']) ? sanitize_text_field($params['reference']) : '';
     if (empty($reference) && isset($_POST['reference'])) {
@@ -8851,6 +8826,16 @@ function propvendor_marketplace_handle_rest_verify_payment(WP_REST_Request $requ
 
     if (empty($reference)) {
         return new WP_REST_Response(array('success' => false, 'message' => 'Reference is required.'), 400);
+    }
+
+    global $wpdb;
+    $table_orders = $wpdb->prefix . 'propvendor_orders';
+    $order = $wpdb->get_row($wpdb->prepare(
+        "SELECT vendor_id FROM {$table_orders} WHERE transaction_reference = %s LIMIT 1",
+        $reference
+    ));
+    if ($order && (int) $order->vendor_id !== get_current_user_id() && !current_user_can('manage_options')) {
+        return new WP_REST_Response(array('success' => false, 'message' => __('You are not authorized to verify this order.', 'propvendor-marketplace')), 403);
     }
 
     $result = propvendor_marketplace_verify_and_fulfill_order($reference);
@@ -8903,6 +8888,16 @@ function propvendor_marketplace_ajax_verify_payment() {
     $reference = isset($_POST['reference']) ? sanitize_text_field(wp_unslash($_POST['reference'])) : '';
     if (empty($reference)) {
         wp_send_json_error(array('message' => __('Transaction reference is required.', 'propvendor-marketplace')));
+    }
+
+    global $wpdb;
+    $table_orders = $wpdb->prefix . 'propvendor_orders';
+    $order = $wpdb->get_row($wpdb->prepare(
+        "SELECT vendor_id FROM {$table_orders} WHERE transaction_reference = %s LIMIT 1",
+        $reference
+    ));
+    if ($order && (int) $order->vendor_id !== get_current_user_id() && !current_user_can('manage_options')) {
+        wp_send_json_error(array('message' => __('You are not authorized to verify this order.', 'propvendor-marketplace')), 403);
     }
 
     $result = propvendor_marketplace_verify_and_fulfill_order($reference);
@@ -9184,3 +9179,842 @@ function propvendor_marketplace_vendor_wallet_shortcode($atts = array()) {
     return ob_get_clean();
 }
 add_shortcode('propvendor_vendor_wallet', 'propvendor_marketplace_vendor_wallet_shortcode');
+
+/**
+ * =========================================================================
+ * PHASE 6A: SECURE AUTOMATED EMAIL NOTIFICATIONS & DELIVERY ARCHITECTURE
+ * =========================================================================
+ */
+
+/**
+ * 1. Database Table Creation & Migration: wp_propvendor_notifications
+ */
+function propvendor_marketplace_create_notifications_table() {
+    global $wpdb;
+    $charset_collate = $wpdb->get_charset_collate();
+    $table_notifications = $wpdb->prefix . 'propvendor_notifications';
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+    $sql = "CREATE TABLE {$table_notifications} (
+        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+        event_key varchar(191) NOT NULL,
+        notification_type varchar(80) NOT NULL,
+        recipient_user_id bigint(20) unsigned NOT NULL DEFAULT 0,
+        recipient_email varchar(191) NOT NULL DEFAULT '',
+        subject varchar(255) NOT NULL DEFAULT '',
+        status varchar(30) NOT NULL DEFAULT 'pending',
+        attempts int(10) unsigned NOT NULL DEFAULT 0,
+        last_error text NULL,
+        related_object_type varchar(80) NOT NULL DEFAULT '',
+        related_object_id bigint(20) unsigned NOT NULL DEFAULT 0,
+        scheduled_at datetime NULL,
+        sent_at datetime NULL,
+        created_at datetime NOT NULL,
+        updated_at datetime NOT NULL,
+        PRIMARY KEY  (id),
+        UNIQUE KEY event_key (event_key),
+        KEY status (status),
+        KEY recipient_user_id (recipient_user_id),
+        KEY related_object (related_object_type, related_object_id)
+    ) ENGINE=InnoDB {$charset_collate};";
+
+    dbDelta($sql);
+
+    // Ensure InnoDB engine for ACID transactions and row-level locking
+    $wpdb->query("ALTER TABLE {$table_notifications} ENGINE = InnoDB");
+}
+
+/**
+ * 2. Configurable Sender Settings
+ */
+function propvendor_marketplace_get_notification_sender_email() {
+    $email = get_option('propvendor_mail_sender_email', '');
+    if (!empty($email) && is_email($email)) {
+        return sanitize_email($email);
+    }
+    $host = wp_parse_url(home_url(), PHP_URL_HOST);
+    if (empty($host) || strpos($host, '.') === false) {
+        $host = 'propvendor.ng';
+    }
+    $fallback = 'no-reply@' . $host;
+    if (!is_email($fallback)) {
+        $fallback = 'no-reply@propvendor.ng';
+    }
+    return $fallback;
+}
+
+function propvendor_marketplace_get_notification_sender_name() {
+    $name = get_option('propvendor_mail_sender_name', '');
+    if (empty($name)) {
+        $name = 'PropVendor Marketplace';
+    }
+    return sanitize_text_field($name);
+}
+
+/**
+ * 3. User Preferences (Opt-out Support)
+ */
+function propvendor_marketplace_user_has_opted_out_notifications($user_id, $notification_type = '') {
+    $user_id = absint($user_id);
+    if ($user_id <= 0) {
+        return false;
+    }
+    // Specific type opt-out
+    if (!empty($notification_type)) {
+        $type_optout = get_user_meta($user_id, 'propvendor_optout_' . sanitize_key($notification_type), true);
+        if (!empty($type_optout)) {
+            return true;
+        }
+    }
+    // Global notifications opt-out
+    $global_optout = get_user_meta($user_id, 'propvendor_optout_all_notifications', true);
+    return !empty($global_optout);
+}
+
+function propvendor_marketplace_set_user_notification_optout($user_id, $notification_type = '', $optout = true) {
+    $user_id = absint($user_id);
+    if ($user_id <= 0) {
+        return false;
+    }
+    $meta_key = empty($notification_type) ? 'propvendor_optout_all_notifications' : ('propvendor_optout_' . sanitize_key($notification_type));
+    if ($optout) {
+        return update_user_meta($user_id, $meta_key, 1);
+    } else {
+        return delete_user_meta($user_id, $meta_key);
+    }
+}
+
+/**
+ * 4. Responsive & Safe HTML Email Template Renderer
+ */
+function propvendor_marketplace_render_email_layout($title, $heading, $content_html, $cta_text = '', $cta_url = '') {
+    $sender_name = propvendor_marketplace_get_notification_sender_name();
+    $home_url    = home_url();
+
+    ob_start();
+    ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?php echo esc_html($title); ?></title>
+    <style>
+        body { margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1e293b; line-height: 1.6; }
+        .pv-email-wrapper { width: 100%; background-color: #f1f5f9; padding: 32px 12px; }
+        .pv-email-container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0; overflow: hidden; }
+        .pv-email-header { background-color: #1e3a8a; padding: 24px 32px; text-align: left; }
+        .pv-email-header h1 { margin: 0; color: #ffffff; font-size: 20px; font-weight: 700; letter-spacing: -0.025em; }
+        .pv-email-header p { margin: 4px 0 0 0; color: #93c5fd; font-size: 13px; }
+        .pv-email-body { padding: 32px; font-size: 15px; color: #334155; }
+        .pv-email-body h2 { margin-top: 0; margin-bottom: 16px; font-size: 18px; color: #0f172a; }
+        .pv-preview-card { background-color: #f8fafc; border-left: 4px solid #1e3a8a; border-radius: 4px; padding: 14px 18px; margin: 18px 0; font-size: 14px; font-style: italic; color: #475569; }
+        .pv-notice-box { background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 12px 16px; margin: 18px 0; font-size: 13px; color: #1e40af; }
+        .pv-btn-action { display: inline-block; background-color: #1e3a8a; color: #ffffff !important; text-decoration: none; font-weight: 600; font-size: 14px; padding: 12px 24px; border-radius: 6px; margin: 20px 0 10px 0; text-align: center; }
+        .pv-email-footer { background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 32px; text-align: center; font-size: 12px; color: #64748b; line-height: 1.5; }
+        .pv-email-footer a { color: #2563eb; text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="pv-email-wrapper">
+        <div class="pv-email-container">
+            <div class="pv-email-header">
+                <h1><?php echo esc_html($sender_name); ?></h1>
+                <p><?php echo esc_html__('Nigeria\'s Trusted Property, Land & Vehicle Marketplace', 'propvendor-marketplace'); ?></p>
+            </div>
+            <div class="pv-email-body">
+                <h2><?php echo esc_html($heading); ?></h2>
+                <?php echo $content_html; // dynamically escaped within builders ?>
+                <?php if (!empty($cta_text) && !empty($cta_url)) : ?>
+                    <div>
+                        <a href="<?php echo esc_url($cta_url); ?>" class="pv-btn-action"><?php echo esc_html($cta_text); ?> &rarr;</a>
+                    </div>
+                <?php endif; ?>
+            </div>
+            <div class="pv-email-footer">
+                <p>&copy; <?php echo esc_html(date_i18n('Y')); ?> <a href="<?php echo esc_url($home_url); ?>"><?php echo esc_html($sender_name); ?></a>. <?php esc_html_e('All rights reserved.', 'propvendor-marketplace'); ?></p>
+                <p><?php esc_html_e('This is a transactional alert regarding your PropVendor activity. Customer phone numbers and emails are protected by PropVendor Privacy Safeguards.', 'propvendor-marketplace'); ?></p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+    <?php
+    return ob_get_clean();
+}
+
+/**
+ * 5. Reusable Central Notification Dispatcher (Duplicate-Safe, Logged, Bounded Retry)
+ */
+function propvendor_marketplace_dispatch_notification($args) {
+    global $wpdb;
+    propvendor_marketplace_create_notifications_table();
+    $table_notifications = $wpdb->prefix . 'propvendor_notifications';
+
+    $event_key           = sanitize_text_field($args['event_key'] ?? '');
+    $notification_type   = sanitize_key($args['notification_type'] ?? 'general');
+    $recipient_user_id   = absint($args['recipient_user_id'] ?? 0);
+    $recipient_email     = sanitize_email($args['recipient_email'] ?? '');
+    $subject             = sanitize_text_field($args['subject'] ?? '');
+    $html_body           = $args['html_body'] ?? '';
+    $related_object_type = sanitize_key($args['related_object_type'] ?? '');
+    $related_object_id   = absint($args['related_object_id'] ?? 0);
+    $reply_to            = sanitize_email($args['reply_to'] ?? '');
+
+    if (empty($event_key)) {
+        return array('success' => false, 'status' => 'failed', 'reason' => 'missing_event_key');
+    }
+
+    $now_mysql = current_time('mysql');
+
+    // 1. Check existing record
+    $existing = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$table_notifications} WHERE event_key = %s LIMIT 1",
+        $event_key
+    ));
+
+    if ($existing) {
+        if ('sent' === $existing->status) {
+            return array(
+                'success'         => true,
+                'status'          => 'skipped',
+                'reason'          => 'already_sent',
+                'notification_id' => (int) $existing->id,
+            );
+        }
+        if ('skipped' === $existing->status) {
+            return array(
+                'success'         => true,
+                'status'          => 'skipped',
+                'reason'          => 'already_skipped',
+                'notification_id' => (int) $existing->id,
+            );
+        }
+        if ((int) $existing->attempts >= 3 && empty($args['force_retry'])) {
+            return array(
+                'success'         => false,
+                'status'          => 'failed',
+                'reason'          => 'max_retries_exceeded',
+                'notification_id' => (int) $existing->id,
+            );
+        }
+    }
+
+    // 2. Check user opt-out preferences
+    if ($recipient_user_id > 0 && propvendor_marketplace_user_has_opted_out_notifications($recipient_user_id, $notification_type)) {
+        if ($existing) {
+            $wpdb->update(
+                $table_notifications,
+                array(
+                    'status'     => 'skipped',
+                    'last_error' => 'User opted out of notifications',
+                    'updated_at' => $now_mysql,
+                ),
+                array('id' => $existing->id),
+                array('%s', '%s', '%s'),
+                array('%d')
+            );
+            $notification_id = (int) $existing->id;
+        } else {
+            $wpdb->insert(
+                $table_notifications,
+                array(
+                    'event_key'           => $event_key,
+                    'notification_type'   => $notification_type,
+                    'recipient_user_id'   => $recipient_user_id,
+                    'recipient_email'     => $recipient_email,
+                    'subject'             => $subject,
+                    'status'              => 'skipped',
+                    'attempts'            => 0,
+                    'last_error'          => 'User opted out of notifications',
+                    'related_object_type' => $related_object_type,
+                    'related_object_id'   => $related_object_id,
+                    'created_at'          => $now_mysql,
+                    'updated_at'          => $now_mysql,
+                ),
+                array('%s', '%s', '%d', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%s', '%s')
+            );
+            $notification_id = $wpdb->insert_id;
+        }
+
+        return array(
+            'success'         => true,
+            'status'          => 'skipped',
+            'reason'          => 'opted_out',
+            'notification_id' => $notification_id,
+        );
+    }
+
+    // 3. Validate recipient email
+    if (empty($recipient_email) || !is_email($recipient_email)) {
+        if ($existing) {
+            $wpdb->update(
+                $table_notifications,
+                array(
+                    'status'     => 'failed',
+                    'last_error' => 'Invalid or missing recipient email',
+                    'updated_at' => $now_mysql,
+                ),
+                array('id' => $existing->id),
+                array('%s', '%s', '%s'),
+                array('%d')
+            );
+            $notification_id = (int) $existing->id;
+        } else {
+            $wpdb->insert(
+                $table_notifications,
+                array(
+                    'event_key'           => $event_key,
+                    'notification_type'   => $notification_type,
+                    'recipient_user_id'   => $recipient_user_id,
+                    'recipient_email'     => '',
+                    'subject'             => $subject,
+                    'status'              => 'failed',
+                    'attempts'            => 0,
+                    'last_error'          => 'Invalid or missing recipient email',
+                    'related_object_type' => $related_object_type,
+                    'related_object_id'   => $related_object_id,
+                    'created_at'          => $now_mysql,
+                    'updated_at'          => $now_mysql,
+                ),
+                array('%s', '%s', '%d', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%s', '%s')
+            );
+            $notification_id = $wpdb->insert_id;
+        }
+
+        return array(
+            'success'         => false,
+            'status'          => 'failed',
+            'reason'          => 'invalid_recipient_email',
+            'notification_id' => $notification_id,
+        );
+    }
+
+    // 4. Ensure initial record exists
+    if (!$existing) {
+        $wpdb->insert(
+            $table_notifications,
+            array(
+                'event_key'           => $event_key,
+                'notification_type'   => $notification_type,
+                'recipient_user_id'   => $recipient_user_id,
+                'recipient_email'     => $recipient_email,
+                'subject'             => $subject,
+                'status'              => 'pending',
+                'attempts'            => 0,
+                'last_error'          => null,
+                'related_object_type' => $related_object_type,
+                'related_object_id'   => $related_object_id,
+                'created_at'          => $now_mysql,
+                'updated_at'          => $now_mysql,
+            ),
+            array('%s', '%s', '%d', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%s', '%s')
+        );
+        $notification_id = $wpdb->insert_id;
+        $current_attempts = 0;
+    } else {
+        $notification_id = (int) $existing->id;
+        $current_attempts = (int) $existing->attempts;
+    }
+
+    // 5. Build headers
+    $sender_name  = propvendor_marketplace_get_notification_sender_name();
+    $sender_email = propvendor_marketplace_get_notification_sender_email();
+
+    $headers = array(
+        'Content-Type: text/html; charset=UTF-8',
+        sprintf('From: %s <%s>', $sender_name, $sender_email),
+    );
+
+    if (!empty($reply_to) && is_email($reply_to)) {
+        $headers[] = sprintf('Reply-To: %s', $reply_to);
+    } else {
+        $headers[] = sprintf('Reply-To: %s <%s>', $sender_name, $sender_email);
+    }
+
+    $new_attempts = $current_attempts + 1;
+    $mail_sent = false;
+    $last_error_message = '';
+
+    try {
+        $mail_sent = wp_mail($recipient_email, $subject, $html_body, $headers);
+    } catch (Exception $e) {
+        $mail_sent = false;
+        $last_error_message = $e->getMessage();
+    }
+
+    // 6. Record delivery outcome
+    if ($mail_sent) {
+        $wpdb->update(
+            $table_notifications,
+            array(
+                'status'     => 'sent',
+                'attempts'   => $new_attempts,
+                'sent_at'    => current_time('mysql'),
+                'updated_at' => current_time('mysql'),
+                'last_error' => null,
+            ),
+            array('id' => $notification_id),
+            array('%s', '%d', '%s', '%s', '%s'),
+            array('%d')
+        );
+
+        return array(
+            'success'         => true,
+            'status'          => 'sent',
+            'notification_id' => $notification_id,
+        );
+    } else {
+        $next_status = ($new_attempts >= 3) ? 'failed' : 'retrying';
+        $failure_msg = !empty($last_error_message) ? $last_error_message : 'wp_mail returned false (transient mail delivery failure)';
+
+        $wpdb->update(
+            $table_notifications,
+            array(
+                'status'     => $next_status,
+                'attempts'   => $new_attempts,
+                'last_error' => $failure_msg,
+                'updated_at' => current_time('mysql'),
+            ),
+            array('id' => $notification_id),
+            array('%s', '%d', '%s', '%s'),
+            array('%d')
+        );
+
+        return array(
+            'success'         => false,
+            'status'          => $next_status,
+            'reason'          => $failure_msg,
+            'notification_id' => $notification_id,
+        );
+    }
+}
+
+/**
+ * 6. Event A Trigger: New Customer Enquiry -> Notify Vendor
+ */
+function propvendor_marketplace_send_new_enquiry_notification($enquiry_id, $thread_id = 0, $is_retry = false) {
+    global $wpdb;
+    $table_enquiries = $wpdb->prefix . 'propvendor_enquiries';
+    $table_threads   = $wpdb->prefix . 'propvendor_threads';
+
+    $enquiry = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$table_enquiries} WHERE id = %d LIMIT 1",
+        $enquiry_id
+    ));
+    if (!$enquiry) {
+        return array('success' => false, 'status' => 'failed', 'reason' => 'enquiry_not_found');
+    }
+
+    $listing_id = (int) $enquiry->listing_id;
+    $listing = get_post($listing_id);
+    if (!$listing || !in_array($listing->post_type, array('property_listing', 'land_listing', 'vehicle_listing'), true)) {
+        return array('success' => false, 'status' => 'failed', 'reason' => 'invalid_listing');
+    }
+
+    $vendor_id = (int) $enquiry->vendor_id;
+    if ($vendor_id <= 0) {
+        return array('success' => false, 'status' => 'failed', 'reason' => 'invalid_vendor');
+    }
+
+    // Determine actual thread id
+    $actual_thread_id = absint($thread_id);
+    if ($actual_thread_id <= 0) {
+        $thread_row = $wpdb->get_row($wpdb->prepare(
+            "SELECT id FROM {$table_threads} WHERE listing_id = %d AND vendor_id = %d ORDER BY id DESC LIMIT 1",
+            $listing_id,
+            $vendor_id
+        ));
+        if ($thread_row) {
+            $actual_thread_id = (int) $thread_row->id;
+        }
+    }
+
+    // Recipient email: vendor's public email or account email
+    $vendor_user = get_user_by('id', $vendor_id);
+    $vendor_email = '';
+    $public_email = get_user_meta($vendor_id, 'propvendor_public_email', true);
+    if (!empty($public_email) && is_email($public_email)) {
+        $vendor_email = sanitize_email($public_email);
+    } elseif ($vendor_user && is_email($vendor_user->user_email)) {
+        $vendor_email = sanitize_email($vendor_user->user_email);
+    }
+
+    $vendor_name = $vendor_user ? $vendor_user->display_name : 'Vendor';
+    $listing_title = get_the_title($listing);
+
+    // Format creation time in site timezone
+    $enquiry_time_str = date_i18n(
+        get_option('date_format') . ' ' . get_option('time_format'),
+        strtotime(get_date_from_gmt($enquiry->created_at))
+    );
+
+    // Privacy-Safe Sanitized Message Preview (Strip HTML and Scripts)
+    $clean_message = wp_strip_all_tags($enquiry->message);
+    $preview_snippet = wp_trim_words($clean_message, 25, '...');
+
+    // URL to authorized vendor inbox
+    $vendor_inbox_url = home_url('/vendor-dashboard/?view=inbox' . ($actual_thread_id > 0 ? '&thread_id=' . $actual_thread_id : ''));
+
+    // Stable Event Key
+    $event_key = sprintf('new_enquiry:%d:vendor:%d', $enquiry_id, $vendor_id);
+    $subject   = sprintf('[PropVendor] You have a new enquiry for %s', $listing_title);
+
+    // Assemble safe HTML content
+    $content_html  = '<p>' . sprintf(esc_html__('Hello %s,', 'propvendor-marketplace'), '<strong>' . esc_html($vendor_name) . '</strong>') . '</p>';
+    $content_html .= '<p>' . sprintf(esc_html__('You have received a new customer enquiry regarding your marketplace listing: %s', 'propvendor-marketplace'), '<strong>' . esc_html($listing_title) . '</strong>') . '</p>';
+    $content_html .= '<p><small style="color: #64748b;">' . sprintf(esc_html__('Received on: %s (Site Time)', 'propvendor-marketplace'), esc_html($enquiry_time_str)) . '</small></p>';
+    $content_html .= '<div class="pv-preview-card">"' . esc_html($preview_snippet) . '"</div>';
+    $content_html .= '<div class="pv-notice-box">';
+    $content_html .= '<strong>' . esc_html__('Customer Contact Protection:', 'propvendor-marketplace') . '</strong> ';
+    $content_html .= esc_html__('Direct customer phone numbers and email addresses are securely protected. Log in to your vendor dashboard to review this enquiry and respond.', 'propvendor-marketplace');
+    $content_html .= '</div>';
+
+    $html_body = propvendor_marketplace_render_email_layout(
+        $subject,
+        __('New Customer Enquiry Received', 'propvendor-marketplace'),
+        $content_html,
+        __('View Enquiry in Vendor Inbox', 'propvendor-marketplace'),
+        $vendor_inbox_url
+    );
+
+    return propvendor_marketplace_dispatch_notification(array(
+        'event_key'           => $event_key,
+        'notification_type'   => 'new_enquiry',
+        'recipient_user_id'   => $vendor_id,
+        'recipient_email'     => $vendor_email,
+        'subject'             => $subject,
+        'html_body'           => $html_body,
+        'related_object_type' => 'enquiry',
+        'related_object_id'   => $enquiry_id,
+        'force_retry'         => $is_retry,
+    ));
+}
+
+/**
+ * 7. Event B Trigger: Vendor Reply -> Notify Buyer
+ */
+function propvendor_marketplace_send_vendor_reply_notification($message_id, $thread_id = 0, $is_retry = false) {
+    global $wpdb;
+    $table_threads  = $wpdb->prefix . 'propvendor_threads';
+    $table_messages = $wpdb->prefix . 'propvendor_messages';
+
+    $message = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$table_messages} WHERE id = %d LIMIT 1",
+        $message_id
+    ));
+    if (!$message) {
+        return array('success' => false, 'status' => 'failed', 'reason' => 'message_not_found');
+    }
+
+    $actual_thread_id = absint($thread_id);
+    if ($actual_thread_id <= 0) {
+        $actual_thread_id = (int) $message->thread_id;
+    }
+    if ((int) $message->thread_id !== $actual_thread_id) {
+        return array('success' => false, 'status' => 'failed', 'reason' => 'thread_mismatch');
+    }
+
+    $thread = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$table_threads} WHERE id = %d LIMIT 1",
+        $actual_thread_id
+    ));
+    if (!$thread) {
+        return array('success' => false, 'status' => 'failed', 'reason' => 'thread_not_found');
+    }
+
+    // Role check: must be vendor or admin
+    if ('vendor' !== $message->sender_role && 'admin' !== $message->sender_role) {
+        return array('success' => false, 'status' => 'failed', 'reason' => 'invalid_sender_role');
+    }
+
+    // Sender authorization check: sender must be thread vendor or have manage_options
+    $is_authorized = false;
+    if ((int) $message->sender_id === (int) $thread->vendor_id) {
+        $is_authorized = true;
+    } elseif (user_can($message->sender_id, 'manage_options')) {
+        $is_authorized = true;
+    }
+    if (!$is_authorized) {
+        return array('success' => false, 'status' => 'failed', 'reason' => 'unauthorized_sender');
+    }
+
+    $listing = get_post($thread->listing_id);
+    $listing_title = $listing ? get_the_title($listing) : ('Listing #' . $thread->listing_id);
+
+    $vendor_user = get_user_by('id', $thread->vendor_id);
+    $vendor_name = $vendor_user ? $vendor_user->display_name : 'The Vendor';
+
+    $customer_name  = !empty($thread->customer_name) ? $thread->customer_name : 'Customer';
+    $customer_email = sanitize_email($thread->customer_email);
+    $customer_uid   = absint($thread->customer_user_id);
+
+    $clean_reply     = wp_strip_all_tags($message->message);
+    $preview_snippet = wp_trim_words($clean_reply, 25, '...');
+
+    // Stable Event Key
+    $buyer_key_suffix = ($customer_uid > 0)
+        ? (string) $customer_uid
+        : ('guest_' . substr(md5(strtolower(trim($customer_email))), 0, 16));
+    $event_key = sprintf('vendor_reply:%d:buyer:%s', $message_id, $buyer_key_suffix);
+    $subject   = sprintf('[PropVendor] You have a new reply for %s', $listing_title);
+
+    // Contextual CTA
+    if ($customer_uid > 0) {
+        $cta_text = __('View Conversation & Reply', 'propvendor-marketplace');
+        $cta_url  = home_url('/customer-inbox/?thread_id=' . $actual_thread_id);
+        $access_note = __('Sign in to your customer account to view the full message history and reply directly.', 'propvendor-marketplace');
+    } else {
+        $cta_text = __('Register on PropVendor', 'propvendor-marketplace');
+        $cta_url  = wp_registration_url();
+        $access_note = __('You submitted this inquiry as a guest. To view your full message history and chat in real-time, register an account on PropVendor using this email address.', 'propvendor-marketplace');
+    }
+
+    // Assemble safe HTML content
+    $content_html  = '<p>' . sprintf(esc_html__('Hello %s,', 'propvendor-marketplace'), '<strong>' . esc_html($customer_name) . '</strong>') . '</p>';
+    $content_html .= '<p>' . sprintf(esc_html__('%s has replied to your enquiry regarding %s:', 'propvendor-marketplace'), '<strong>' . esc_html($vendor_name) . '</strong>', '<strong>' . esc_html($listing_title) . '</strong>') . '</p>';
+    $content_html .= '<div class="pv-preview-card">"' . esc_html($preview_snippet) . '"</div>';
+    $content_html .= '<p>' . esc_html($access_note) . '</p>';
+
+    $html_body = propvendor_marketplace_render_email_layout(
+        $subject,
+        __('New Reply to Your Enquiry', 'propvendor-marketplace'),
+        $content_html,
+        $cta_text,
+        $cta_url
+    );
+
+    // Reply-To: vendor public email if present, else site sender
+    $vendor_reply_to = '';
+    $public_email = get_user_meta($thread->vendor_id, 'propvendor_public_email', true);
+    if (!empty($public_email) && is_email($public_email)) {
+        $vendor_reply_to = sanitize_email($public_email);
+    }
+
+    return propvendor_marketplace_dispatch_notification(array(
+        'event_key'           => $event_key,
+        'notification_type'   => 'vendor_reply',
+        'recipient_user_id'   => $customer_uid,
+        'recipient_email'     => $customer_email,
+        'subject'             => $subject,
+        'html_body'           => $html_body,
+        'reply_to'            => $vendor_reply_to,
+        'related_object_type' => 'thread_message',
+        'related_object_id'   => $message_id,
+        'force_retry'         => $is_retry,
+    ));
+}
+
+/**
+ * 8. Notification Retry & Query API
+ */
+function propvendor_marketplace_get_notification_by_key($event_key) {
+    global $wpdb;
+    propvendor_marketplace_create_notifications_table();
+    $table = $wpdb->prefix . 'propvendor_notifications';
+    return $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$table} WHERE event_key = %s LIMIT 1",
+        $event_key
+    ));
+}
+
+function propvendor_marketplace_get_notifications($args = array()) {
+    global $wpdb;
+    propvendor_marketplace_create_notifications_table();
+    $table = $wpdb->prefix . 'propvendor_notifications';
+
+    $limit  = isset($args['limit']) ? absint($args['limit']) : 50;
+    $offset = isset($args['offset']) ? absint($args['offset']) : 0;
+    $status = isset($args['status']) ? sanitize_key($args['status']) : '';
+
+    $where = 'WHERE 1=1';
+    $params = array();
+
+    if (!empty($status)) {
+        $where .= ' AND status = %s';
+        $params[] = $status;
+    }
+
+    $params[] = $limit;
+    $params[] = $offset;
+
+    $sql = "SELECT * FROM {$table} {$where} ORDER BY id DESC LIMIT %d OFFSET %d";
+    return $wpdb->get_results($wpdb->prepare($sql, $params));
+}
+
+function propvendor_marketplace_retry_notification($notification_id) {
+    global $wpdb;
+    propvendor_marketplace_create_notifications_table();
+    $table = $wpdb->prefix . 'propvendor_notifications';
+
+    $row = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$table} WHERE id = %d LIMIT 1",
+        $notification_id
+    ));
+    if (!$row) {
+        return array('success' => false, 'reason' => 'notification_not_found');
+    }
+
+    // Idempotency: do not re-send if already marked sent
+    if ('sent' === $row->status) {
+        return array('success' => false, 'reason' => 'already_sent');
+    }
+
+    if ((int) $row->attempts >= 3) {
+        return array('success' => false, 'reason' => 'max_retries_exceeded');
+    }
+
+    if ('enquiry' === $row->related_object_type) {
+        return propvendor_marketplace_send_new_enquiry_notification($row->related_object_id, 0, true);
+    } elseif ('thread_message' === $row->related_object_type) {
+        return propvendor_marketplace_send_vendor_reply_notification($row->related_object_id, 0, true);
+    }
+
+    return array('success' => false, 'reason' => 'unknown_object_type');
+}
+
+function propvendor_marketplace_retry_notification_by_key($event_key) {
+    $row = propvendor_marketplace_get_notification_by_key($event_key);
+    if (!$row) {
+        return array('success' => false, 'reason' => 'notification_not_found');
+    }
+    return propvendor_marketplace_retry_notification($row->id);
+}
+
+/**
+ * 9. Administrator-Only Notification Logs & Email Settings View
+ */
+function propvendor_marketplace_render_admin_notifications_page() {
+    if (!current_user_can('manage_options')) {
+        wp_die(esc_html__('Access denied: You do not have sufficient permissions to view notification logs.', 'propvendor-marketplace'));
+    }
+
+    global $wpdb;
+    propvendor_marketplace_create_notifications_table();
+
+    $notice = '';
+
+    // Handle settings submission
+    if (isset($_POST['pv_action']) && 'save_mail_settings' === $_POST['pv_action']) {
+        check_admin_referer('propvendor_save_mail_settings');
+        $sender_name  = sanitize_text_field(wp_unslash($_POST['pv_mail_sender_name'] ?? ''));
+        $sender_email = sanitize_email(wp_unslash($_POST['pv_mail_sender_email'] ?? ''));
+
+        if (!empty($sender_name)) {
+            update_option('propvendor_mail_sender_name', $sender_name);
+        }
+        if (!empty($sender_email) && is_email($sender_email)) {
+            update_option('propvendor_mail_sender_email', $sender_email);
+        }
+        $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html__('Notification email settings saved successfully.', 'propvendor-marketplace') . '</p></div>';
+    }
+
+    // Handle manual retry trigger
+    if (isset($_POST['pv_action']) && 'retry_notification' === $_POST['pv_action']) {
+        $notif_id = absint($_POST['notification_id'] ?? 0);
+        check_admin_referer('propvendor_retry_' . $notif_id);
+
+        $res = propvendor_marketplace_retry_notification($notif_id);
+        if (!empty($res['success'])) {
+            $notice = '<div class="notice notice-success is-dismissible"><p>' . sprintf(esc_html__('Notification #%d retried successfully: %s', 'propvendor-marketplace'), $notif_id, esc_html($res['status'])) . '</p></div>';
+        } else {
+            $notice = '<div class="notice notice-error is-dismissible"><p>' . sprintf(esc_html__('Retry failed for notification #%d: %s', 'propvendor-marketplace'), $notif_id, esc_html($res['reason'] ?? 'Error')) . '</p></div>';
+        }
+    }
+
+    $current_sender_name  = propvendor_marketplace_get_notification_sender_name();
+    $current_sender_email = propvendor_marketplace_get_notification_sender_email();
+
+    $notifications = propvendor_marketplace_get_notifications(array('limit' => 50));
+    ?>
+    <div class="wrap">
+        <h1><?php esc_html_e('PropVendor Notification Logs & Email Settings', 'propvendor-marketplace'); ?></h1>
+        <?php echo $notice; // escaped above ?>
+
+        <!-- Email Configuration Box -->
+        <div class="card" style="max-width: 800px; margin-top: 15px; padding: 15px 20px;">
+            <h2><?php esc_html_e('Transactional Email Sender Settings', 'propvendor-marketplace'); ?></h2>
+            <form method="post" action="">
+                <?php wp_nonce_field('propvendor_save_mail_settings'); ?>
+                <input type="hidden" name="pv_action" value="save_mail_settings">
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><label for="pv_mail_sender_name"><?php esc_html_e('Sender Name', 'propvendor-marketplace'); ?></label></th>
+                        <td><input type="text" id="pv_mail_sender_name" name="pv_mail_sender_name" class="regular-text" value="<?php echo esc_attr($current_sender_name); ?>"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="pv_mail_sender_email"><?php esc_html_e('Sender Email', 'propvendor-marketplace'); ?></label></th>
+                        <td><input type="email" id="pv_mail_sender_email" name="pv_mail_sender_email" class="regular-text" value="<?php echo esc_attr($current_sender_email); ?>"></td>
+                    </tr>
+                </table>
+                <p class="submit">
+                    <button type="submit" class="button button-primary"><?php esc_html_e('Save Email Settings', 'propvendor-marketplace'); ?></button>
+                </p>
+            </form>
+        </div>
+
+        <!-- Notification History Table -->
+        <div style="margin-top: 30px;">
+            <h2><?php esc_html_e('Recent Transactional Notifications', 'propvendor-marketplace'); ?></h2>
+            <p class="description"><?php esc_html_e('Private buyer phone numbers and message bodies are never stored in delivery logs.', 'propvendor-marketplace'); ?></p>
+
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;"><?php esc_html_e('ID', 'propvendor-marketplace'); ?></th>
+                        <th style="width: 140px;"><?php esc_html_e('Type', 'propvendor-marketplace'); ?></th>
+                        <th style="width: 200px;"><?php esc_html_e('Recipient', 'propvendor-marketplace'); ?></th>
+                        <th><?php esc_html_e('Subject', 'propvendor-marketplace'); ?></th>
+                        <th style="width: 90px;"><?php esc_html_e('Status', 'propvendor-marketplace'); ?></th>
+                        <th style="width: 70px;"><?php esc_html_e('Attempts', 'propvendor-marketplace'); ?></th>
+                        <th><?php esc_html_e('Last Error / Notes', 'propvendor-marketplace'); ?></th>
+                        <th style="width: 140px;"><?php esc_html_e('Created At', 'propvendor-marketplace'); ?></th>
+                        <th style="width: 100px;"><?php esc_html_e('Actions', 'propvendor-marketplace'); ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (!empty($notifications)) : ?>
+                        <?php foreach ($notifications as $n) :
+                            $masked_email = !empty($n->recipient_email) ? propvendor_marketplace_mask_email($n->recipient_email) : 'N/A';
+                            $status_color = ('sent' === $n->status) ? '#15803d' : (('failed' === $n->status) ? '#b91c1c' : (('retrying' === $n->status) ? '#b45309' : '#475569'));
+                        ?>
+                            <tr>
+                                <td><?php echo (int) $n->id; ?></td>
+                                <td><code><?php echo esc_html($n->notification_type); ?></code></td>
+                                <td>
+                                    <?php echo esc_html($masked_email); ?>
+                                    <?php if ($n->recipient_user_id > 0) : ?>
+                                        <small style="color: #64748b;">(UID: <?php echo (int) $n->recipient_user_id; ?>)</small>
+                                    <?php endif; ?>
+                                </td>
+                                <td><?php echo esc_html($n->subject); ?></td>
+                                <td><strong style="color: <?php echo esc_attr($status_color); ?>;"><?php echo esc_html(strtoupper($n->status)); ?></strong></td>
+                                <td><?php echo (int) $n->attempts; ?></td>
+                                <td><small style="color: #64748b;"><?php echo esc_html($n->last_error ? $n->last_error : '—'); ?></small></td>
+                                <td><?php echo esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($n->created_at))); ?></td>
+                                <td>
+                                    <?php if (in_array($n->status, array('failed', 'retrying'), true) && (int) $n->attempts < 3) : ?>
+                                        <form method="post" action="" style="display:inline;">
+                                            <?php wp_nonce_field('propvendor_retry_' . $n->id); ?>
+                                            <input type="hidden" name="pv_action" value="retry_notification">
+                                            <input type="hidden" name="notification_id" value="<?php echo (int) $n->id; ?>">
+                                            <button type="submit" class="button button-small"><?php esc_html_e('Retry', 'propvendor-marketplace'); ?></button>
+                                        </form>
+                                    <?php else : ?>
+                                        <span style="color: #94a3b8;">—</span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else : ?>
+                        <tr>
+                            <td colspan="9"><?php esc_html_e('No notifications recorded yet.', 'propvendor-marketplace'); ?></td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <?php
+}
