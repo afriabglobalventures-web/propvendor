@@ -1183,6 +1183,7 @@ function propvendor_marketplace_activate() {
     propvendor_marketplace_create_default_pages();
     propvendor_marketplace_create_enquiries_table();
     propvendor_marketplace_create_credit_ledger_table();
+    propvendor_marketplace_create_payment_tables();
     flush_rewrite_rules();
 }
 
@@ -1194,11 +1195,31 @@ function propvendor_marketplace_enqueue_assets() {
         '0.5.0'
     );
     wp_enqueue_script(
+        'paystack-inline',
+        'https://js.paystack.co/v1/inline.js',
+        array(),
+        null,
+        true
+    );
+    wp_enqueue_script(
         'propvendor-marketplace-frontend',
         plugins_url('assets/js/front-end.js', __FILE__),
-        array(),
+        array('jquery'),
         '0.5.0',
         true
+    );
+    wp_localize_script(
+        'propvendor-marketplace-frontend',
+        'propvendor_payment_vars',
+        array(
+            'ajax_url'            => admin_url('admin-ajax.php'),
+            'rest_verify_url'     => esc_url_raw(rest_url('propvendor/v1/verify-payment')),
+            'paystack_public_key' => propvendor_marketplace_get_paystack_public_key(),
+            'nonce'               => wp_create_nonce('propvendor_checkout_nonce'),
+            'unlock_nonce'        => wp_create_nonce('propvendor_unlock_lead_nonce'),
+            'wallet_url'          => home_url('/vendor-wallet/'),
+            'user_email'          => is_user_logged_in() ? wp_get_current_user()->user_email : '',
+        )
     );
 }
 add_action('wp_enqueue_scripts', 'propvendor_marketplace_enqueue_assets');
@@ -1268,6 +1289,10 @@ function propvendor_marketplace_create_default_pages() {
         'customer-inbox' => array(
             'title' => 'Customer Inbox',
             'content' => '[propvendor_customer_inbox]',
+        ),
+        'vendor-wallet' => array(
+            'title' => 'Vendor Wallet',
+            'content' => '[propvendor_vendor_wallet]',
         ),
     );
 
@@ -2042,6 +2067,32 @@ function propvendor_marketplace_render_listing_details($content) {
         $output .= propvendor_marketplace_render_listing_cards($related->posts, 'Related listings');
         $output .= '</section>';
     }
+
+    // Phase 5: Accessible Confirmation Modal for Lead Contact Unlock
+    $output .= '
+    <div id="pv-unlock-lead-modal" class="pv-unlock-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="pv-unlock-modal-title">
+        <div class="pv-unlock-modal-backdrop"></div>
+        <div class="pv-unlock-modal-dialog">
+            <div class="pv-unlock-modal-header">
+                <h4 id="pv-unlock-modal-title"><span class="dashicons dashicons-unlock"></span> ' . esc_html__('Confirm Lead Contact Unlock', 'propvendor-marketplace') . '</h4>
+                <button type="button" class="pv-unlock-modal-close" aria-label="' . esc_attr__('Close dialog', 'propvendor-marketplace') . '">&times;</button>
+            </div>
+            <div class="pv-unlock-modal-body">
+                <p>' . esc_html__('Are you sure you want to unlock this customer\'s direct contact details?', 'propvendor-marketplace') . '</p>
+                <div class="pv-unlock-modal-details">
+                    <div><strong>' . esc_html__('Cost:', 'propvendor-marketplace') . '</strong> 1 Credit</div>
+                    <div><strong>' . esc_html__('Your Balance:', 'propvendor-marketplace') . '</strong> <span id="pv-modal-current-balance">0</span> Credits</div>
+                    <div><strong>' . esc_html__('Balance After Unlock:', 'propvendor-marketplace') . '</strong> <span id="pv-modal-balance-after">0</span> Credits</div>
+                </div>
+                <p class="pv-unlock-modal-subtext">' . esc_html__('1 credit will be deducted from your wallet upon confirmation. Customer phone number and email will be revealed immediately.', 'propvendor-marketplace') . '</p>
+                <div id="pv-unlock-modal-error" class="pv-unlock-modal-error" style="display: none;"></div>
+            </div>
+            <div class="pv-unlock-modal-footer">
+                <button type="button" id="pv-btn-confirm-unlock" class="button button-primary">' . esc_html__('Confirm & Deduct 1 Credit', 'propvendor-marketplace') . '</button>
+                <button type="button" id="pv-btn-cancel-unlock" class="button button-secondary">' . esc_html__('Cancel', 'propvendor-marketplace') . '</button>
+            </div>
+        </div>
+    </div>';
 
     $output .= '</section>';
     return $output;
@@ -2961,6 +3012,32 @@ function propvendor_marketplace_browse_shortcode() {
     }
 
     wp_reset_postdata();
+    // Phase 5: Accessible Confirmation Modal for Lead Contact Unlock
+    $output .= '
+    <div id="pv-unlock-lead-modal" class="pv-unlock-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="pv-unlock-modal-title">
+        <div class="pv-unlock-modal-backdrop"></div>
+        <div class="pv-unlock-modal-dialog">
+            <div class="pv-unlock-modal-header">
+                <h4 id="pv-unlock-modal-title"><span class="dashicons dashicons-unlock"></span> ' . esc_html__('Confirm Lead Contact Unlock', 'propvendor-marketplace') . '</h4>
+                <button type="button" class="pv-unlock-modal-close" aria-label="' . esc_attr__('Close dialog', 'propvendor-marketplace') . '">&times;</button>
+            </div>
+            <div class="pv-unlock-modal-body">
+                <p>' . esc_html__('Are you sure you want to unlock this customer\'s direct contact details?', 'propvendor-marketplace') . '</p>
+                <div class="pv-unlock-modal-details">
+                    <div><strong>' . esc_html__('Cost:', 'propvendor-marketplace') . '</strong> 1 Credit</div>
+                    <div><strong>' . esc_html__('Your Balance:', 'propvendor-marketplace') . '</strong> <span id="pv-modal-current-balance">0</span> Credits</div>
+                    <div><strong>' . esc_html__('Balance After Unlock:', 'propvendor-marketplace') . '</strong> <span id="pv-modal-balance-after">0</span> Credits</div>
+                </div>
+                <p class="pv-unlock-modal-subtext">' . esc_html__('1 credit will be deducted from your wallet upon confirmation. Customer phone number and email will be revealed immediately.', 'propvendor-marketplace') . '</p>
+                <div id="pv-unlock-modal-error" class="pv-unlock-modal-error" style="display: none;"></div>
+            </div>
+            <div class="pv-unlock-modal-footer">
+                <button type="button" id="pv-btn-confirm-unlock" class="button button-primary">' . esc_html__('Confirm & Deduct 1 Credit', 'propvendor-marketplace') . '</button>
+                <button type="button" id="pv-btn-cancel-unlock" class="button button-secondary">' . esc_html__('Cancel', 'propvendor-marketplace') . '</button>
+            </div>
+        </div>
+    </div>';
+
     $output .= '</section>';
     return $output;
 }
@@ -3456,6 +3533,32 @@ function propvendor_marketplace_vendor_dashboard_shortcode() {
             $output .= propvendor_marketplace_submit_listing_form_shortcode();
         }
     }
+
+    // Phase 5: Accessible Confirmation Modal for Lead Contact Unlock
+    $output .= '
+    <div id="pv-unlock-lead-modal" class="pv-unlock-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="pv-unlock-modal-title">
+        <div class="pv-unlock-modal-backdrop"></div>
+        <div class="pv-unlock-modal-dialog">
+            <div class="pv-unlock-modal-header">
+                <h4 id="pv-unlock-modal-title"><span class="dashicons dashicons-unlock"></span> ' . esc_html__('Confirm Lead Contact Unlock', 'propvendor-marketplace') . '</h4>
+                <button type="button" class="pv-unlock-modal-close" aria-label="' . esc_attr__('Close dialog', 'propvendor-marketplace') . '">&times;</button>
+            </div>
+            <div class="pv-unlock-modal-body">
+                <p>' . esc_html__('Are you sure you want to unlock this customer\'s direct contact details?', 'propvendor-marketplace') . '</p>
+                <div class="pv-unlock-modal-details">
+                    <div><strong>' . esc_html__('Cost:', 'propvendor-marketplace') . '</strong> 1 Credit</div>
+                    <div><strong>' . esc_html__('Your Balance:', 'propvendor-marketplace') . '</strong> <span id="pv-modal-current-balance">0</span> Credits</div>
+                    <div><strong>' . esc_html__('Balance After Unlock:', 'propvendor-marketplace') . '</strong> <span id="pv-modal-balance-after">0</span> Credits</div>
+                </div>
+                <p class="pv-unlock-modal-subtext">' . esc_html__('1 credit will be deducted from your wallet upon confirmation. Customer phone number and email will be revealed immediately.', 'propvendor-marketplace') . '</p>
+                <div id="pv-unlock-modal-error" class="pv-unlock-modal-error" style="display: none;"></div>
+            </div>
+            <div class="pv-unlock-modal-footer">
+                <button type="button" id="pv-btn-confirm-unlock" class="button button-primary">' . esc_html__('Confirm & Deduct 1 Credit', 'propvendor-marketplace') . '</button>
+                <button type="button" id="pv-btn-cancel-unlock" class="button button-secondary">' . esc_html__('Cancel', 'propvendor-marketplace') . '</button>
+            </div>
+        </div>
+    </div>';
 
     $output .= '</section>';
     return $output;
@@ -5559,6 +5662,150 @@ function propvendor_marketplace_create_credit_ledger_table() {
     $wpdb->query("ALTER TABLE {$table_ledger} ENGINE = InnoDB");
 }
 
+/**
+ * =========================================================================
+ * PHASE 4B / STAGE 5B: PAYMENT GATEWAY & ORDER TRACKING SCHEMA
+ * =========================================================================
+ */
+
+function propvendor_marketplace_create_payment_tables() {
+    global $wpdb;
+    $charset_collate = $wpdb->get_charset_collate();
+    $table_plans     = $wpdb->prefix . 'propvendor_plans';
+    $table_orders    = $wpdb->prefix . 'propvendor_orders';
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+    // 1. Plans Catalog Table
+    $sql_plans = "CREATE TABLE {$table_plans} (
+        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+        plan_key varchar(50) NOT NULL,
+        name varchar(100) NOT NULL,
+        product_type varchar(50) NOT NULL,
+        price_kobo bigint(20) unsigned NOT NULL,
+        credits int(11) NOT NULL DEFAULT 0,
+        duration_days int(11) NOT NULL DEFAULT 0,
+        description text DEFAULT NULL,
+        is_active tinyint(1) NOT NULL DEFAULT 1,
+        created_at datetime NOT NULL,
+        PRIMARY KEY  (id),
+        UNIQUE KEY plan_key (plan_key),
+        KEY product_type (product_type),
+        KEY is_active (is_active)
+    ) ENGINE=InnoDB {$charset_collate};";
+    dbDelta($sql_plans);
+    $wpdb->query("ALTER TABLE {$table_plans} ENGINE = InnoDB");
+
+    // 2. Orders Table
+    $sql_orders = "CREATE TABLE {$table_orders} (
+        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+        vendor_id bigint(20) unsigned NOT NULL,
+        plan_id bigint(20) unsigned NOT NULL,
+        amount_kobo bigint(20) unsigned NOT NULL,
+        transaction_reference varchar(100) NOT NULL,
+        gateway varchar(50) NOT NULL DEFAULT 'paystack',
+        status varchar(50) NOT NULL DEFAULT 'pending',
+        created_at datetime NOT NULL,
+        updated_at datetime NOT NULL,
+        PRIMARY KEY  (id),
+        UNIQUE KEY transaction_reference (transaction_reference),
+        KEY vendor_id (vendor_id),
+        KEY plan_id (plan_id),
+        KEY status (status),
+        KEY created_at (created_at)
+    ) ENGINE=InnoDB {$charset_collate};";
+    dbDelta($sql_orders);
+    $wpdb->query("ALTER TABLE {$table_orders} ENGINE = InnoDB");
+
+    // Seed default products
+    propvendor_marketplace_seed_default_plans();
+}
+
+function propvendor_marketplace_seed_default_plans() {
+    global $wpdb;
+    $table_plans = $wpdb->prefix . 'propvendor_plans';
+
+    $default_plans = array(
+        array(
+            'plan_key'      => 'vip_agent_monthly',
+            'name'          => 'VIP Agent Monthly',
+            'product_type'  => 'vip_agent',
+            'price_kobo'    => 3000000, // ₦30,000.00
+            'credits'       => 0,
+            'duration_days' => 30,
+            'description'   => 'Unlimited leads and contact unlocks for 30 days plus VIP badge on all listings.',
+            'is_active'     => 1,
+        ),
+        array(
+            'plan_key'      => 'credit_pack_starter',
+            'name'          => 'Starter Pack (5 Leads)',
+            'product_type'  => 'credit_pack',
+            'price_kobo'    => 500000, // ₦5,000.00
+            'credits'       => 5,
+            'duration_days' => 0,
+            'description'   => '5 Contact Unlocks (₦1,000 per lead). Credits never expire.',
+            'is_active'     => 1,
+        ),
+        array(
+            'plan_key'      => 'credit_pack_growth',
+            'name'          => 'Growth Pack (12 Leads)',
+            'product_type'  => 'credit_pack',
+            'price_kobo'    => 1000000, // ₦10,000.00
+            'credits'       => 12,
+            'duration_days' => 0,
+            'description'   => '12 Contact Unlocks (₦833 per lead). Best value for active agents. Credits never expire.',
+            'is_active'     => 1,
+        ),
+        array(
+            'plan_key'      => 'credit_pack_pro',
+            'name'          => 'Pro Pack (28 Leads)',
+            'product_type'  => 'credit_pack',
+            'price_kobo'    => 2000000, // ₦20,000.00
+            'credits'       => 28,
+            'duration_days' => 0,
+            'description'   => '28 Contact Unlocks (₦714 per lead). Highest volume discount. Credits never expire.',
+            'is_active'     => 1,
+        ),
+    );
+
+    foreach ($default_plans as $p) {
+        $existing = $wpdb->get_row($wpdb->prepare("SELECT id FROM {$table_plans} WHERE plan_key = %s", $p['plan_key']));
+        if ($existing) {
+            $wpdb->update(
+                $table_plans,
+                array(
+                    'name'          => $p['name'],
+                    'product_type'  => $p['product_type'],
+                    'price_kobo'    => $p['price_kobo'],
+                    'credits'       => $p['credits'],
+                    'duration_days' => $p['duration_days'],
+                    'description'   => $p['description'],
+                    'is_active'     => $p['is_active'],
+                ),
+                array('id' => $existing->id),
+                array('%s', '%s', '%d', '%d', '%d', '%s', '%d'),
+                array('%d')
+            );
+        } else {
+            $wpdb->insert(
+                $table_plans,
+                array(
+                    'plan_key'      => $p['plan_key'],
+                    'name'          => $p['name'],
+                    'product_type'  => $p['product_type'],
+                    'price_kobo'    => $p['price_kobo'],
+                    'credits'       => $p['credits'],
+                    'duration_days' => $p['duration_days'],
+                    'description'   => $p['description'],
+                    'is_active'     => $p['is_active'],
+                    'created_at'    => current_time('mysql'),
+                ),
+                array('%s', '%s', '%s', '%d', '%d', '%d', '%s', '%d', '%s')
+            );
+        }
+    }
+}
+
 function propvendor_marketplace_create_enquiries_table() {
     global $wpdb;
     $charset_collate = $wpdb->get_charset_collate();
@@ -5639,7 +5886,10 @@ function propvendor_marketplace_create_enquiries_table() {
     // 4. Credit Ledger Table Schema (Stage 5)
     propvendor_marketplace_create_credit_ledger_table();
 
-    // 5. Backfill existing enquiries (Fix 6)
+    // 5. Payment & Order Schema (Phase 4B)
+    propvendor_marketplace_create_payment_tables();
+
+    // 6. Backfill existing enquiries (Fix 6)
     propvendor_marketplace_backfill_enquiries();
 }
 
@@ -5750,18 +6000,23 @@ function propvendor_marketplace_maybe_create_enquiries_table() {
     $table_threads   = $wpdb->prefix . 'propvendor_threads';
     $table_messages  = $wpdb->prefix . 'propvendor_messages';
     $table_ledger    = $wpdb->prefix . 'propvendor_credit_ledger';
+    $table_plans     = $wpdb->prefix . 'propvendor_plans';
+    $table_orders    = $wpdb->prefix . 'propvendor_orders';
 
     $schema_version = get_option('propvendor_enquiry_schema_version', '1.0');
 
     if (
-        version_compare((string) $schema_version, '1.3', '<') ||
+        version_compare((string) $schema_version, '1.4', '<') ||
         $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_enquiries)) !== $table_enquiries ||
         $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_threads)) !== $table_threads ||
         $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_messages)) !== $table_messages ||
-        $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_ledger)) !== $table_ledger
+        $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_ledger)) !== $table_ledger ||
+        $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_plans)) !== $table_plans ||
+        $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_orders)) !== $table_orders
     ) {
         propvendor_marketplace_create_enquiries_table();
-        update_option('propvendor_enquiry_schema_version', '1.3');
+        propvendor_marketplace_create_payment_tables();
+        update_option('propvendor_enquiry_schema_version', '1.4');
     }
 }
 add_action('init', 'propvendor_marketplace_maybe_create_enquiries_table');
@@ -6154,6 +6409,22 @@ function propvendor_marketplace_add_admin_menu() {
         'dashicons-email-alt',
         26
     );
+    add_submenu_page(
+        'propvendor-enquiries',
+        'Enquiries',
+        'All Enquiries',
+        'manage_options',
+        'propvendor-enquiries',
+        'propvendor_marketplace_render_admin_enquiries_page'
+    );
+    add_submenu_page(
+        'propvendor-enquiries',
+        'Payment Settings',
+        'Payment Settings',
+        'manage_options',
+        'propvendor-payments',
+        'propvendor_marketplace_render_admin_payments_page'
+    );
 }
 add_action('admin_menu', 'propvendor_marketplace_add_admin_menu');
 
@@ -6277,6 +6548,117 @@ function propvendor_marketplace_render_admin_enquiries_page() {
     }
 
     echo '</div>';
+}
+
+function propvendor_marketplace_render_admin_payments_page() {
+    if (!current_user_can('manage_options')) {
+        wp_die(__('You do not have sufficient permissions to access this page.', 'propvendor-marketplace'));
+    }
+
+    $saved_notice = false;
+
+    // Handle form submit
+    if (isset($_POST['propvendor_save_payment_settings'])) {
+        check_admin_referer('propvendor_payment_settings_verify', 'propvendor_payment_settings_nonce');
+
+        $mode = isset($_POST['propvendor_paystack_mode']) ? sanitize_key($_POST['propvendor_paystack_mode']) : 'test';
+        if (!in_array($mode, array('test', 'live'), true)) {
+            $mode = 'test';
+        }
+        update_option('propvendor_paystack_mode', $mode);
+
+        if (isset($_POST['propvendor_paystack_test_public_key'])) {
+            update_option('propvendor_paystack_test_public_key', sanitize_text_field(wp_unslash($_POST['propvendor_paystack_test_public_key'])));
+        }
+        if (isset($_POST['propvendor_paystack_test_secret_key'])) {
+            update_option('propvendor_paystack_test_secret_key', sanitize_text_field(wp_unslash($_POST['propvendor_paystack_test_secret_key'])));
+        }
+        if (isset($_POST['propvendor_paystack_live_public_key'])) {
+            update_option('propvendor_paystack_live_public_key', sanitize_text_field(wp_unslash($_POST['propvendor_paystack_live_public_key'])));
+        }
+        if (isset($_POST['propvendor_paystack_live_secret_key'])) {
+            update_option('propvendor_paystack_live_secret_key', sanitize_text_field(wp_unslash($_POST['propvendor_paystack_live_secret_key'])));
+        }
+
+        $saved_notice = true;
+    }
+
+    $mode         = propvendor_marketplace_get_paystack_mode();
+    $test_pub_key = get_option('propvendor_paystack_test_public_key', '');
+    $test_sec_key = get_option('propvendor_paystack_test_secret_key', '');
+    $live_pub_key = get_option('propvendor_paystack_live_public_key', '');
+    $live_sec_key = get_option('propvendor_paystack_live_secret_key', '');
+    $webhook_url  = propvendor_marketplace_get_paystack_webhook_url();
+    ?>
+    <div class="wrap">
+        <h1><?php esc_html_e('PropVendor Payment Gateway Settings (Paystack)', 'propvendor-marketplace'); ?></h1>
+        <p><?php esc_html_e('Configure your Paystack API credentials for monetization, credit packs, and VIP agent subscriptions.', 'propvendor-marketplace'); ?></p>
+
+        <?php if ($saved_notice) : ?>
+            <div class="notice notice-success is-dismissible">
+                <p><?php esc_html_e('Payment gateway settings saved successfully.', 'propvendor-marketplace'); ?></p>
+            </div>
+        <?php endif; ?>
+
+        <form method="post" action="">
+            <?php wp_nonce_field('propvendor_payment_settings_verify', 'propvendor_payment_settings_nonce'); ?>
+            <table class="form-table" role="presentation">
+                <tbody>
+                    <tr>
+                        <th scope="row"><label for="propvendor_paystack_mode"><?php esc_html_e('Gateway Mode', 'propvendor-marketplace'); ?></label></th>
+                        <td>
+                            <select name="propvendor_paystack_mode" id="propvendor_paystack_mode">
+                                <option value="test" <?php selected($mode, 'test'); ?>><?php esc_html_e('Test Mode (Local Sandbox & Development)', 'propvendor-marketplace'); ?></option>
+                                <option value="live" <?php selected($mode, 'live'); ?>><?php esc_html_e('Live Mode (Production Charges)', 'propvendor-marketplace'); ?></option>
+                            </select>
+                            <p class="description"><?php esc_html_e('Select "Test Mode" during testing to avoid actual card charges.', 'propvendor-marketplace'); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="propvendor_paystack_test_public_key"><?php esc_html_e('Test Public Key', 'propvendor-marketplace'); ?></label></th>
+                        <td>
+                            <input name="propvendor_paystack_test_public_key" type="text" id="propvendor_paystack_test_public_key" value="<?php echo esc_attr($test_pub_key); ?>" class="regular-text" placeholder="pk_test_..." autocomplete="off" />
+                            <p class="description"><?php esc_html_e('Paystack test public key starting with pk_test_', 'propvendor-marketplace'); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="propvendor_paystack_test_secret_key"><?php esc_html_e('Test Secret Key', 'propvendor-marketplace'); ?></label></th>
+                        <td>
+                            <input name="propvendor_paystack_test_secret_key" type="password" id="propvendor_paystack_test_secret_key" value="<?php echo esc_attr($test_sec_key); ?>" class="regular-text" placeholder="sk_test_..." autocomplete="off" />
+                            <p class="description"><?php esc_html_e('Paystack test secret key starting with sk_test_', 'propvendor-marketplace'); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="propvendor_paystack_live_public_key"><?php esc_html_e('Live Public Key', 'propvendor-marketplace'); ?></label></th>
+                        <td>
+                            <input name="propvendor_paystack_live_public_key" type="text" id="propvendor_paystack_live_public_key" value="<?php echo esc_attr($live_pub_key); ?>" class="regular-text" placeholder="pk_live_..." autocomplete="off" />
+                            <p class="description"><?php esc_html_e('Paystack live public key starting with pk_live_', 'propvendor-marketplace'); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="propvendor_paystack_live_secret_key"><?php esc_html_e('Live Secret Key', 'propvendor-marketplace'); ?></label></th>
+                        <td>
+                            <input name="propvendor_paystack_live_secret_key" type="password" id="propvendor_paystack_live_secret_key" value="<?php echo esc_attr($live_sec_key); ?>" class="regular-text" placeholder="sk_live_..." autocomplete="off" />
+                            <p class="description"><?php esc_html_e('Paystack live secret key starting with sk_live_', 'propvendor-marketplace'); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label><?php esc_html_e('Paystack Webhook URL', 'propvendor-marketplace'); ?></label></th>
+                        <td>
+                            <input type="text" readonly value="<?php echo esc_url($webhook_url); ?>" class="large-text code" onclick="this.select();" />
+                            <p class="description">
+                                <?php esc_html_e('Copy this webhook URL into your Paystack Dashboard (Settings &rarr; API Keys &amp; Webhooks &rarr; Webhook URL) to automatically receive transaction events.', 'propvendor-marketplace'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            <p class="submit">
+                <input type="submit" name="propvendor_save_payment_settings" id="submit" class="button button-primary" value="<?php esc_attr_e('Save Changes', 'propvendor-marketplace'); ?>" />
+            </p>
+        </form>
+    </div>
+    <?php
 }
 
 /**
@@ -6815,8 +7197,8 @@ function propvendor_marketplace_unlock_thread_with_credits($vendor_id, $thread_i
         return new WP_Error('invalid_thread', __('Invalid thread ID.', 'propvendor-marketplace'));
     }
 
-    // 1. VIP bypass check: VIP vendors have automatic lead unlock entitlement
-    if (propvendor_marketplace_is_vendor_vip($vendor_id)) {
+    // 1. VIP bypass check: VIP Agent and VIP vendors have automatic lead unlock entitlement
+    if (propvendor_marketplace_is_vendor_vip_agent($vendor_id) || propvendor_marketplace_is_vendor_vip($vendor_id)) {
         return array(
             'success'          => true,
             'already_unlocked' => false,
@@ -6922,8 +7304,8 @@ function propvendor_marketplace_vendor_can_view_contact_info($vendor_id, $thread
     // 3. Unlocked specific thread check (VIP Plan, Credit Ledger, or User Meta)
     $thread_id = absint($thread_id);
     if ($thread_id > 0) {
-        // Active VIP vendor has automatic access to lead contact info on threads
-        if (propvendor_marketplace_is_vendor_vip($vendor_id)) {
+        // Active VIP Agent or VIP vendor has automatic access to lead contact info on threads
+        if (propvendor_marketplace_is_vendor_vip_agent($vendor_id) || propvendor_marketplace_is_vendor_vip($vendor_id)) {
             return true;
         }
         if (propvendor_marketplace_is_thread_unlocked($vendor_id, $thread_id)) {
@@ -7151,12 +7533,40 @@ function propvendor_marketplace_render_vendor_inbox($vendor_id) {
         } else {
             // Part 2: Monetization Engine Lead Masking & Anti-Inspector Rule
             $masked_email = propvendor_marketplace_mask_email($active_thread->customer_email);
-            $output .= '<span><strong>Email:</strong> <span class="pv-masked-info">' . esc_html($masked_email) . '</span></span>';
+            $output .= '<span class="pv-contact-field pv-contact-email" id="pv-contact-email-' . esc_attr($active_thread_id) . '"><strong>Email:</strong> <span class="pv-masked-info">' . esc_html($masked_email) . '</span></span>';
             if (!empty($customer_phone)) {
                 $masked_phone = propvendor_marketplace_mask_phone($customer_phone);
-                $output .= '<span><strong>Phone:</strong> <span class="pv-masked-info">' . esc_html($masked_phone) . '</span></span>';
+                $output .= '<span class="pv-contact-field pv-contact-phone" id="pv-contact-phone-' . esc_attr($active_thread_id) . '"><strong>Phone:</strong> <span class="pv-masked-info">' . esc_html($masked_phone) . '</span></span>';
             }
-            $output .= '<span class="pv-unlock-lead-wrap"><span class="pv-unlock-badge">🔒 Locked Lead</span> <a href="#unlock" class="pv-btn-unlock-lead" onclick="alert(\'Upgrade to PropVendor Premium or Purchase Lead Credits to reveal direct customer phone numbers &amp; email addresses.\'); return false;">Upgrade to Unlock Direct Contact Details</a></span>';
+
+            // Phase 5: Interactive Unlock with 1 Credit Interface
+            $credit_balance = propvendor_marketplace_get_vendor_credit_balance($vendor_id);
+            $wallet_url     = home_url('/vendor-wallet/');
+
+            $output .= '<div class="pv-unlock-lead-container" id="pv-unlock-box-' . esc_attr($active_thread_id) . '">';
+            $output .= '<div class="pv-unlock-lead-inner">';
+            $output .= '<div class="pv-unlock-status">';
+            $output .= '<span class="pv-unlock-badge"><span class="dashicons dashicons-lock"></span> ' . esc_html__('Locked Lead Contact', 'propvendor-marketplace') . '</span>';
+            $output .= '<span class="pv-unlock-balance-pill">' . sprintf(esc_html__('Balance: %d Credits', 'propvendor-marketplace'), $credit_balance) . '</span>';
+            $output .= '</div>';
+
+            if ($credit_balance >= 1) {
+                $output .= '<div class="pv-unlock-action">';
+                $output .= '<button type="button" class="button button-primary pv-btn-unlock-lead-trigger" data-thread-id="' . esc_attr($active_thread_id) . '" data-balance="' . esc_attr($credit_balance) . '">';
+                $output .= '<span class="dashicons dashicons-unlock"></span> ' . esc_html__('Unlock Contact — 1 Credit', 'propvendor-marketplace');
+                $output .= '</button>';
+                $output .= '<span class="pv-unlock-hint">' . esc_html__('1 credit will be deducted upon successful unlock. Contact details remain permanently accessible.', 'propvendor-marketplace') . '</span>';
+                $output .= '</div>';
+            } else {
+                $output .= '<div class="pv-unlock-action pv-unlock-insufficient">';
+                $output .= '<a href="' . esc_url($wallet_url) . '" class="button button-secondary pv-btn-buy-credits">';
+                $output .= '<span class="dashicons dashicons-plus-alt"></span> ' . esc_html__('Get Credits to Unlock (1 Credit needed)', 'propvendor-marketplace');
+                $output .= '</a>';
+                $output .= '<span class="pv-unlock-hint pv-text-warning">' . wp_kses_post(sprintf(__('You have 0 credits. <a href="%s">Purchase a credit pack</a> to reveal customer phone & email.', 'propvendor-marketplace'), esc_url($wallet_url))) . '</span>';
+                $output .= '</div>';
+            }
+            $output .= '</div>';
+            $output .= '</div>';
         }
         $output .= '</div>';
         $output .= '</div>';
@@ -7431,6 +7841,32 @@ function propvendor_marketplace_customer_inbox_shortcode() {
 
     // Auto-scroll conversation stream to bottom
     $output .= '<script>document.addEventListener("DOMContentLoaded", function() { var el = document.getElementById("pv-msg-stream-cust"); if (el) { el.scrollTop = el.scrollHeight; } });</script>';
+
+    // Phase 5: Accessible Confirmation Modal for Lead Contact Unlock
+    $output .= '
+    <div id="pv-unlock-lead-modal" class="pv-unlock-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="pv-unlock-modal-title">
+        <div class="pv-unlock-modal-backdrop"></div>
+        <div class="pv-unlock-modal-dialog">
+            <div class="pv-unlock-modal-header">
+                <h4 id="pv-unlock-modal-title"><span class="dashicons dashicons-unlock"></span> ' . esc_html__('Confirm Lead Contact Unlock', 'propvendor-marketplace') . '</h4>
+                <button type="button" class="pv-unlock-modal-close" aria-label="' . esc_attr__('Close dialog', 'propvendor-marketplace') . '">&times;</button>
+            </div>
+            <div class="pv-unlock-modal-body">
+                <p>' . esc_html__('Are you sure you want to unlock this customer\'s direct contact details?', 'propvendor-marketplace') . '</p>
+                <div class="pv-unlock-modal-details">
+                    <div><strong>' . esc_html__('Cost:', 'propvendor-marketplace') . '</strong> 1 Credit</div>
+                    <div><strong>' . esc_html__('Your Balance:', 'propvendor-marketplace') . '</strong> <span id="pv-modal-current-balance">0</span> Credits</div>
+                    <div><strong>' . esc_html__('Balance After Unlock:', 'propvendor-marketplace') . '</strong> <span id="pv-modal-balance-after">0</span> Credits</div>
+                </div>
+                <p class="pv-unlock-modal-subtext">' . esc_html__('1 credit will be deducted from your wallet upon confirmation. Customer phone number and email will be revealed immediately.', 'propvendor-marketplace') . '</p>
+                <div id="pv-unlock-modal-error" class="pv-unlock-modal-error" style="display: none;"></div>
+            </div>
+            <div class="pv-unlock-modal-footer">
+                <button type="button" id="pv-btn-confirm-unlock" class="button button-primary">' . esc_html__('Confirm & Deduct 1 Credit', 'propvendor-marketplace') . '</button>
+                <button type="button" id="pv-btn-cancel-unlock" class="button button-secondary">' . esc_html__('Cancel', 'propvendor-marketplace') . '</button>
+            </div>
+        </div>
+    </div>';
 
     $output .= '</section>';
     return $output;
@@ -7741,5 +8177,1010 @@ function propvendor_marketplace_handle_send_inbox_reply() {
 }
 add_action('admin_post_propvendor_send_inbox_reply', 'propvendor_marketplace_handle_send_inbox_reply');
 
+/**
+ * =========================================================================
+ * PHASE 4B: PAYMENT GATEWAY INTEGRATION (PAYSTACK) & CHECKOUT ENGINE
+ * =========================================================================
+ */
+
+/**
+ * Get active Paystack mode ('test' or 'live').
+ *
+ * @return string
+ */
+function propvendor_marketplace_get_paystack_mode() {
+    $mode = get_option('propvendor_paystack_mode', 'test');
+    return ('live' === $mode) ? 'live' : 'test';
+}
+
+/**
+ * Get active Paystack Public Key.
+ *
+ * @return string
+ */
+function propvendor_marketplace_get_paystack_public_key() {
+    $mode = propvendor_marketplace_get_paystack_mode();
+    if ('live' === $mode) {
+        return trim((string) get_option('propvendor_paystack_live_public_key', ''));
+    }
+    return trim((string) get_option('propvendor_paystack_test_public_key', ''));
+}
+
+/**
+ * Get active Paystack Secret Key.
+ *
+ * @return string
+ */
+function propvendor_marketplace_get_paystack_secret_key() {
+    $mode = propvendor_marketplace_get_paystack_mode();
+    if ('live' === $mode) {
+        return trim((string) get_option('propvendor_paystack_live_secret_key', ''));
+    }
+    return trim((string) get_option('propvendor_paystack_test_secret_key', ''));
+}
+
+/**
+ * Get Paystack Webhook URL.
+ *
+ * @return string
+ */
+function propvendor_marketplace_get_paystack_webhook_url() {
+    return home_url('/wp-json/propvendor/v1/paystack-webhook');
+}
+
+/**
+ * Query active plans from catalog.
+ *
+ * @param string $product_type Optional filter ('vip_agent' or 'credit_pack')
+ * @return array
+ */
+function propvendor_marketplace_get_active_plans($product_type = '') {
+    global $wpdb;
+    $table_plans = $wpdb->prefix . 'propvendor_plans';
+    if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_plans)) !== $table_plans) {
+        propvendor_marketplace_create_payment_tables();
+    }
+    if (!empty($product_type)) {
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$table_plans} WHERE is_active = 1 AND product_type = %s ORDER BY price_kobo ASC",
+            sanitize_key($product_type)
+        ));
+    }
+    return $wpdb->get_results("SELECT * FROM {$table_plans} WHERE is_active = 1 ORDER BY product_type DESC, price_kobo ASC");
+}
+
+/**
+ * Get single plan by ID.
+ *
+ * @param int $plan_id
+ * @return object|null
+ */
+function propvendor_marketplace_get_plan_by_id($plan_id) {
+    global $wpdb;
+    $table_plans = $wpdb->prefix . 'propvendor_plans';
+    if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_plans)) !== $table_plans) {
+        propvendor_marketplace_create_payment_tables();
+    }
+    return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table_plans} WHERE id = %d", absint($plan_id)));
+}
+
+/**
+ * Get single plan by plan key.
+ *
+ * @param string $plan_key
+ * @return object|null
+ */
+function propvendor_marketplace_get_plan_by_key($plan_key) {
+    global $wpdb;
+    $table_plans = $wpdb->prefix . 'propvendor_plans';
+    if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_plans)) !== $table_plans) {
+        propvendor_marketplace_create_payment_tables();
+    }
+    return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table_plans} WHERE plan_key = %s", sanitize_key($plan_key)));
+}
+
+/**
+ * Create a new pending order tracking record.
+ *
+ * @param int $vendor_id
+ * @param int $plan_id
+ * @param string $gateway
+ * @return array|WP_Error
+ */
+function propvendor_marketplace_create_order($vendor_id, $plan_id, $gateway = 'paystack') {
+    $vendor_id = absint($vendor_id);
+    $plan_id   = absint($plan_id);
+
+    if ($vendor_id <= 0) {
+        return new WP_Error('invalid_vendor', __('Invalid vendor ID.', 'propvendor-marketplace'));
+    }
+    $vendor_user = get_user_by('id', $vendor_id);
+    if (!$vendor_user) {
+        return new WP_Error('vendor_not_found', __('Vendor user not found.', 'propvendor-marketplace'));
+    }
+
+    $plan = propvendor_marketplace_get_plan_by_id($plan_id);
+    if (!$plan || (int) $plan->is_active !== 1) {
+        return new WP_Error('invalid_plan', __('The selected plan does not exist or is inactive.', 'propvendor-marketplace'));
+    }
+
+    global $wpdb;
+    $table_orders = $wpdb->prefix . 'propvendor_orders';
+    if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_orders)) !== $table_orders) {
+        propvendor_marketplace_create_payment_tables();
+    }
+
+    // Generate unique transaction reference (e.g. PV_12_1729000000_aB3dE8)
+    $reference = 'PV_' . $vendor_id . '_' . time() . '_' . wp_generate_password(6, false, false);
+
+    $now = current_time('mysql');
+    $inserted = $wpdb->insert(
+        $table_orders,
+        array(
+            'vendor_id'             => $vendor_id,
+            'plan_id'               => $plan->id,
+            'amount_kobo'           => (int) $plan->price_kobo,
+            'transaction_reference' => $reference,
+            'gateway'               => sanitize_key($gateway),
+            'status'                => 'pending',
+            'created_at'            => $now,
+            'updated_at'            => $now,
+        ),
+        array('%d', '%d', '%d', '%s', '%s', '%s', '%s', '%s')
+    );
+
+    if (false === $inserted) {
+        return new WP_Error('order_creation_failed', __('Failed to create order record.', 'propvendor-marketplace'));
+    }
+
+    $order_id = $wpdb->insert_id;
+
+    return array(
+        'success'      => true,
+        'order_id'     => $order_id,
+        'reference'    => $reference,
+        'amount_kobo'  => (int) $plan->price_kobo,
+        'plan_id'      => (int) $plan->id,
+        'plan_key'     => $plan->plan_key,
+        'plan_name'    => $plan->name,
+        'product_type' => $plan->product_type,
+        'vendor_email' => $vendor_user->user_email,
+        'status'       => 'pending',
+    );
+}
+
+/**
+ * Grant or extend VIP Agent entitlement for a vendor.
+ *
+ * @param int $vendor_id
+ * @param int $duration_days
+ * @param string $reference
+ * @return array|WP_Error
+ */
+/**
+ * Check if a vendor has an active VIP Agent subscription (for lead contact access).
+ *
+ * @param int $user_id
+ * @return bool
+ */
+function propvendor_marketplace_is_vendor_vip_agent($user_id) {
+    $user_id = absint($user_id);
+    if ($user_id <= 0) {
+        return false;
+    }
+
+    if (user_can($user_id, 'manage_options')) {
+        return true;
+    }
+
+    $plan = strtolower(trim((string) get_user_meta($user_id, 'propvendor_vip_agent_plan', true)));
+    if ('vip' !== $plan) {
+        return false;
+    }
+
+    $expires_at = get_user_meta($user_id, 'propvendor_vip_agent_expires_at', true);
+    if ('' !== trim((string) $expires_at)) {
+        $expiry_str = trim((string) $expires_at);
+        $site_tz    = wp_timezone();
+        $now_ts     = current_time('timestamp');
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $expiry_str)) {
+            $dt = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $expiry_str . ' 23:59:59', $site_tz);
+            $expiry_ts = $dt ? $dt->getTimestamp() : false;
+        } elseif (is_numeric($expiry_str)) {
+            $expiry_ts = (int) $expiry_str;
+        } else {
+            try {
+                $dt = new DateTimeImmutable($expiry_str, $site_tz);
+                $expiry_ts = $dt->getTimestamp();
+            } catch (Exception $e) {
+                $expiry_ts = false;
+            }
+        }
+
+        if (false === $expiry_ts || $expiry_ts <= 0) {
+            return false;
+        }
+
+        if ($now_ts > $expiry_ts) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Grant VIP Agent entitlement to a vendor wallet.
+ *
+ * Stores subscription under dedicated meta 'propvendor_vip_agent_plan' and
+ * 'propvendor_vip_agent_expires_at', completely separated from Stage 3 listing quotas.
+ *
+ * @param int $vendor_id
+ * @param int $duration_days
+ * @param string $reference
+ * @return array|WP_Error
+ */
+function propvendor_marketplace_grant_vip_agent_entitlement($vendor_id, $duration_days = 30, $reference = '') {
+    $vendor_id     = absint($vendor_id);
+    $duration_days = max(1, (int) $duration_days);
+
+    if ($vendor_id <= 0) {
+        return new WP_Error('invalid_vendor', __('Invalid vendor ID.', 'propvendor-marketplace'));
+    }
+
+    // Set dedicated VIP agent subscription (does NOT touch listing quota plan)
+    update_user_meta($vendor_id, 'propvendor_vip_agent_plan', 'vip');
+
+    // Check existing expiry date for VIP agent subscription
+    $existing_expiry = get_user_meta($vendor_id, 'propvendor_vip_agent_expires_at', true);
+    $site_tz = wp_timezone();
+    $now_ts  = current_time('timestamp');
+    $base_ts = $now_ts;
+
+    if (!empty($existing_expiry)) {
+        $expiry_str = trim((string) $existing_expiry);
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $expiry_str)) {
+            $dt = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $expiry_str . ' 23:59:59', $site_tz);
+            $exp_ts = $dt ? $dt->getTimestamp() : false;
+        } else {
+            try {
+                $dt = new DateTimeImmutable($expiry_str, $site_tz);
+                $exp_ts = $dt->getTimestamp();
+            } catch (Exception $e) {
+                $exp_ts = false;
+            }
+        }
+        // If current expiry is in the future, extend from that point
+        if ($exp_ts && $exp_ts > $now_ts) {
+            $base_ts = $exp_ts;
+        }
+    }
+
+    $new_expiry_ts   = $base_ts + ($duration_days * DAY_IN_SECONDS);
+    $new_expiry_date = wp_date('Y-m-d', $new_expiry_ts, $site_tz);
+
+    update_user_meta($vendor_id, 'propvendor_vip_agent_expires_at', $new_expiry_date);
+
+    return array(
+        'success'        => true,
+        'plan'           => 'vip',
+        'expires_at'     => $new_expiry_date,
+        'duration_added' => $duration_days,
+        'reference'      => $reference,
+    );
+}
+
+/**
+ * Grant credits to vendor wallet atomically with idempotency protection.
+ *
+ * @param int $vendor_id
+ * @param int $credits
+ * @param string $idempotency_key
+ * @param string $description
+ * @return array|WP_Error
+ */
+function propvendor_marketplace_grant_vendor_credits($vendor_id, $credits, $idempotency_key = '', $description = '') {
+    $vendor_id = absint($vendor_id);
+    $credits   = (int) $credits;
+
+    if ($vendor_id <= 0) {
+        return new WP_Error('invalid_vendor', __('Invalid vendor ID.', 'propvendor-marketplace'));
+    }
+    if ($credits <= 0) {
+        return new WP_Error('invalid_credits', __('Credits must be greater than zero.', 'propvendor-marketplace'));
+    }
+
+    // Check if idempotency key was already applied in ledger
+    global $wpdb;
+    $table_ledger = $wpdb->prefix . 'propvendor_credit_ledger';
+    if (!empty($idempotency_key) && $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_ledger)) === $table_ledger) {
+        $already_applied = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$table_ledger} WHERE vendor_id = %d AND reference = %s AND transaction_type = 'pack_purchase' LIMIT 1",
+            $vendor_id,
+            $idempotency_key
+        ));
+        if ($already_applied) {
+            return array(
+                'success'          => true,
+                'already_credited' => true,
+                'balance'          => propvendor_marketplace_get_vendor_credit_balance($vendor_id),
+            );
+        }
+    }
+
+    if (empty($description)) {
+        $description = sprintf(__('%d Credits Pack Purchase', 'propvendor-marketplace'), $credits);
+    }
+
+    $new_balance = propvendor_marketplace_add_vendor_credits(
+        $vendor_id,
+        $credits,
+        'pack_purchase',
+        $idempotency_key,
+        $description
+    );
+
+    if (is_wp_error($new_balance)) {
+        return $new_balance;
+    }
+
+    return array(
+        'success'          => true,
+        'already_credited' => false,
+        'credits_added'    => $credits,
+        'new_balance'      => $new_balance,
+        'reference'        => $idempotency_key,
+    );
+}
+
+/**
+ * Query Paystack API to verify a transaction.
+ *
+ * @param string $reference
+ * @param array|null $mock_api_response Optional mock response for automated testing
+ * @return array|WP_Error Paystack data array or WP_Error
+ */
+function propvendor_marketplace_verify_paystack_transaction($reference, $mock_api_response = null) {
+    $reference = sanitize_text_field(trim($reference));
+    if (empty($reference)) {
+        return new WP_Error('empty_reference', __('Transaction reference cannot be empty.', 'propvendor-marketplace'));
+    }
+
+    // Allow mock response strictly in automated test environment
+    if (null !== $mock_api_response) {
+        if (!defined('PROPVENDOR_TESTING') || !PROPVENDOR_TESTING) {
+            return new WP_Error('mock_forbidden', __('Mock verification is strictly forbidden outside the test environment.', 'propvendor-marketplace'));
+        }
+        if (is_wp_error($mock_api_response)) {
+            return $mock_api_response;
+        }
+        if (is_array($mock_api_response)) {
+            if (!empty($mock_api_response['status']) && !empty($mock_api_response['data']) && 'success' === $mock_api_response['data']['status']) {
+                return $mock_api_response['data'];
+            }
+            $msg = !empty($mock_api_response['message']) ? $mock_api_response['message'] : __('Paystack verification failed.', 'propvendor-marketplace');
+            return new WP_Error('payment_not_successful', $msg, $mock_api_response);
+        }
+    }
+
+    $secret_key = propvendor_marketplace_get_paystack_secret_key();
+    if (empty($secret_key)) {
+        return new WP_Error('paystack_not_configured', __('Paystack Secret Key is not configured in PropVendor settings.', 'propvendor-marketplace'));
+    }
+
+    $url = 'https://api.paystack.co/transaction/verify/' . rawurlencode($reference);
+    $response = wp_remote_get($url, array(
+        'timeout' => 25,
+        'headers' => array(
+            'Authorization' => 'Bearer ' . $secret_key,
+            'Content-Type'  => 'application/json',
+            'Accept'        => 'application/json',
+        ),
+    ));
+
+    if (is_wp_error($response)) {
+        return new WP_Error('http_error', sprintf(__('Failed to communicate with Paystack: %s', 'propvendor-marketplace'), $response->get_error_message()));
+    }
+
+    $code = wp_remote_retrieve_response_code($response);
+    $body = wp_remote_retrieve_body($response);
+    $data = json_decode($body, true);
+
+    if ($code !== 200 || !is_array($data) || empty($data['status'])) {
+        $msg = !empty($data['message']) ? $data['message'] : __('Paystack transaction could not be verified.', 'propvendor-marketplace');
+        return new WP_Error('verification_failed', $msg, array('status_code' => $code, 'body' => $data));
+    }
+
+    if (empty($data['data']) || 'success' !== $data['data']['status']) {
+        return new WP_Error('payment_not_success', __('Payment was not successful.', 'propvendor-marketplace'), $data);
+    }
+
+    return $data['data'];
+}
+
+/**
+ * Verify payment with Paystack and fulfill entitlements atomically.
+ *
+ * @param string $reference
+ * @param array|null $mock_api_response Optional mock response for automated testing
+ * @return array|WP_Error
+ */
+function propvendor_marketplace_verify_and_fulfill_order($reference, $mock_api_response = null) {
+    $reference = sanitize_text_field(trim($reference));
+    if (empty($reference)) {
+        return new WP_Error('empty_reference', __('Transaction reference cannot be empty.', 'propvendor-marketplace'));
+    }
+
+    global $wpdb;
+    $table_orders = $wpdb->prefix . 'propvendor_orders';
+    $table_plans  = $wpdb->prefix . 'propvendor_plans';
+
+    if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_orders)) !== $table_orders) {
+        propvendor_marketplace_create_payment_tables();
+    }
+
+    // Mutex locking to prevent concurrent race conditions
+    $lock_name     = 'pv_order_' . md5($reference);
+    $lock_acquired = $wpdb->get_var($wpdb->prepare("SELECT GET_LOCK(%s, 15)", $lock_name));
+
+    if ('1' !== (string) $lock_acquired) {
+        return new WP_Error('lock_timeout', __('Could not acquire processing lock for order.', 'propvendor-marketplace'));
+    }
+
+    try {
+        // Find order under lock
+        $order = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$table_orders} WHERE transaction_reference = %s LIMIT 1",
+            $reference
+        ));
+
+        if (!$order) {
+            return new WP_Error('order_not_found', __('Order with the specified transaction reference does not exist.', 'propvendor-marketplace'));
+        }
+
+        // Idempotency: Already fulfilled
+        if ('successful' === $order->status) {
+            return array(
+                'success'           => true,
+                'already_fulfilled' => true,
+                'order_id'          => (int) $order->id,
+                'reference'         => $reference,
+                'vendor_id'         => (int) $order->vendor_id,
+                'plan_id'           => (int) $order->plan_id,
+                'amount_kobo'       => (int) $order->amount_kobo,
+                'message'           => __('Order has already been fulfilled.', 'propvendor-marketplace'),
+            );
+        }
+
+        // Query Paystack (or mock if testing)
+        $paystack_data = propvendor_marketplace_verify_paystack_transaction($reference, $mock_api_response);
+        if (is_wp_error($paystack_data)) {
+            $wpdb->update(
+                $table_orders,
+                array('status' => 'failed', 'updated_at' => current_time('mysql')),
+                array('id' => $order->id),
+                array('%s', '%s'),
+                array('%d')
+            );
+            return $paystack_data;
+        }
+
+        // Security check 1: Amount match (strict integer kobo equality)
+        $paid_kobo  = isset($paystack_data['amount']) ? (int) $paystack_data['amount'] : 0;
+        $order_kobo = (int) $order->amount_kobo;
+
+        if ($paid_kobo !== $order_kobo) {
+            $wpdb->update(
+                $table_orders,
+                array('status' => 'failed', 'updated_at' => current_time('mysql')),
+                array('id' => $order->id),
+                array('%s', '%s'),
+                array('%d')
+            );
+            return new WP_Error(
+                'amount_mismatch',
+                sprintf(__('Paid amount (%d kobo) does not match required order amount (%d kobo).', 'propvendor-marketplace'), $paid_kobo, $order_kobo)
+            );
+        }
+
+        // Security check 2: Reference match
+        if (empty($paystack_data['reference']) || $paystack_data['reference'] !== $reference) {
+            $wpdb->update(
+                $table_orders,
+                array('status' => 'failed', 'updated_at' => current_time('mysql')),
+                array('id' => $order->id),
+                array('%s', '%s'),
+                array('%d')
+            );
+            return new WP_Error('reference_mismatch', __('Transaction reference does not match the order.', 'propvendor-marketplace'));
+        }
+
+        // Security check 3: Currency match (NGN only)
+        if (empty($paystack_data['currency']) || strtoupper(trim((string) $paystack_data['currency'])) !== 'NGN') {
+            $wpdb->update(
+                $table_orders,
+                array('status' => 'failed', 'updated_at' => current_time('mysql')),
+                array('id' => $order->id),
+                array('%s', '%s'),
+                array('%d')
+            );
+            return new WP_Error('currency_mismatch', __('Transaction currency must be NGN.', 'propvendor-marketplace'));
+        }
+
+        // Fetch Plan
+        $plan = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table_plans} WHERE id = %d", (int) $order->plan_id));
+        if (!$plan) {
+            return new WP_Error('plan_not_found', __('Plan associated with this order could not be found.', 'propvendor-marketplace'));
+        }
+
+        // Atomic fulfillment wrapped in DB transaction
+        $wpdb->query('START TRANSACTION');
+
+        $fulfillment_result = null;
+        if ('vip_agent' === $plan->product_type) {
+            $fulfillment_result = propvendor_marketplace_grant_vip_agent_entitlement(
+                (int) $order->vendor_id,
+                (int) $plan->duration_days,
+                $reference
+            );
+        } elseif ('credit_pack' === $plan->product_type) {
+            $fulfillment_result = propvendor_marketplace_grant_vendor_credits(
+                (int) $order->vendor_id,
+                (int) $plan->credits,
+                $reference,
+                $plan->name
+            );
+        } else {
+            $wpdb->query('ROLLBACK');
+            return new WP_Error('unsupported_product_type', __('Unsupported product type.', 'propvendor-marketplace'));
+        }
+
+        if (is_wp_error($fulfillment_result)) {
+            $wpdb->query('ROLLBACK');
+            return $fulfillment_result;
+        }
+
+        // Mark order as successful
+        $updated = $wpdb->update(
+            $table_orders,
+            array(
+                'status'     => 'successful',
+                'updated_at' => current_time('mysql'),
+            ),
+            array('id' => $order->id),
+            array('%s', '%s'),
+            array('%d')
+        );
+
+        if (false === $updated) {
+            $wpdb->query('ROLLBACK');
+            return new WP_Error('order_update_failed', __('Failed to update order status.', 'propvendor-marketplace'));
+        }
+
+        $wpdb->query('COMMIT');
+
+        return array(
+            'success'           => true,
+            'already_fulfilled' => false,
+            'order_id'          => (int) $order->id,
+            'reference'         => $reference,
+            'vendor_id'         => (int) $order->vendor_id,
+            'plan_id'           => (int) $order->plan_id,
+            'plan_name'         => $plan->name,
+            'product_type'      => $plan->product_type,
+            'amount_kobo'       => $order_kobo,
+            'credits'           => (int) $plan->credits,
+            'duration_days'     => (int) $plan->duration_days,
+            'details'           => $fulfillment_result,
+        );
+    } finally {
+        $wpdb->query($wpdb->prepare("SELECT RELEASE_LOCK(%s)", $lock_name));
+    }
+}
+
+/**
+ * Register REST API routes for Paystack webhook and direct verification.
+ */
+function propvendor_marketplace_register_payment_rest_routes() {
+    register_rest_route('propvendor/v1', '/paystack-webhook', array(
+        'methods'             => 'POST',
+        'callback'            => 'propvendor_marketplace_handle_paystack_webhook',
+        'permission_callback' => '__return_true',
+    ));
+    register_rest_route('propvendor/v1', '/verify-payment', array(
+        'methods'             => 'POST',
+        'callback'            => 'propvendor_marketplace_handle_rest_verify_payment',
+        'permission_callback' => '__return_true',
+    ));
+}
+add_action('rest_api_init', 'propvendor_marketplace_register_payment_rest_routes');
+
+/**
+ * Handle incoming Paystack webhook events.
+ *
+ * @param WP_REST_Request $request
+ * @return WP_REST_Response
+ */
+function propvendor_marketplace_handle_paystack_webhook(WP_REST_Request $request) {
+    $secret_key = propvendor_marketplace_get_paystack_secret_key();
+    if (empty($secret_key)) {
+        return new WP_REST_Response(array('message' => 'Paystack secret key not configured.'), 400);
+    }
+
+    $signature = $request->get_header('x-paystack-signature');
+    $payload   = $request->get_body();
+
+    // Verify signature
+    $computed_signature = hash_hmac('sha512', $payload, $secret_key);
+    if (!hash_equals($computed_signature, (string) $signature)) {
+        return new WP_REST_Response(array('message' => 'Invalid webhook signature.'), 401);
+    }
+
+    $event = json_decode($payload, true);
+    if (!is_array($event) || empty($event['event'])) {
+        return new WP_REST_Response(array('message' => 'Invalid event payload.'), 400);
+    }
+
+    if ('charge.success' === $event['event']) {
+        $reference = isset($event['data']['reference']) ? sanitize_text_field($event['data']['reference']) : '';
+        if (!empty($reference)) {
+            $result = propvendor_marketplace_verify_and_fulfill_order($reference);
+            if (is_wp_error($result)) {
+                return new WP_REST_Response(array('message' => $result->get_error_message()), 400);
+            }
+            return new WP_REST_Response(array('message' => 'Order fulfilled successfully.', 'result' => $result), 200);
+        }
+    }
+
+    return new WP_REST_Response(array('message' => 'Event acknowledged.'), 200);
+}
+
+/**
+ * Handle REST direct payment verification request.
+ *
+ * @param WP_REST_Request $request
+ * @return WP_REST_Response
+ */
+function propvendor_marketplace_handle_rest_verify_payment(WP_REST_Request $request) {
+    $params = $request->get_json_params();
+    $reference = isset($params['reference']) ? sanitize_text_field($params['reference']) : '';
+    if (empty($reference) && isset($_POST['reference'])) {
+        $reference = sanitize_text_field($_POST['reference']);
+    }
+
+    if (empty($reference)) {
+        return new WP_REST_Response(array('success' => false, 'message' => 'Reference is required.'), 400);
+    }
+
+    $result = propvendor_marketplace_verify_and_fulfill_order($reference);
+    if (is_wp_error($result)) {
+        return new WP_REST_Response(array('success' => false, 'message' => $result->get_error_message()), 400);
+    }
+
+    return new WP_REST_Response($result, 200);
+}
+
+/**
+ * AJAX Handler: Create checkout order.
+ */
+function propvendor_marketplace_ajax_create_checkout_order() {
+    check_ajax_referer('propvendor_checkout_nonce', 'nonce');
+
+    if (!is_user_logged_in()) {
+        wp_send_json_error(array('message' => __('You must be logged in to make a purchase.', 'propvendor-marketplace')));
+    }
+
+    $vendor_id = get_current_user_id();
+    $plan_id   = isset($_POST['plan_id']) ? absint($_POST['plan_id']) : 0;
+
+    if ($plan_id <= 0) {
+        wp_send_json_error(array('message' => __('Invalid plan selected.', 'propvendor-marketplace')));
+    }
+
+    $order = propvendor_marketplace_create_order($vendor_id, $plan_id, 'paystack');
+    if (is_wp_error($order)) {
+        wp_send_json_error(array('message' => $order->get_error_message()));
+    }
+
+    $public_key = propvendor_marketplace_get_paystack_public_key();
+    $order['paystack_public_key'] = $public_key;
+
+    wp_send_json_success($order);
+}
+add_action('wp_ajax_propvendor_create_checkout_order', 'propvendor_marketplace_ajax_create_checkout_order');
+
+/**
+ * AJAX Handler: Verify and fulfill payment after inline popup success.
+ */
+function propvendor_marketplace_ajax_verify_payment() {
+    check_ajax_referer('propvendor_checkout_nonce', 'nonce');
+
+    if (!is_user_logged_in()) {
+        wp_send_json_error(array('message' => __('You must be logged in to verify payment.', 'propvendor-marketplace')));
+    }
+
+    $reference = isset($_POST['reference']) ? sanitize_text_field(wp_unslash($_POST['reference'])) : '';
+    if (empty($reference)) {
+        wp_send_json_error(array('message' => __('Transaction reference is required.', 'propvendor-marketplace')));
+    }
+
+    $result = propvendor_marketplace_verify_and_fulfill_order($reference);
+    if (is_wp_error($result)) {
+        wp_send_json_error(array('message' => $result->get_error_message()));
+    }
+
+    wp_send_json_success($result);
+}
+add_action('wp_ajax_propvendor_verify_payment', 'propvendor_marketplace_ajax_verify_payment');
+
+/**
+ * AJAX Handler: Unlock thread lead contact details with 1 credit.
+ */
+function propvendor_marketplace_ajax_unlock_thread_lead() {
+    check_ajax_referer('propvendor_unlock_lead_nonce', 'nonce');
+
+    if (!is_user_logged_in()) {
+        wp_send_json_error(array(
+            'code'    => 'not_logged_in',
+            'message' => __('You must be logged in to unlock contact details.', 'propvendor-marketplace'),
+        ), 401);
+    }
+
+    $vendor_id = get_current_user_id();
+    $thread_id = isset($_POST['thread_id']) ? absint($_POST['thread_id']) : 0;
+
+    if ($thread_id <= 0) {
+        wp_send_json_error(array(
+            'code'    => 'invalid_thread',
+            'message' => __('Invalid thread ID.', 'propvendor-marketplace'),
+        ), 400);
+    }
+
+    global $wpdb;
+    $table_threads   = $wpdb->prefix . 'propvendor_threads';
+    $table_enquiries = $wpdb->prefix . 'propvendor_enquiries';
+
+    // Verify thread exists
+    $thread = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$table_threads} WHERE id = %d",
+        $thread_id
+    ));
+
+    if (!$thread) {
+        wp_send_json_error(array(
+            'code'    => 'thread_not_found',
+            'message' => __('The specified enquiry thread could not be found.', 'propvendor-marketplace'),
+        ), 404);
+    }
+
+    // Authorization: Vendor must own the thread or be an administrator
+    if ((int) $thread->vendor_id !== $vendor_id && !user_can($vendor_id, 'manage_options')) {
+        wp_send_json_error(array(
+            'code'    => 'unauthorized',
+            'message' => __('You are not authorized to unlock contact details for this thread.', 'propvendor-marketplace'),
+        ), 403);
+    }
+
+    // Call the core atomic entitlement unlock engine
+    $unlock_res = propvendor_marketplace_unlock_thread_with_credits($vendor_id, $thread_id);
+
+    if (is_wp_error($unlock_res)) {
+        $err_code = $unlock_res->get_error_code();
+        $status_code = ('insufficient_credits' === $err_code) ? 400 : 400;
+        wp_send_json_error(array(
+            'code'            => $err_code,
+            'message'         => $unlock_res->get_error_message(),
+            'current_balance' => propvendor_marketplace_get_vendor_credit_balance($vendor_id),
+            'wallet_url'      => home_url('/vendor-wallet/'),
+        ), $status_code);
+    }
+
+    // Access confirmed! Fetch real unmasked customer phone & email
+    $customer_phone = $wpdb->get_var($wpdb->prepare(
+        "SELECT customer_phone FROM {$table_enquiries} WHERE listing_id = %d AND customer_email = %s AND customer_phone != '' ORDER BY id DESC LIMIT 1",
+        $thread->listing_id,
+        $thread->customer_email
+    ));
+
+    $new_balance = propvendor_marketplace_get_vendor_credit_balance($vendor_id);
+
+    wp_send_json_success(array(
+        'success'          => true,
+        'thread_id'        => $thread_id,
+        'already_unlocked' => !empty($unlock_res['already_unlocked']),
+        'vip_bypass'       => !empty($unlock_res['vip_bypass']),
+        'deducted'         => isset($unlock_res['deducted']) ? (int) $unlock_res['deducted'] : 0,
+        'balance'          => $new_balance,
+        'customer_name'    => esc_html($thread->customer_name),
+        'customer_email'   => sanitize_email($thread->customer_email),
+        'customer_phone'   => !empty($customer_phone) ? sanitize_text_field($customer_phone) : '',
+        'message'          => !empty($unlock_res['message']) ? $unlock_res['message'] : __('Lead contact details unlocked successfully.', 'propvendor-marketplace'),
+    ));
+}
+add_action('wp_ajax_propvendor_unlock_thread_lead', 'propvendor_marketplace_ajax_unlock_thread_lead');
 
 
+/**
+ * =========================================================================
+ * FRONTEND VENDOR WALLET & PRICING SHORTCODE [propvendor_vendor_wallet]
+ * =========================================================================
+ */
+
+function propvendor_marketplace_vendor_wallet_shortcode($atts = array()) {
+    if (!is_user_logged_in()) {
+        $login_url = wp_login_url(get_permalink());
+        return '<div class="propvendor-wallet-login-prompt"><p>' .
+            sprintf(__('Please <a href="%s">log in</a> with your vendor account to access your wallet and subscription options.', 'propvendor-marketplace'), esc_url($login_url)) .
+            '</p></div>';
+    }
+
+    $vendor_id      = get_current_user_id();
+    $credit_balance = propvendor_marketplace_get_vendor_credit_balance($vendor_id);
+    $is_vip         = propvendor_marketplace_is_vendor_vip_agent($vendor_id) || propvendor_marketplace_is_vendor_vip($vendor_id);
+    $vip_expiry     = get_user_meta($vendor_id, 'propvendor_vip_agent_expires_at', true);
+    if (empty($vip_expiry)) {
+        $vip_expiry = get_user_meta($vendor_id, 'propvendor_plan_expires_at', true);
+    }
+
+    $plans = propvendor_marketplace_get_active_plans();
+
+    // Fetch recent transactions (last 10 orders)
+    global $wpdb;
+    $table_orders  = $wpdb->prefix . 'propvendor_orders';
+    $table_plans   = $wpdb->prefix . 'propvendor_plans';
+    $recent_orders = array();
+    if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_orders)) === $table_orders) {
+        $recent_orders = $wpdb->get_results($wpdb->prepare(
+            "SELECT o.*, p.name as plan_name, p.product_type
+             FROM {$table_orders} o
+             LEFT JOIN {$table_plans} p ON o.plan_id = p.id
+             WHERE o.vendor_id = %d
+             ORDER BY o.id DESC LIMIT 10",
+            $vendor_id
+        ));
+    }
+
+    ob_start();
+    ?>
+    <div class="propvendor-wallet-container" id="propvendor-wallet-app">
+        <!-- Wallet Header / Balances -->
+        <div class="propvendor-wallet-header">
+            <div class="propvendor-wallet-card propvendor-balance-card">
+                <div class="propvendor-wallet-card-icon">
+                    <span class="dashicons dashicons-money-alt"></span>
+                </div>
+                <div class="propvendor-wallet-card-info">
+                    <span class="propvendor-card-label"><?php esc_html_e('Lead Contact Credits', 'propvendor-marketplace'); ?></span>
+                    <span class="propvendor-card-value" id="pv-current-credit-balance"><?php echo esc_html(number_format_i18n($credit_balance)); ?></span>
+                    <span class="propvendor-card-subtext"><?php esc_html_e('1 Credit = 1 Lead Contact Unlock', 'propvendor-marketplace'); ?></span>
+                </div>
+            </div>
+
+            <div class="propvendor-wallet-card propvendor-vip-card <?php echo $is_vip ? 'is-vip-active' : 'is-vip-inactive'; ?>">
+                <div class="propvendor-wallet-card-icon">
+                    <span class="dashicons dashicons-awards"></span>
+                </div>
+                <div class="propvendor-wallet-card-info">
+                    <span class="propvendor-card-label"><?php esc_html_e('VIP Agent Status', 'propvendor-marketplace'); ?></span>
+                    <?php if ($is_vip) : ?>
+                        <span class="propvendor-card-value propvendor-status-active"><?php esc_html_e('Active VIP Agent', 'propvendor-marketplace'); ?></span>
+                        <span class="propvendor-card-subtext">
+                            <?php
+                            if (!empty($vip_expiry)) {
+                                printf(esc_html__('Expires on: %s', 'propvendor-marketplace'), esc_html(date_i18n(get_option('date_format'), strtotime($vip_expiry))));
+                            } else {
+                                esc_html_e('Unlimited VIP Plan', 'propvendor-marketplace');
+                            }
+                            ?>
+                        </span>
+                    <?php else : ?>
+                        <span class="propvendor-card-value propvendor-status-inactive"><?php esc_html_e('Standard Vendor', 'propvendor-marketplace'); ?></span>
+                        <span class="propvendor-card-subtext"><?php esc_html_e('Upgrade for unlimited leads & VIP badge', 'propvendor-marketplace'); ?></span>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notification container -->
+        <div id="propvendor-wallet-notice" class="propvendor-wallet-notice" style="display: none;"></div>
+
+        <!-- Pricing Cards Section -->
+        <div class="propvendor-pricing-section">
+            <div class="propvendor-section-header">
+                <h2><?php esc_html_e('Subscriptions & Credit Packs', 'propvendor-marketplace'); ?></h2>
+                <p><?php esc_html_e('Select a package to upgrade your vendor status or purchase lead contact unlock credits.', 'propvendor-marketplace'); ?></p>
+            </div>
+
+            <div class="propvendor-pricing-grid">
+                <?php foreach ($plans as $plan) :
+                    $is_vip_plan = ('vip_agent' === $plan->product_type);
+                    $price_naira = number_format($plan->price_kobo / 100);
+                ?>
+                    <div class="propvendor-pricing-card <?php echo $is_vip_plan ? 'featured-plan' : ''; ?>" data-plan-id="<?php echo esc_attr($plan->id); ?>">
+                        <?php if ($is_vip_plan) : ?>
+                            <div class="propvendor-card-badge"><?php esc_html_e('Most Popular', 'propvendor-marketplace'); ?></div>
+                        <?php elseif ($plan->credits >= 12) : ?>
+                            <div class="propvendor-card-badge best-value-badge"><?php esc_html_e('Best Value', 'propvendor-marketplace'); ?></div>
+                        <?php endif; ?>
+
+                        <div class="propvendor-plan-header">
+                            <h3 class="propvendor-plan-title"><?php echo esc_html($plan->name); ?></h3>
+                            <div class="propvendor-plan-price">
+                                <span class="currency">&#8358;</span><span class="amount"><?php echo esc_html($price_naira); ?></span>
+                                <?php if ($is_vip_plan) : ?>
+                                    <span class="period">/ <?php printf(esc_html__('%d days', 'propvendor-marketplace'), (int) $plan->duration_days); ?></span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <div class="propvendor-plan-body">
+                            <p class="propvendor-plan-desc"><?php echo esc_html($plan->description); ?></p>
+                            <ul class="propvendor-plan-features">
+                                <?php if ($is_vip_plan) : ?>
+                                    <li><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e('Unlimited Direct Lead Phone & Email Unlocks', 'propvendor-marketplace'); ?></li>
+                                    <li><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e('Verified VIP Agent Badge On All Listings', 'propvendor-marketplace'); ?></li>
+                                    <li><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e('Priority Placement In Discovery Search', 'propvendor-marketplace'); ?></li>
+                                    <li><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e('Instant WhatsApp Customer Direct Chat', 'propvendor-marketplace'); ?></li>
+                                <?php else : ?>
+                                    <li><span class="dashicons dashicons-yes-alt"></span> <?php printf(esc_html__('%d Contact Unlocks (Phone & Email)', 'propvendor-marketplace'), (int) $plan->credits); ?></li>
+                                    <li><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e('Credits Never Expire', 'propvendor-marketplace'); ?></li>
+                                    <li><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e('Use Anytime Across All Inquiries', 'propvendor-marketplace'); ?></li>
+                                    <li><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e('Unlock Leads One At A Time As Needed', 'propvendor-marketplace'); ?></li>
+                                <?php endif; ?>
+                            </ul>
+                        </div>
+
+                        <div class="propvendor-plan-footer">
+                            <button type="button"
+                                class="button button-primary propvendor-checkout-btn"
+                                data-plan-id="<?php echo esc_attr($plan->id); ?>"
+                                data-plan-name="<?php echo esc_attr($plan->name); ?>"
+                                data-price-kobo="<?php echo esc_attr($plan->price_kobo); ?>">
+                                <?php echo $is_vip_plan ? esc_html__('Upgrade to VIP Agent', 'propvendor-marketplace') : esc_html__('Buy Credits Now', 'propvendor-marketplace'); ?>
+                            </button>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <!-- Recent Transactions Table -->
+        <div class="propvendor-transactions-section">
+            <div class="propvendor-section-header">
+                <h3><?php esc_html_e('Payment & Order History', 'propvendor-marketplace'); ?></h3>
+            </div>
+            <?php if (!empty($recent_orders)) : ?>
+                <table class="propvendor-table propvendor-transactions-table">
+                    <thead>
+                        <tr>
+                            <th><?php esc_html_e('Date', 'propvendor-marketplace'); ?></th>
+                            <th><?php esc_html_e('Item', 'propvendor-marketplace'); ?></th>
+                            <th><?php esc_html_e('Reference', 'propvendor-marketplace'); ?></th>
+                            <th><?php esc_html_e('Amount', 'propvendor-marketplace'); ?></th>
+                            <th><?php esc_html_e('Status', 'propvendor-marketplace'); ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($recent_orders as $o) :
+                            $status_class = ('successful' === $o->status) ? 'status-success' : (('pending' === $o->status) ? 'status-pending' : 'status-failed');
+                        ?>
+                            <tr>
+                                <td><?php echo esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($o->created_at))); ?></td>
+                                <td><strong><?php echo esc_html(!empty($o->plan_name) ? $o->plan_name : 'Plan #' . $o->plan_id); ?></strong></td>
+                                <td><code><?php echo esc_html($o->transaction_reference); ?></code></td>
+                                <td>&#8358;<?php echo esc_html(number_format($o->amount_kobo / 100, 2)); ?></td>
+                                <td><span class="propvendor-badge <?php echo esc_attr($status_class); ?>"><?php echo esc_html(ucfirst($o->status)); ?></span></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php else : ?>
+                <p class="propvendor-no-orders"><?php esc_html_e('No orders placed yet.', 'propvendor-marketplace'); ?></p>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php
+    return ob_get_clean();
+}
+add_shortcode('propvendor_vendor_wallet', 'propvendor_marketplace_vendor_wallet_shortcode');

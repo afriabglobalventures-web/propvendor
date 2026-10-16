@@ -11,6 +11,8 @@
         initExistingImageToggles();
         initFormValidationAndScroll();
         initSearchFilters();
+        initWalletCheckout();
+        initInboxLeadUnlock();
     });
 
     /**
@@ -424,6 +426,311 @@
                 });
             });
         });
+    }
+
+    /**
+     * 6. Vendor Wallet & Paystack Checkout Integration
+     */
+    function initWalletCheckout() {
+        var walletApp = document.getElementById('propvendor-wallet-app');
+        if (!walletApp) {
+            return;
+        }
+
+        var noticeEl = document.getElementById('propvendor-wallet-notice');
+        var checkoutButtons = walletApp.querySelectorAll('.propvendor-checkout-btn');
+
+        function showNotice(type, msg) {
+            if (!noticeEl) return;
+            noticeEl.className = 'propvendor-wallet-notice notice-' + type;
+            noticeEl.innerHTML = '<p>' + msg + '</p>';
+            noticeEl.style.display = 'block';
+            noticeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        checkoutButtons.forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (btn.disabled) return;
+
+                var planId = btn.getAttribute('data-plan-id');
+                var originalText = btn.innerHTML;
+
+                if (!window.propvendor_payment_vars) {
+                    showNotice('error', 'Payment configuration is missing. Please refresh the page.');
+                    return;
+                }
+
+                btn.disabled = true;
+                btn.innerHTML = '<span class="propvendor-spinner"></span> Initializing...';
+                if (noticeEl) {
+                    noticeEl.style.display = 'none';
+                }
+
+                // 1. Create Checkout Order via AJAX
+                var formData = new FormData();
+                formData.append('action', 'propvendor_create_checkout_order');
+                formData.append('plan_id', planId);
+                formData.append('nonce', window.propvendor_payment_vars.nonce);
+
+                fetch(window.propvendor_payment_vars.ajax_url, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(function(res) { return res.json(); })
+                .then(function(response) {
+                    if (!response || !response.success || !response.data) {
+                        var err = (response && response.data && response.data.message) ? response.data.message : 'Unable to create checkout order.';
+                        showNotice('error', err);
+                        btn.disabled = false;
+                        btn.innerHTML = originalText;
+                        return;
+                    }
+
+                    var order = response.data;
+                    var paystackKey = order.paystack_public_key || window.propvendor_payment_vars.paystack_public_key;
+
+                    if (!paystackKey) {
+                        showNotice('error', 'Paystack Public Key is not configured. Please contact the site administrator.');
+                        btn.disabled = false;
+                        btn.innerHTML = originalText;
+                        return;
+                    }
+
+                    if (typeof PaystackPop === 'undefined') {
+                        showNotice('error', 'Payment gateway SDK could not be loaded. Please check your internet connection.');
+                        btn.disabled = false;
+                        btn.innerHTML = originalText;
+                        return;
+                    }
+
+                    // 2. Open Paystack Inline Modal
+                    var handler = PaystackPop.setup({
+                        key: paystackKey,
+                        email: order.vendor_email || window.propvendor_payment_vars.user_email,
+                        amount: order.amount_kobo,
+                        currency: 'NGN',
+                        ref: order.reference,
+                        metadata: {
+                            custom_fields: [
+                                { display_name: "Plan Name", variable_name: "plan_name", value: order.plan_name },
+                                { display_name: "Order ID", variable_name: "order_id", value: String(order.order_id) }
+                            ]
+                        },
+                        callback: function(paymentResponse) {
+                            btn.innerHTML = '<span class="propvendor-spinner"></span> Verifying...';
+                            showNotice('info', 'Payment successful! Verifying with Paystack and granting entitlements, please wait...');
+
+                            var verifyData = new FormData();
+                            verifyData.append('action', 'propvendor_verify_payment');
+                            verifyData.append('reference', paymentResponse.reference || order.reference);
+                            verifyData.append('nonce', window.propvendor_payment_vars.nonce);
+
+                            fetch(window.propvendor_payment_vars.ajax_url, {
+                                method: 'POST',
+                                body: verifyData
+                            })
+                            .then(function(vRes) { return vRes.json(); })
+                            .then(function(verifyResult) {
+                                if (verifyResult && verifyResult.success) {
+                                    showNotice('success', 'Payment verified successfully! Your account has been credited. Refreshing page...');
+                                    setTimeout(function() {
+                                        window.location.reload();
+                                    }, 1500);
+                                } else {
+                                    var vErr = (verifyResult && verifyResult.data && verifyResult.data.message) ? verifyResult.data.message : 'Verification was not completed. Reference: ' + order.reference;
+                                    showNotice('error', vErr);
+                                    btn.disabled = false;
+                                    btn.innerHTML = originalText;
+                                }
+                            })
+                            .catch(function() {
+                                showNotice('error', 'Network error during verification. Reference: ' + order.reference);
+                                btn.disabled = false;
+                                btn.innerHTML = originalText;
+                            });
+                        },
+                        onClose: function() {
+                            btn.disabled = false;
+                            btn.innerHTML = originalText;
+                            showNotice('warning', 'Payment window closed.');
+                        }
+                    });
+
+                    handler.openIframe();
+                })
+                .catch(function() {
+                    showNotice('error', 'Network error creating order. Please check your connection and try again.');
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                });
+            });
+        });
+    }
+
+    /**
+     * 7. Vendor Inbox Lead Contact Unlock Integration (Phase 5)
+     */
+    function initInboxLeadUnlock() {
+        var triggers = document.querySelectorAll('.pv-btn-unlock-lead-trigger');
+        if (!triggers.length) {
+            return;
+        }
+
+        var modal = document.getElementById('pv-unlock-lead-modal');
+        var modalBalance = document.getElementById('pv-modal-current-balance');
+        var modalAfter = document.getElementById('pv-modal-balance-after');
+        var modalError = document.getElementById('pv-unlock-modal-error');
+        var confirmBtn = document.getElementById('pv-btn-confirm-unlock');
+        var cancelBtn = document.getElementById('pv-btn-cancel-unlock');
+        var closeBtn = modal ? modal.querySelector('.pv-unlock-modal-close') : null;
+        var backdrop = modal ? modal.querySelector('.pv-unlock-modal-backdrop') : null;
+
+        var activeThreadId = null;
+        var activeBtn = null;
+
+        function closeModal() {
+            if (!modal) return;
+            modal.style.display = 'none';
+            modal.setAttribute('aria-hidden', 'true');
+            if (modalError) {
+                modalError.style.display = 'none';
+                modalError.innerHTML = '';
+            }
+            if (confirmBtn) {
+                confirmBtn.disabled = false;
+                confirmBtn.innerHTML = 'Confirm &amp; Deduct 1 Credit';
+            }
+            activeThreadId = null;
+            activeBtn = null;
+        }
+
+        function openModal(threadId, btn) {
+            if (!modal) return;
+            activeThreadId = threadId;
+            activeBtn = btn;
+
+            var bal = parseInt(btn.getAttribute('data-balance'), 10) || 0;
+            if (modalBalance) modalBalance.textContent = bal;
+            if (modalAfter) modalAfter.textContent = Math.max(0, bal - 1);
+            if (modalError) modalError.style.display = 'none';
+
+            modal.style.display = 'flex';
+            modal.setAttribute('aria-hidden', 'false');
+            if (confirmBtn) confirmBtn.focus();
+        }
+
+        triggers.forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                var threadId = btn.getAttribute('data-thread-id');
+                var bal = parseInt(btn.getAttribute('data-balance'), 10) || 0;
+
+                if (bal < 1) {
+                    if (window.propvendor_payment_vars && window.propvendor_payment_vars.wallet_url) {
+                        window.location.href = window.propvendor_payment_vars.wallet_url;
+                    }
+                    return;
+                }
+
+                openModal(threadId, btn);
+            });
+        });
+
+        if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        if (backdrop) backdrop.addEventListener('click', closeModal);
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && modal && modal.style.display === 'flex') {
+                closeModal();
+            }
+        });
+
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (!activeThreadId || confirmBtn.disabled) return;
+
+                confirmBtn.disabled = true;
+                confirmBtn.innerHTML = '<span class="propvendor-spinner"></span> Unlocking...';
+                if (modalError) modalError.style.display = 'none';
+
+                var formData = new FormData();
+                formData.append('action', 'propvendor_unlock_thread_lead');
+                formData.append('thread_id', activeThreadId);
+                formData.append('nonce', window.propvendor_payment_vars.unlock_nonce || window.propvendor_payment_vars.nonce);
+
+                fetch(window.propvendor_payment_vars.ajax_url, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(function(res) { return res.json(); })
+                .then(function(response) {
+                    if (!response || !response.success || !response.data) {
+                        var msg = (response && response.data && response.data.message) ? response.data.message : 'Failed to unlock contact. Please try again.';
+                        if (modalError) {
+                            modalError.innerHTML = msg;
+                            modalError.style.display = 'block';
+                        }
+                        confirmBtn.disabled = false;
+                        confirmBtn.innerHTML = 'Confirm &amp; Deduct 1 Credit';
+                        return;
+                    }
+
+                    var data = response.data;
+                    closeModal();
+
+                    // 1. Reveal unmasked email
+                    var emailEl = document.getElementById('pv-contact-email-' + activeThreadId);
+                    if (emailEl && data.customer_email) {
+                        emailEl.innerHTML = '<strong>Email:</strong> <a href="mailto:' + encodeURI(data.customer_email) + '">' + escapeHtml(data.customer_email) + '</a>';
+                    }
+
+                    // 2. Reveal unmasked phone
+                    var phoneEl = document.getElementById('pv-contact-phone-' + activeThreadId);
+                    if (phoneEl && data.customer_phone) {
+                        phoneEl.innerHTML = '<strong>Phone:</strong> <a href="tel:' + encodeURI(data.customer_phone) + '">' + escapeHtml(data.customer_phone) + '</a>';
+                    }
+
+                    // 3. Replace unlock box with Unlocked Badge
+                    var box = document.getElementById('pv-unlock-box-' + activeThreadId);
+                    if (box) {
+                        box.innerHTML = '<div class="pv-unlock-success-banner"><span class="dashicons dashicons-yes-alt"></span> <strong>Lead Contact Details Unlocked!</strong> You have permanent direct access to this customer.</div>';
+                    }
+
+                    // 4. Update all balance pills / displays
+                    var balancePills = document.querySelectorAll('.pv-unlock-balance-pill, #pv-current-credit-balance');
+                    balancePills.forEach(function(pill) {
+                        if (pill.id === 'pv-current-credit-balance') {
+                            pill.textContent = data.balance;
+                        } else {
+                            pill.textContent = 'Balance: ' + data.balance + ' Credits';
+                        }
+                    });
+
+                    // Update data-balance on all remaining unlock buttons
+                    var remainingBtns = document.querySelectorAll('.pv-btn-unlock-lead-trigger');
+                    remainingBtns.forEach(function(rb) {
+                        rb.setAttribute('data-balance', data.balance);
+                    });
+                })
+                .catch(function() {
+                    if (modalError) {
+                        modalError.innerHTML = 'Network error during unlock request. Please check your connection and try again.';
+                        modalError.style.display = 'block';
+                    }
+                    confirmBtn.disabled = false;
+                    confirmBtn.innerHTML = 'Confirm &amp; Deduct 1 Credit';
+                });
+            });
+        }
+
+        function escapeHtml(str) {
+            var div = document.createElement('div');
+            div.appendChild(document.createTextNode(str));
+            return div.innerHTML;
+        }
     }
 
 })();

@@ -88,7 +88,12 @@ $suites = [
     [
         'file'                => 'test_stage5_entitlements_and_ledger.php',
         'name'                => 'Stage 5: Credit Ledger & Lead Entitlements',
-        'expected_assertions' => 71,
+        'expected_assertions' => 98,
+    ],
+    [
+        'file'                => 'test_stage5b_payments.php',
+        'name'                => 'Phase 4B: Payment Gateway Integration & Checkout',
+        'expected_assertions' => 99,
     ],
 ];
 

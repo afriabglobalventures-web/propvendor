@@ -13,6 +13,9 @@
  */
 
 define('WP_USE_THEMES', false);
+if (!defined('DOING_AJAX')) {
+    define('DOING_AJAX', true);
+}
 $wp_load = dirname(__DIR__, 4) . '/wp-load.php';
 if (file_exists($wp_load)) {
     require_once $wp_load;
@@ -21,6 +24,31 @@ if (file_exists($wp_load)) {
 }
 
 add_filter('pre_wp_mail', '__return_false');
+
+add_filter('wp_die_ajax_handler', function() {
+    return function($message = '') {
+        throw new Exception((string) $message);
+    };
+});
+
+function stage5_call_ajax_unlock($thread_id, $nonce) {
+    $_POST['action']    = 'propvendor_unlock_thread_lead';
+    $_POST['thread_id'] = $thread_id;
+    $_POST['nonce']     = $nonce;
+    $_REQUEST['nonce']  = $nonce;
+    $_REQUEST['action'] = 'propvendor_unlock_thread_lead';
+
+    ob_start();
+    $caught_e = null;
+    try {
+        propvendor_marketplace_ajax_unlock_thread_lead();
+    } catch (Exception $e) {
+        $caught_e = $e;
+    }
+    $raw = ob_get_clean();
+    $data = json_decode($raw, true);
+    return array('raw' => $raw, 'json' => $data, 'exception' => $caught_e ? $caught_e->getMessage() : null);
+}
 
 echo "====================================================================\n";
 echo "  PROPVENDOR STAGE 5 — CREDIT LEDGER & ENTITLEMENT TEST SUITE       \n";
@@ -45,6 +73,8 @@ function run_test($condition, $name, $extra = '') {
 global $wpdb;
 $created_user_ids   = array();
 $created_thread_ids = array();
+$created_enquiry_ids = array();
+$table_enquiries    = $wpdb->prefix . 'propvendor_enquiries';
 $table_ledger       = $wpdb->prefix . 'propvendor_credit_ledger';
 $table_threads      = $wpdb->prefix . 'propvendor_threads';
 
@@ -336,6 +366,149 @@ try {
         run_test(true, 'Admin user contact access skipped (no admin user found)');
     }
 
+
+    // -------------------------------------------------------------
+    // TEST 8: Vendor Inbox Lead Unlock AJAX Action & Security
+    // -------------------------------------------------------------
+    echo "\n--- TEST 8: Vendor Inbox Lead Unlock AJAX Action & Security ---\n";
+
+    // 8a. Invalid nonce rejected
+    wp_set_current_user(0);
+    $res_bad_nonce = stage5_call_ajax_unlock(999, 'invalid_nonce_token');
+    run_test(!empty($res_bad_nonce['exception']) && '-1' === $res_bad_nonce['exception'], 'AJAX unlock rejects invalid nonce');
+
+    // 8b. Unauthenticated user rejected
+    $valid_unlock_nonce = wp_create_nonce('propvendor_unlock_lead_nonce');
+    $res_unauth = stage5_call_ajax_unlock(999, $valid_unlock_nonce);
+    run_test(!empty($res_unauth['json']) && false === $res_unauth['json']['success'] && 'not_logged_in' === $res_unauth['json']['data']['code'], 'AJAX unlock rejects unauthenticated user');
+
+    // Create Vendor A and Vendor B
+    $vendor_a_login = 'test_v5_ajax_va_' . time() . '_' . wp_rand(100, 999);
+    $vid_a = wp_create_user($vendor_a_login, 'PassStage5VA!', $vendor_a_login . '@propvendor.ng');
+    $created_user_ids[] = $vid_a;
+    $va_user = get_user_by('id', $vid_a);
+    $va_user->set_role('vendor');
+
+    $vendor_b_login = 'test_v5_ajax_vb_' . time() . '_' . wp_rand(100, 999);
+    $vid_b = wp_create_user($vendor_b_login, 'PassStage5VB!', $vendor_b_login . '@propvendor.ng');
+    $created_user_ids[] = $vid_b;
+    $vb_user = get_user_by('id', $vid_b);
+    $vb_user->set_role('vendor');
+
+    // Create Thread 1 belonging to Vendor A
+    $test_listing_id = 99881;
+    $cust_email = 'confidential.lead.' . time() . '@testdomain.ng';
+    $cust_phone = '08098765432';
+
+    $wpdb->insert($table_threads, array(
+        'listing_id'        => $test_listing_id,
+        'vendor_id'         => $vid_a,
+        'customer_name'     => 'Dr. Ngozi Okonjo',
+        'customer_email'    => $cust_email,
+        'customer_user_id'  => 0,
+        'status'            => 'open',
+        'last_message_at'   => current_time('mysql'),
+        'created_at'        => current_time('mysql'),
+    ));
+    $thread_1_id = $wpdb->insert_id;
+    $created_thread_ids[] = $thread_1_id;
+
+    // Create enquiry record with real customer phone & email
+    $wpdb->insert($table_enquiries, array(
+        'listing_id'      => $test_listing_id,
+        'customer_name'   => 'Dr. Ngozi Okonjo',
+        'customer_email'  => $cust_email,
+        'customer_phone'  => $cust_phone,
+        'message'         => 'Interested in this commercial property.',
+        'created_at'      => current_time('mysql'),
+    ));
+    $enq_1_id = $wpdb->insert_id;
+    $created_enquiry_ids[] = $enq_1_id;
+
+    // 8c. Privacy Check Before Unlock: Locked contact info not exposed
+    run_test(false === propvendor_marketplace_vendor_can_view_contact_info($vid_a, $thread_1_id), 'Lead contact access is false for Vendor A before unlock');
+    $masked_test_email = propvendor_marketplace_mask_email($cust_email);
+    $masked_test_phone = propvendor_marketplace_mask_phone($cust_phone);
+    run_test(strpos($masked_test_phone, '***') !== false && strpos($masked_test_phone, $cust_phone) === false, 'Phone is masked before unlock (anti-leakage)');
+
+    // 8d. Unauthorized Vendor B cannot unlock Vendor A thread
+    wp_set_current_user($vid_b);
+    $res_unauthorized = stage5_call_ajax_unlock($thread_1_id, wp_create_nonce('propvendor_unlock_lead_nonce'));
+    run_test(!empty($res_unauthorized['json']) && false === $res_unauthorized['json']['success'], 'Unauthorized Vendor B request is rejected');
+    run_test('unauthorized' === $res_unauthorized['json']['data']['code'], 'Rejection code is unauthorized');
+
+    // 8e. Insufficient balance: Vendor A has 0 credits
+    wp_set_current_user($vid_a);
+    $bal_before_fail = propvendor_marketplace_get_vendor_credit_balance($vid_a);
+    $res_no_credits = stage5_call_ajax_unlock($thread_1_id, wp_create_nonce('propvendor_unlock_lead_nonce'));
+    run_test(!empty($res_no_credits['json']) && false === $res_no_credits['json']['success'], 'Zero credit vendor unlock attempt is rejected');
+    run_test('insufficient_credits' === $res_no_credits['json']['data']['code'], 'Error code is insufficient_credits');
+    run_test(propvendor_marketplace_get_vendor_credit_balance($vid_a) === $bal_before_fail, 'Credit balance remained strictly unchanged after rejected unlock');
+
+    // 8f. Successful unlock with 1 credit
+    // Add 3 credits to Vendor A
+    propvendor_marketplace_add_vendor_credits($vid_a, 3, 'pack_purchase', 'pack_test_3', 'Starter pack');
+    run_test(propvendor_marketplace_get_vendor_credit_balance($vid_a) === 3, 'Vendor A credited with 3 credits');
+
+    $res_unlock_success = stage5_call_ajax_unlock($thread_1_id, wp_create_nonce('propvendor_unlock_lead_nonce'));
+    run_test(!empty($res_unlock_success['json']) && true === $res_unlock_success['json']['success'], 'Authorized Vendor A successfully unlocks thread via AJAX');
+    run_test(1 === (int) $res_unlock_success['json']['data']['deducted'], 'Exactly 1 credit was deducted');
+    run_test(2 === (int) $res_unlock_success['json']['data']['balance'], 'New credit balance is exactly 2');
+    run_test($cust_email === $res_unlock_success['json']['data']['customer_email'], 'Unmasked customer email returned in response after successful unlock');
+    run_test($cust_phone === $res_unlock_success['json']['data']['customer_phone'], 'Unmasked customer phone returned in response after successful unlock');
+
+    // 8g. Unlocked state verification
+    run_test(true === propvendor_marketplace_vendor_can_view_contact_info($vid_a, $thread_1_id), 'propvendor_marketplace_vendor_can_view_contact_info now returns true');
+    $ledger_row = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$table_ledger} WHERE vendor_id = %d AND reference = %s ORDER BY id DESC LIMIT 1",
+        $vid_a,
+        'thread_' . $thread_1_id
+    ));
+    run_test(null !== $ledger_row && -1 === (int) $ledger_row->amount && 2 === (int) $ledger_row->balance_after, 'Credit ledger records -1 deduction with balance_after = 2');
+
+    // 8h. Idempotent repeat unlock: duplicate click does NOT deduct again
+    $res_duplicate = stage5_call_ajax_unlock($thread_1_id, wp_create_nonce('propvendor_unlock_lead_nonce'));
+    run_test(!empty($res_duplicate['json']) && true === $res_duplicate['json']['success'], 'Repeat unlock request succeeds idempotently');
+    run_test(true === $res_duplicate['json']['data']['already_unlocked'], 'Repeat unlock identifies already_unlocked = true');
+    run_test(0 === (int) $res_duplicate['json']['data']['deducted'], 'Zero additional credits deducted on duplicate unlock');
+    run_test(2 === propvendor_marketplace_get_vendor_credit_balance($vid_a), 'Vendor balance remains strictly at 2 credits');
+
+    // 8i. VIP Agent bypass check: VIP Agent subscriber pays 0 credits to unlock
+    $vendor_c_login = 'test_v5_ajax_vc_' . time() . '_' . wp_rand(100, 999);
+    $vid_c = wp_create_user($vendor_c_login, 'PassStage5VC!', $vendor_c_login . '@propvendor.ng');
+    $created_user_ids[] = $vid_c;
+    $vc_user = get_user_by('id', $vid_c);
+    $vc_user->set_role('vendor');
+
+    // Grant VIP Agent entitlement (0 credits in wallet)
+    propvendor_marketplace_grant_vip_agent_entitlement($vid_c, 30, 'vip_agent_test');
+    run_test(true === propvendor_marketplace_is_vendor_vip_agent($vid_c), 'Vendor C has active VIP Agent entitlement');
+    run_test(0 === propvendor_marketplace_get_vendor_credit_balance($vid_c), 'Vendor C has 0 credits in wallet');
+
+    // Create Thread 2 for Vendor C
+    $wpdb->insert($table_threads, array(
+        'listing_id'        => $test_listing_id,
+        'vendor_id'         => $vid_c,
+        'customer_name'     => 'Chief Emeka',
+        'customer_email'    => 'emeka@vipdomain.ng',
+        'customer_user_id'  => 0,
+        'status'            => 'open',
+        'last_message_at'   => current_time('mysql'),
+        'created_at'        => current_time('mysql'),
+    ));
+    $thread_2_id = $wpdb->insert_id;
+    $created_thread_ids[] = $thread_2_id;
+
+    wp_set_current_user($vid_c);
+    $res_vip_unlock = stage5_call_ajax_unlock($thread_2_id, wp_create_nonce('propvendor_unlock_lead_nonce'));
+    run_test(!empty($res_vip_unlock['json']) && true === $res_vip_unlock['json']['success'], 'VIP Agent vendor unlocks thread successfully');
+    run_test(true === $res_vip_unlock['json']['data']['vip_bypass'], 'VIP bypass is identified in response');
+    run_test(0 === (int) $res_vip_unlock['json']['data']['deducted'], '0 credits deducted for VIP Agent subscriber');
+    run_test('emeka@vipdomain.ng' === $res_vip_unlock['json']['data']['customer_email'], 'Unmasked email returned to VIP Agent vendor');
+
+    // Reset current user
+    wp_set_current_user(0);
+
 } finally {
     // Teardown: clean up created test records
     foreach ($created_user_ids as $uid) {
@@ -345,6 +518,9 @@ try {
     }
     foreach ($created_thread_ids as $tid) {
         $wpdb->delete($table_threads, array('id' => $tid));
+    }
+    foreach ($created_enquiry_ids as $eid) {
+        $wpdb->delete($table_enquiries, array('id' => $eid));
     }
 }
 
