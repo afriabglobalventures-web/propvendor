@@ -8824,7 +8824,10 @@ function propvendor_marketplace_verify_and_fulfill_order($reference, $mock_api_r
         $wpdb->query('START TRANSACTION');
 
         $fulfillment_result = null;
-        if ('vip_agent' === $plan->product_type) {
+        $custom_grant = apply_filters('propvendor_marketplace_override_grant', null, $order, $plan, $reference);
+        if (null !== $custom_grant) {
+            $fulfillment_result = is_callable($custom_grant) ? call_user_func($custom_grant, $order, $plan, $reference) : $custom_grant;
+        } elseif ('vip_agent' === $plan->product_type) {
             $fulfillment_result = propvendor_marketplace_grant_vip_agent_entitlement(
                 (int) $order->vendor_id,
                 (int) $plan->duration_days,
@@ -8842,9 +8845,20 @@ function propvendor_marketplace_verify_and_fulfill_order($reference, $mock_api_r
             return new WP_Error('unsupported_product_type', __('Unsupported product type.', 'propvendor-marketplace'));
         }
 
-        if (is_wp_error($fulfillment_result)) {
+        /**
+         * Allow filtering or mocking fulfillment result before committing order.
+         *
+         * @param array|WP_Error $fulfillment_result
+         * @param object         $order
+         * @param object         $plan
+         * @param string         $reference
+         */
+        $fulfillment_result = apply_filters('propvendor_marketplace_fulfillment_result', $fulfillment_result, $order, $plan, $reference);
+
+        // SEC-01: Defense-in-depth check for fulfillment result validity
+        if (is_wp_error($fulfillment_result) || !is_array($fulfillment_result) || empty($fulfillment_result['success'])) {
             $wpdb->query('ROLLBACK');
-            return $fulfillment_result;
+            return is_wp_error($fulfillment_result) ? $fulfillment_result : new WP_Error('fulfillment_failed', __('Entitlement grant failed.', 'propvendor-marketplace'));
         }
 
         // Mark order as successful
@@ -10226,6 +10240,21 @@ function propvendor_cron_cleanup_stale_orders($hours = 24, $batch_size = 50) {
             'cutoff'     => '',
         );
     }
+    // SEC-02: Database-level mutex locking to guarantee cross-worker process serialization
+    $db_lock_name = 'pv_stale_cleanup_lock';
+    $db_lock_acquired = $wpdb->get_var($wpdb->prepare("SELECT GET_LOCK(%s, 5)", $db_lock_name));
+    if ('1' !== (string) $db_lock_acquired) {
+        return array(
+            'success'    => false,
+            'reason'     => 'already_running',
+            'cleaned'    => 0,
+            'batch_size' => $batch_size,
+            'hours'      => $hours,
+            'order_ids'  => array(),
+            'cutoff'     => '',
+        );
+    }
+
     set_transient($lock_key, time(), 300);
 
     try {
@@ -10295,6 +10324,7 @@ function propvendor_cron_cleanup_stale_orders($hours = 24, $batch_size = 50) {
         );
     } finally {
         delete_transient($lock_key);
+        $wpdb->query($wpdb->prepare("SELECT RELEASE_LOCK(%s)", $db_lock_name));
     }
 }
 
