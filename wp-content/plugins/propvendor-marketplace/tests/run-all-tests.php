@@ -2,7 +2,7 @@
 /**
  * PropVendor Master 1-Click Test Runner
  *
- * Discovers and executes all 12 regression test suites in isolated PHP subprocesses,
+ * Discovers and executes all 13 regression test suites in isolated PHP subprocesses,
  * collecting assertion counts, execution times, and exit statuses into a unified report.
  *
  * Usage:
@@ -104,6 +104,11 @@ $suites = [
         'file'                => 'test_phase7a_security_audit.php',
         'name'                => 'Phase 7A: Production Security & Reliability Audit',
         'expected_assertions' => 44,
+    ],
+    [
+        'file'                => 'test_phase7b_cleanup_and_readiness.php',
+        'name'                => 'Phase 7B: Stale Order Cleanup & Deployment Readiness',
+        'expected_assertions' => 42,
     ],
 ];
 

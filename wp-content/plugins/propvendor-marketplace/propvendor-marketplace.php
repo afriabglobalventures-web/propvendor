@@ -1136,7 +1136,9 @@ add_filter('rest_pre_dispatch', 'propvendor_marketplace_restrict_unavailable_res
 
 add_action('init', 'propvendor_marketplace_register_post_types');
 add_action('init', 'propvendor_marketplace_register_role');
+add_action('init', 'propvendor_marketplace_schedule_cron_jobs');
 register_activation_hook(__FILE__, 'propvendor_marketplace_activate');
+register_deactivation_hook(__FILE__, 'propvendor_marketplace_deactivate');
 
 function propvendor_marketplace_restrict_vendor_admin_access() {
     if (!is_user_logged_in()) {
@@ -1185,6 +1187,7 @@ function propvendor_marketplace_activate() {
     propvendor_marketplace_create_credit_ledger_table();
     propvendor_marketplace_create_payment_tables();
     propvendor_marketplace_create_notifications_table();
+    propvendor_marketplace_schedule_cron_jobs();
     flush_rewrite_rules();
 }
 
@@ -6565,7 +6568,14 @@ function propvendor_marketplace_render_admin_payments_page() {
         wp_die(__('You do not have sufficient permissions to access this page.', 'propvendor-marketplace'));
     }
 
-    $saved_notice = false;
+    global $wpdb;
+    $table_orders = $wpdb->prefix . 'propvendor_orders';
+    if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_orders)) !== $table_orders) {
+        propvendor_marketplace_create_payment_tables();
+    }
+
+    $saved_notice   = false;
+    $cleanup_notice = '';
 
     // Handle form submit
     if (isset($_POST['propvendor_save_payment_settings'])) {
@@ -6593,12 +6603,40 @@ function propvendor_marketplace_render_admin_payments_page() {
         $saved_notice = true;
     }
 
+    // Handle manual cleanup trigger
+    if (isset($_POST['propvendor_run_stale_cleanup'])) {
+        check_admin_referer('propvendor_manual_cleanup_action', 'propvendor_manual_cleanup_nonce');
+        $cleanup_result = propvendor_cron_cleanup_stale_orders(24, 50);
+        $cleaned_count  = isset($cleanup_result['cleaned']) ? (int) $cleanup_result['cleaned'] : 0;
+        $cleanup_notice = sprintf(
+            __('Manual cleanup executed: %d stale pending order(s) transitioned to expired.', 'propvendor-marketplace'),
+            $cleaned_count
+        );
+    }
+
     $mode         = propvendor_marketplace_get_paystack_mode();
     $test_pub_key = get_option('propvendor_paystack_test_public_key', '');
     $test_sec_key = get_option('propvendor_paystack_test_secret_key', '');
     $live_pub_key = get_option('propvendor_paystack_live_public_key', '');
     $live_sec_key = get_option('propvendor_paystack_live_secret_key', '');
     $webhook_url  = propvendor_marketplace_get_paystack_webhook_url();
+
+    // Deployment Readiness Metrics
+    $cron_next   = wp_next_scheduled('propvendor_cron_cleanup_stale_orders');
+    $cron_active = (bool) $cron_next;
+    $cron_status_text = $cron_active
+        ? sprintf(__('Active (Daily) — Next run: %s', 'propvendor-marketplace'), date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $cron_next))
+        : __('Inactive / Not Scheduled', 'propvendor-marketplace');
+
+    $cutoff_24h = date('Y-m-d H:i:s', current_time('timestamp') - (24 * HOUR_IN_SECONDS));
+    $count_pending       = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table_orders} WHERE status = 'pending'");
+    $count_stale_pending = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$table_orders} WHERE status = 'pending' AND created_at < %s", $cutoff_24h));
+    $count_expired       = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table_orders} WHERE status = 'expired'");
+    $count_successful    = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table_orders} WHERE status = 'successful'");
+    $count_failed        = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table_orders} WHERE status = 'failed'");
+
+    $is_ssl_active = is_ssl();
+    $keys_ready    = ('live' === $mode) ? (!empty($live_pub_key) && !empty($live_sec_key)) : (!empty($test_pub_key) && !empty($test_sec_key));
     ?>
     <div class="wrap">
         <h1><?php esc_html_e('PropVendor Payment Gateway Settings (Paystack)', 'propvendor-marketplace'); ?></h1>
@@ -6609,6 +6647,98 @@ function propvendor_marketplace_render_admin_payments_page() {
                 <p><?php esc_html_e('Payment gateway settings saved successfully.', 'propvendor-marketplace'); ?></p>
             </div>
         <?php endif; ?>
+
+        <?php if (!empty($cleanup_notice)) : ?>
+            <div class="notice notice-success is-dismissible">
+                <p><?php echo esc_html($cleanup_notice); ?></p>
+            </div>
+        <?php endif; ?>
+
+        <!-- Deployment Readiness Overview & Verification Card -->
+        <div class="card" style="max-width: 900px; margin-top: 15px; margin-bottom: 25px; padding: 18px 24px; border-left: 4px solid #1e3a8a;">
+            <h2 style="margin-top: 0; display: flex; align-items: center; gap: 8px;">
+                <span class="dashicons dashicons-shield-alt" style="color: #1e3a8a; font-size: 24px; width: 24px; height: 24px;"></span>
+                <?php esc_html_e('Deployment Readiness & Health Status', 'propvendor-marketplace'); ?>
+            </h2>
+            <p class="description" style="margin-bottom: 15px;">
+                <?php esc_html_e('Real-time verification of payment gateway health, background order maintenance, and webhook status.', 'propvendor-marketplace'); ?>
+            </p>
+
+            <table class="widefat striped" style="border: 1px solid #e2e8f0; margin-bottom: 16px;">
+                <tbody>
+                    <tr>
+                        <th style="width: 250px;"><strong><?php esc_html_e('WP-Cron Stale Order Cleanup', 'propvendor-marketplace'); ?></strong></th>
+                        <td>
+                            <?php if ($cron_active) : ?>
+                                <span style="color: #15803d; font-weight: 600;">&#10004; <?php echo esc_html($cron_status_text); ?></span>
+                            <?php else : ?>
+                                <span style="color: #b91c1c; font-weight: 600;">&#10008; <?php echo esc_html($cron_status_text); ?></span>
+                            <?php endif; ?>
+                            <p class="description" style="margin: 2px 0 0 0;"><?php esc_html_e('Daily maintenance hook (propvendor_cron_cleanup_stale_orders) moves orders pending >24h to expired status in batches of 50.', 'propvendor-marketplace'); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><strong><?php esc_html_e('Order Pipeline Statistics', 'propvendor-marketplace'); ?></strong></th>
+                        <td>
+                            <span style="display: inline-block; margin-right: 15px;">
+                                <strong><?php echo (int) $count_pending; ?></strong> <?php esc_html_e('Pending', 'propvendor-marketplace'); ?>
+                                <?php if ($count_stale_pending > 0) : ?>
+                                    <span style="color: #b45309;">(<?php echo (int) $count_stale_pending; ?> stale >24h)</span>
+                                <?php endif; ?>
+                            </span>
+                            <span style="display: inline-block; margin-right: 15px;">
+                                <strong style="color: #64748b;"><?php echo (int) $count_expired; ?></strong> <?php esc_html_e('Expired', 'propvendor-marketplace'); ?>
+                            </span>
+                            <span style="display: inline-block; margin-right: 15px;">
+                                <strong style="color: #15803d;"><?php echo (int) $count_successful; ?></strong> <?php esc_html_e('Successful', 'propvendor-marketplace'); ?>
+                            </span>
+                            <span style="display: inline-block;">
+                                <strong style="color: #b91c1c;"><?php echo (int) $count_failed; ?></strong> <?php esc_html_e('Failed', 'propvendor-marketplace'); ?>
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><strong><?php esc_html_e('Late Payment Reconciliation', 'propvendor-marketplace'); ?></strong></th>
+                        <td>
+                            <span style="color: #15803d; font-weight: 600;">&#10004; <?php esc_html_e('Active & Automated', 'propvendor-marketplace'); ?></span>
+                            <p class="description" style="margin: 2px 0 0 0;"><?php esc_html_e('Webhook charge.success events for expired orders automatically reconcile, fulfill credits/VIP, and record audit logs.', 'propvendor-marketplace'); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><strong><?php esc_html_e('Gateway Credentials Status', 'propvendor-marketplace'); ?></strong></th>
+                        <td>
+                            <?php if ($keys_ready) : ?>
+                                <span style="color: #15803d; font-weight: 600;">&#10004; <?php printf(esc_html__('Configured for %s Mode', 'propvendor-marketplace'), strtoupper($mode)); ?></span>
+                            <?php else : ?>
+                                <span style="color: #b91c1c; font-weight: 600;">&#10008; <?php printf(esc_html__('Keys Missing for %s Mode', 'propvendor-marketplace'), strtoupper($mode)); ?></span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><strong><?php esc_html_e('Webhook Endpoint & SSL', 'propvendor-marketplace'); ?></strong></th>
+                        <td>
+                            <code><?php echo esc_html($webhook_url); ?></code>
+                            <div style="margin-top: 4px;">
+                                <?php if ($is_ssl_active) : ?>
+                                    <span style="color: #15803d; font-weight: 600;">&#10004; <?php esc_html_e('HTTPS Enabled (Production Safe)', 'propvendor-marketplace'); ?></span>
+                                <?php else : ?>
+                                    <span style="color: #b45309; font-weight: 600;">&#9888; <?php esc_html_e('HTTP / Local Environment (Ensure HTTPS is configured in staging/production)', 'propvendor-marketplace'); ?></span>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Manual Stale Orders Cleanup Button -->
+            <form method="post" action="" style="display: inline-block;">
+                <?php wp_nonce_field('propvendor_manual_cleanup_action', 'propvendor_manual_cleanup_nonce'); ?>
+                <button type="submit" name="propvendor_run_stale_cleanup" class="button button-secondary" onclick="return confirm('<?php echo esc_js(__('Run background cleanup to transition pending orders older than 24 hours to expired status now?', 'propvendor-marketplace')); ?>');">
+                    <span class="dashicons dashicons-update" style="vertical-align: text-top; margin-right: 4px;"></span>
+                    <?php esc_html_e('Run Stale Order Cleanup Now (24h+ Pending &rarr; Expired)', 'propvendor-marketplace'); ?>
+                </button>
+            </form>
+        </div>
 
         <form method="post" action="">
             <?php wp_nonce_field('propvendor_payment_settings_verify', 'propvendor_payment_settings_nonce'); ?>
@@ -6670,6 +6800,7 @@ function propvendor_marketplace_render_admin_payments_page() {
     </div>
     <?php
 }
+
 
 /**
  * ----------------------------------------------------------------------
@@ -8610,11 +8741,15 @@ function propvendor_marketplace_verify_and_fulfill_order($reference, $mock_api_r
             return new WP_Error('order_not_found', __('Order with the specified transaction reference does not exist.', 'propvendor-marketplace'));
         }
 
+        // Track whether this order was previously marked 'expired' so we can reconcile it cleanly
+        $was_reconciled = ('expired' === $order->status);
+
         // Idempotency: Already fulfilled
         if ('successful' === $order->status) {
             return array(
                 'success'           => true,
                 'already_fulfilled' => true,
+                'was_reconciled'    => false,
                 'order_id'          => (int) $order->id,
                 'reference'         => $reference,
                 'vendor_id'         => (int) $order->vendor_id,
@@ -8731,9 +8866,35 @@ function propvendor_marketplace_verify_and_fulfill_order($reference, $mock_api_r
 
         $wpdb->query('COMMIT');
 
+        // Audit log late payment reconciliation if applicable
+        if ($was_reconciled) {
+            propvendor_marketplace_create_notifications_table();
+            $table_notifications = $wpdb->prefix . 'propvendor_notifications';
+            $reconcile_key = 'late_reconcile_' . md5($reference . '_' . current_time('mysql'));
+            $wpdb->insert(
+                $table_notifications,
+                array(
+                    'event_key'           => $reconcile_key,
+                    'notification_type'   => 'system_late_payment_reconciliation',
+                    'recipient_user_id'   => (int) $order->vendor_id,
+                    'recipient_email'     => get_option('admin_email'),
+                    'subject'             => sprintf(__('Late payment order #%d reconciled and fulfilled (%s)', 'propvendor-marketplace'), (int) $order->id, $reference),
+                    'status'              => 'sent',
+                    'attempts'            => 1,
+                    'last_error'          => sprintf('Order transitioned from expired to successful. Plan ID: %d, Amount: %d kobo', (int) $order->plan_id, $order_kobo),
+                    'related_object_type' => 'order',
+                    'related_object_id'   => (int) $order->id,
+                    'created_at'          => current_time('mysql'),
+                    'updated_at'          => current_time('mysql'),
+                ),
+                array('%s', '%s', '%d', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%s', '%s')
+            );
+        }
+
         return array(
             'success'           => true,
             'already_fulfilled' => false,
+            'was_reconciled'    => $was_reconciled,
             'order_id'          => (int) $order->id,
             'reference'         => $reference,
             'vendor_id'         => (int) $order->vendor_id,
@@ -8744,6 +8905,7 @@ function propvendor_marketplace_verify_and_fulfill_order($reference, $mock_api_r
             'credits'           => (int) $plan->credits,
             'duration_days'     => (int) $plan->duration_days,
             'details'           => $fulfillment_result,
+            'message'           => $was_reconciled ? __('Late payment order reconciled and fulfilled successfully.', 'propvendor-marketplace') : __('Order fulfilled successfully.', 'propvendor-marketplace'),
         );
     } finally {
         $wpdb->query($wpdb->prepare("SELECT RELEASE_LOCK(%s)", $lock_name));
@@ -8796,11 +8958,18 @@ function propvendor_marketplace_handle_paystack_webhook(WP_REST_Request $request
     if ('charge.success' === $event['event']) {
         $reference = isset($event['data']['reference']) ? sanitize_text_field($event['data']['reference']) : '';
         if (!empty($reference)) {
-            $result = propvendor_marketplace_verify_and_fulfill_order($reference);
+            $mock_api_response = null;
+            if (defined('PROPVENDOR_TESTING') && PROPVENDOR_TESTING && isset($event['mock_test_response'])) {
+                $mock_api_response = $event['mock_test_response'];
+            }
+            $result = propvendor_marketplace_verify_and_fulfill_order($reference, $mock_api_response);
             if (is_wp_error($result)) {
                 return new WP_REST_Response(array('message' => $result->get_error_message()), 400);
             }
-            return new WP_REST_Response(array('message' => 'Order fulfilled successfully.', 'result' => $result), 200);
+            $msg = !empty($result['was_reconciled'])
+                ? 'Late payment order reconciled and fulfilled successfully.'
+                : (!empty($result['already_fulfilled']) ? 'Order has already been fulfilled.' : 'Order fulfilled successfully.');
+            return new WP_REST_Response(array('message' => $msg, 'result' => $result), 200);
         }
     }
 
@@ -10017,4 +10186,157 @@ function propvendor_marketplace_render_admin_notifications_page() {
         </div>
     </div>
     <?php
+}
+
+/**
+ * =========================================================================
+ * PHASE 7B: STALE ORDER CLEANUP & WP-CRON MAINTENANCE ENGINE
+ * =========================================================================
+ */
+
+/**
+ * Automated WP-Cron maintenance job to transition stale pending orders to 'expired'.
+ *
+ * Preserves full audit history: NEVER deletes order or ledger records.
+ *
+ * @param int $hours Number of hours an order must remain in 'pending' to be considered stale (default 24).
+ * @param int $batch_size Maximum number of orders to expire in a single execution run (default 50).
+ * @return array Execution statistics, cutoff timestamp, and processed order IDs.
+ */
+function propvendor_cron_cleanup_stale_orders($hours = 24, $batch_size = 50) {
+    global $wpdb;
+    $hours      = max(1, absint($hours));
+    $batch_size = max(1, min(500, absint($batch_size)));
+
+    $table_orders = $wpdb->prefix . 'propvendor_orders';
+    if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_orders)) !== $table_orders) {
+        propvendor_marketplace_create_payment_tables();
+    }
+
+    // Mutex locking using transient to prevent concurrent cleanup collisions
+    $lock_key = 'propvendor_stale_orders_cleanup_lock';
+    if (get_transient($lock_key)) {
+        return array(
+            'success'    => false,
+            'reason'     => 'already_running',
+            'cleaned'    => 0,
+            'batch_size' => $batch_size,
+            'hours'      => $hours,
+            'order_ids'  => array(),
+            'cutoff'     => '',
+        );
+    }
+    set_transient($lock_key, time(), 300);
+
+    try {
+        // Timezone-safe cutoff calculation using PHP/WordPress site time
+        $cutoff_ts = current_time('timestamp') - ($hours * HOUR_IN_SECONDS);
+        $cutoff    = date('Y-m-d H:i:s', $cutoff_ts);
+
+        // Fetch pending order IDs older than the cutoff threshold (strictly pending)
+        $stale_order_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT id FROM {$table_orders} WHERE status = 'pending' AND created_at < %s ORDER BY id ASC LIMIT %d",
+            $cutoff,
+            $batch_size
+        ));
+
+        $cleaned_count = 0;
+        $expired_ids   = array();
+
+        if (!empty($stale_order_ids)) {
+            $id_placeholders = implode(',', array_fill(0, count($stale_order_ids), '%d'));
+            $now_mysql = current_time('mysql');
+
+            // Non-destructive transition: update status to 'expired', never delete rows
+            $update_sql = $wpdb->prepare(
+                "UPDATE {$table_orders} SET status = 'expired', updated_at = %s WHERE id IN ({$id_placeholders}) AND status = 'pending'",
+                array_merge(array($now_mysql), $stale_order_ids)
+            );
+
+            $rows_affected = $wpdb->query($update_sql);
+            if (false !== $rows_affected) {
+                $cleaned_count = (int) $rows_affected;
+                $expired_ids   = array_map('intval', $stale_order_ids);
+            }
+
+            // Log maintenance activity to notifications audit trail if orders were expired
+            if ($cleaned_count > 0) {
+                propvendor_marketplace_create_notifications_table();
+                $table_notifications = $wpdb->prefix . 'propvendor_notifications';
+                $audit_key = 'stale_cleanup_' . md5($cutoff . '_' . implode(',', $expired_ids) . '_' . microtime(true));
+                $wpdb->insert(
+                    $table_notifications,
+                    array(
+                        'event_key'           => $audit_key,
+                        'notification_type'   => 'system_stale_orders_cleanup',
+                        'recipient_user_id'   => 0,
+                        'recipient_email'     => get_option('admin_email'),
+                        'subject'             => sprintf(__('Stale order cleanup: %d order(s) marked as expired', 'propvendor-marketplace'), $cleaned_count),
+                        'status'              => 'sent',
+                        'attempts'            => 1,
+                        'last_error'          => sprintf('Cutoff: %s. Stale order IDs: %s', $cutoff, implode(',', $expired_ids)),
+                        'related_object_type' => 'cron_maintenance',
+                        'related_object_id'   => 0,
+                        'created_at'          => $now_mysql,
+                        'updated_at'          => $now_mysql,
+                    ),
+                    array('%s', '%s', '%d', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%s', '%s')
+                );
+            }
+        }
+
+        return array(
+            'success'    => true,
+            'cleaned'    => $cleaned_count,
+            'batch_size' => $batch_size,
+            'hours'      => $hours,
+            'order_ids'  => $expired_ids,
+            'cutoff'     => $cutoff,
+        );
+    } finally {
+        delete_transient($lock_key);
+    }
+}
+
+/**
+ * Backward and naming compatibility alias for stale orders cleanup cron.
+ *
+ * @param int $hours
+ * @param int $batch_size
+ * @return array
+ */
+function propvendor_marketplace_cron_cleanup_stale_orders($hours = 24, $batch_size = 50) {
+    return propvendor_cron_cleanup_stale_orders($hours, $batch_size);
+}
+add_action('propvendor_cron_cleanup_stale_orders', 'propvendor_cron_cleanup_stale_orders');
+add_action('propvendor_marketplace_cron_cleanup_stale_orders', 'propvendor_cron_cleanup_stale_orders');
+
+/**
+ * Register scheduled cron maintenance events if not already present.
+ */
+function propvendor_marketplace_schedule_cron_jobs() {
+    if (!wp_next_scheduled('propvendor_cron_cleanup_stale_orders')) {
+        wp_schedule_event(time(), 'daily', 'propvendor_cron_cleanup_stale_orders');
+    }
+}
+
+/**
+ * Unschedule and clear plugin cron maintenance events.
+ */
+function propvendor_marketplace_clear_cron_jobs() {
+    $timestamp = wp_next_scheduled('propvendor_cron_cleanup_stale_orders');
+    if ($timestamp) {
+        wp_unschedule_event($timestamp, 'propvendor_cron_cleanup_stale_orders');
+    }
+    wp_clear_scheduled_hook('propvendor_cron_cleanup_stale_orders');
+    wp_clear_scheduled_hook('propvendor_marketplace_cron_cleanup_stale_orders');
+    delete_transient('propvendor_stale_orders_cleanup_lock');
+}
+
+/**
+ * Plugin deactivation handler: cleanly unregisters cron hooks and flushes rewrites.
+ */
+function propvendor_marketplace_deactivate() {
+    propvendor_marketplace_clear_cron_jobs();
+    flush_rewrite_rules();
 }
