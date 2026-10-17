@@ -2104,11 +2104,13 @@ function propvendor_marketplace_render_listing_details($content) {
 add_filter('the_content', 'propvendor_marketplace_render_listing_details', 20);
 
 function propvendor_marketplace_home_shortcode() {
+    global $post;
+    $output = '';
+    // If [propvendor_hero_search] is explicitly in post_content, don't duplicate it here
+    if (!$post || strpos($post->post_content, '[propvendor_hero_search]') === false) {
+        $output .= propvendor_marketplace_hero_search_shortcode();
+    }
     $featured = propvendor_marketplace_listings_query(4);
-    $output = '<section class="propvendor-hero">';
-    $output .= '<div class="propvendor-hero-copy"><span class="propvendor-tag">Nigerian marketplace</span><h1>Find Properties and Rental Opportunities Across Nigeria</h1><p>Explore property sales, rentals, land listings and vehicle offers in one place. Compare options, connect with vendors and make informed decisions.</p><div class="propvendor-actions"><a class="propvendor-btn primary" href="/Propvendor/browse-listings/">Explore Listings</a><a class="propvendor-btn secondary" href="/Propvendor/vendor-registration/">Become a Vendor</a></div></div>';
-    $output .= '<div class="propvendor-hero-panel"><h3>Quick search</h3><ul><li>Houses & apartments</li><li>Land & plots</li><li>Cars & vehicles</li><li>Rental opportunities</li></ul></div>';
-    $output .= '</section>';
     $output .= propvendor_marketplace_render_listing_cards($featured, 'Featured listings');
     $output .= '<section class="propvendor-info-grid"><div><h3>How it works</h3><p>Browse by category or location, compare vendor details and request a viewing or enquiry.</p></div><div><h3>Vendor moderation</h3><p>Each listing should be reviewed before publication to improve trust and reduce fraud risk.</p></div><div><h3>Trust & safety</h3><p>Document verification, contact transparency and clear transaction terms help protect buyers and sellers.</p></div></section>';
     return $output;
@@ -10372,34 +10374,43 @@ function propvendor_marketplace_deactivate() {
 }
 
 // ======================================================================
-// TASK 1: HOMEPAGE HERO BANNER & PILL SEARCH SHORTCODE
+// PHASE 8A — TASK 2: HOMEPAGE HERO BANNER & PILL SEARCH SHORTCODE
 // ======================================================================
 add_shortcode('propvendor_hero_search', 'propvendor_marketplace_hero_search_shortcode');
-function propvendor_marketplace_hero_search_shortcode($atts) {
+function propvendor_marketplace_hero_search_shortcode($atts = array()) {
     ob_start();
     $states = function_exists('propvendor_marketplace_get_nigerian_states') ? propvendor_marketplace_get_nigerian_states() : array();
     $action_url = esc_url(home_url('/browse-listings/'));
     ?>
-    <div class="propvendor-hero">
+    <section class="propvendor-hero" aria-label="Marketplace Hero Search">
+        <div class="propvendor-hero-slides" aria-hidden="true">
+            <!-- Slide 1: Modern Real Estate -->
+            <div class="propvendor-slide active" style="background-image: url('https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1920&q=80');"></div>
+            <!-- Slide 2: Verified Vehicles -->
+            <div class="propvendor-slide" style="background-image: url('https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1920&q=80');"></div>
+            <!-- Slide 3: Surveyed Land & Commercial Plots -->
+            <div class="propvendor-slide" style="background-image: url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1920&q=80');"></div>
+        </div>
         <div class="propvendor-hero-overlay"></div>
         <div class="propvendor-hero-content">
-            <div class="propvendor-hero-badge">NIGERIA'S TRUSTED VERIFIED MARKETPLACE</div>
+            <span class="propvendor-hero-badge">NIGERIA'S TRUSTED VERIFIED MARKETPLACE</span>
             <h1 class="propvendor-hero-title">Find the perfect place to <span class="highlight">call home</span></h1>
             <p class="propvendor-hero-subtitle">Discover thousands of verified properties, land, and vehicles across all 37 Nigerian states.</p>
 
+            <!-- Floating Pill Search Form submitting GET to /browse-listings/ -->
             <div class="propvendor-pill-search-container">
-                <form action="<?php echo $action_url; ?>" method="GET" class="propvendor-pill-search" id="propvendor-hero-search-form">
+                <form action="<?php echo $action_url; ?>" method="GET" class="propvendor-pill-search" id="propvendor-hero-search-form" role="search">
                     <div class="search-field category-field">
-                        <select name="pv_type" aria-label="Category">
+                        <select name="pv_type" aria-label="Listing Category">
                             <option value="">All Categories</option>
-                            <option value="property_listing">Property</option>
-                            <option value="land_listing">Land</option>
-                            <option value="vehicle_listing">Vehicle</option>
+                            <option value="property_listing">Property (Rent & Sale)</option>
+                            <option value="land_listing">Land & Plots</option>
+                            <option value="vehicle_listing">Cars & Vehicles</option>
                         </select>
                     </div>
                     <div class="search-divider"></div>
                     <div class="search-field state-field">
-                        <select name="pv_state" aria-label="State">
+                        <select name="pv_state" aria-label="Nigerian State">
                             <option value="">All States</option>
                             <?php foreach ($states as $state): ?>
                                 <option value="<?php echo esc_attr($state); ?>"><?php echo esc_html($state); ?></option>
@@ -10408,38 +10419,59 @@ function propvendor_marketplace_hero_search_shortcode($atts) {
                     </div>
                     <div class="search-divider"></div>
                     <div class="search-field keyword-field">
-                        <svg class="search-icon-input" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                        <input type="text" name="pv_keyword" placeholder="Enter city, state, or area..." aria-label="Keyword">
+                        <svg class="search-icon-input" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        <input type="text" name="pv_keyword" placeholder="Enter city, state, or area..." aria-label="Search Keyword">
                     </div>
-                    <button type="submit" class="search-submit-btn">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                        Search
+                    <button type="submit" class="search-submit-btn" aria-label="Search Marketplace">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        <span>Search</span>
                     </button>
                 </form>
             </div>
 
             <div class="propvendor-trust-badges">
-                <span class="trust-dot"></span> Always 100% FREE to browse &bull; Zero advance-fee inspection policy &bull; LASRERA / REDAN verified
+                <span class="trust-dot"></span> Always 100% FREE to browse &bull; Zero advance-fee inspection policy &bull; LASRERA & REDAN verified
             </div>
         </div>
-    </div>
+    </section>
     <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        var heroForm = document.getElementById('propvendor-hero-search-form');
-        if (heroForm) {
-            heroForm.addEventListener('submit', function(e) {
-                var inputs = heroForm.querySelectorAll('select, input');
-                inputs.forEach(function(input) {
-                    if (!input.value.trim()) {
-                        input.disabled = true;
-                    }
+    (function() {
+        function initHero() {
+            var slides = document.querySelectorAll('.propvendor-hero .propvendor-slide');
+            if (slides.length > 1) {
+                var currentSlide = 0;
+                var mediaQuery = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+                if (!mediaQuery || !mediaQuery.matches) {
+                    setInterval(function() {
+                        slides[currentSlide].classList.remove('active');
+                        currentSlide = (currentSlide + 1) % slides.length;
+                        slides[currentSlide].classList.add('active');
+                    }, 5500);
+                }
+            }
+
+            var heroForm = document.getElementById('propvendor-hero-search-form');
+            if (heroForm) {
+                heroForm.addEventListener('submit', function() {
+                    var inputs = heroForm.querySelectorAll('select, input');
+                    inputs.forEach(function(input) {
+                        if (!input.value.trim()) {
+                            input.disabled = true;
+                        }
+                    });
+                    setTimeout(function() {
+                        inputs.forEach(function(input) { input.disabled = false; });
+                    }, 500);
                 });
-                setTimeout(function() {
-                    inputs.forEach(function(input) { input.disabled = false; });
-                }, 50);
-            });
+            }
         }
-    });
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initHero);
+        } else {
+            initHero();
+        }
+    })();
     </script>
     <?php
     return ob_get_clean();
