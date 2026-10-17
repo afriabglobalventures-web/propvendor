@@ -2914,11 +2914,11 @@ body.home .ast-archive-description {
    ====================================================================== */
 .propvendor-hero {
     position: relative;
-    min-height: 540px;
+    min-height: 600px;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 60px 20px;
+    padding: 130px 20px 70px;
     margin: 0;
     overflow: hidden;
     background-color: #0a192f;
@@ -3141,7 +3141,7 @@ body.home .ast-archive-description {
 @media (max-width: 768px) {
     .propvendor-hero {
         min-height: auto;
-        padding: 50px 16px;
+        padding: 105px 16px 50px;
     }
     .propvendor-hero-title {
         font-size: 2rem;
@@ -3247,6 +3247,26 @@ body.home .ast-archive-description {
         box-shadow: 0 3px 6px -1px rgba(13, 148, 136, 0.3) !important;
         transform: translateY(-1px);
     }
+
+    /* Standard navigation link hover & active states (non-home pages) */
+    body:not(.home) .site-header-primary-section-right .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a {
+        color: #334155 !important;
+        border-radius: 6px;
+        transition: all 0.2s ease-in-out !important;
+    }
+
+    body:not(.home) .site-header-primary-section-right .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a:hover,
+    body:not(.home) .site-header-primary-section-right .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta).focus > a {
+        color: #0d9488 !important;
+        background-color: rgba(13, 148, 136, 0.08) !important;
+    }
+
+    body:not(.home) .site-header-primary-section-right .main-navigation .main-header-menu > .menu-item.current-menu-item:not(.propvendor-nav-cta) > a,
+    body:not(.home) .site-header-primary-section-right .main-navigation .main-header-menu > .menu-item.current_page_item:not(.propvendor-nav-cta) > a {
+        color: #0d9488 !important;
+        font-weight: 600 !important;
+        background-color: rgba(13, 148, 136, 0.08) !important;
+    }
 }
 
 /* Mobile off-canvas / dropdown styling */
@@ -3254,5 +3274,690 @@ body.home .ast-archive-description {
     #ast-hf-mobile-menu .menu-item.propvendor-nav-cta > a {
         color: #0d9488 !important;
         font-weight: 600 !important;
+    }
+}
+
+/* ======================================================================
+   PHASE 8A — TASK 1: HOMEPAGE TRANSPARENT HEADER INTEGRATION
+   ====================================================================== */
+.home #masthead.site-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 99;
+    background: transparent !important;
+    background-color: transparent !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+.home #masthead .ast-desktop-header,
+.home #masthead .ast-main-header-wrap,
+.home #masthead .main-header-bar-wrap,
+.home #masthead .ast-primary-header-bar,
+.home #masthead .main-header-bar,
+.home #masthead .site-primary-header-wrap {
+    background: transparent !important;
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Front page site title / branding in white with teal hover */
+.home .site-branding .site-title a,
+.home .site-title a {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    transition: color 0.2s ease;
+}
+
+.home .site-branding .site-title a:hover,
+.home .site-title a:hover {
+    color: #14b8a6 !important;
+}
+
+/* Front page desktop navigation links in crisp white */
+.home .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a {
+    color: rgba(255, 255, 255, 0.9) !important;
+    background: transparent !important;
+    transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.home .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a:hover,
+.home .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta).focus > a {
+    color: #ffffff !important;
+    background: rgba(255, 255, 255, 0.12) !important;
+    border-radius: 6px;
+}
+
+.home .main-navigation .main-header-menu > .menu-item.current-menu-item:not(.propvendor-nav-cta) > a,
+.home .main-navigation .main-header-menu > .menu-item.current_page_item:not(.propvendor-nav-cta) > a {
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-radius: 6px;
+}
+
+/* Front page mobile menu trigger icon in crisp white */
+.home .menu-toggle .mobile-menu-toggle-icon svg {
+    fill: #ffffff !important;
+    color: #ffffff !important;
+}
+
+.home #ast-mobile-header .site-branding .site-title a {
+    color: #ffffff !important;
+}
+
+/* Ensure mobile off-canvas drawer maintains dark readable links on light drawer background */
+.ast-mobile-header-content .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a {
+    color: #334155 !important;
+}
+
+.ast-mobile-header-content .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a:hover {
+    color: #0d9488 !important;
+}
+
+/* ======================================================================
+   PHASE 8A — TASK 2: BROWSE LISTINGS COMPACT DARK HERO BANNER
+   ====================================================================== */
+.propvendor-browse-hero {
+    position: relative;
+    background: #0a192f url('https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1920&q=80') center center / cover no-repeat;
+    padding: 50px 24px 75px;
+    margin-bottom: -35px;
+    border-radius: 12px;
+    overflow: hidden;
+    color: #ffffff;
+    text-align: center;
+}
+
+/* Full-width breakout for Astra container */
+.alignfull .propvendor-browse-hero,
+.ast-container .propvendor-browse-hero,
+.entry-content .propvendor-browse-hero {
+    width: 100vw;
+    position: relative;
+    left: 50%;
+    right: 50%;
+    margin-left: -50vw;
+    margin-right: -50vw;
+    border-radius: 0;
+    margin-bottom: -40px;
+    padding: 55px 20px 80px;
+}
+
+.propvendor-browse-hero-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(10, 25, 47, 0.95) 0%, rgba(15, 23, 42, 0.90) 100%);
+    z-index: 1;
+}
+
+.propvendor-browse-hero-content {
+    position: relative;
+    z-index: 2;
+    max-width: 860px;
+    margin: 0 auto;
+}
+
+.propvendor-browse-breadcrumb {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 12px;
+}
+
+.propvendor-browse-breadcrumb a {
+    color: rgba(255, 255, 255, 0.85);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.propvendor-browse-breadcrumb a:hover {
+    color: #14b8a6;
+}
+
+.propvendor-browse-breadcrumb .breadcrumb-sep {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.propvendor-browse-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50px;
+    padding: 5px 16px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 16px;
+}
+
+.propvendor-browse-hero-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 10px;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+}
+
+.propvendor-browse-hero-subtitle {
+    font-size: 1.05rem;
+    color: rgba(255, 255, 255, 0.88);
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* Overlap filter card over browse hero */
+.propvendor-browse .propvendor-search-card {
+    position: relative;
+    z-index: 3;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+}
+
+@media (max-width: 768px) {
+    .propvendor-browse-hero,
+    .alignfull .propvendor-browse-hero,
+    .ast-container .propvendor-browse-hero,
+    .entry-content .propvendor-browse-hero {
+        padding: 40px 16px 65px;
+        margin-bottom: -30px;
+    }
+    .propvendor-browse-hero-title {
+        font-size: 1.75rem;
+    }
+    .propvendor-browse-hero-subtitle {
+        font-size: 0.95rem;
+    }
+}
+
+/* ======================================================================
+   PHASE 8B — CATEGORY NAVIGATION GRID & FEATURED LISTINGS CAROUSEL
+   ====================================================================== */
+
+/* Section headers (shared) */
+.propvendor-section-header {
+    text-align: center;
+    margin-bottom: 2.25rem;
+}
+
+.propvendor-section-badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #0d9488;
+    background: rgba(13, 148, 136, 0.1);
+    padding: 0.35rem 0.85rem;
+    border-radius: 999px;
+    margin-bottom: 0.75rem;
+}
+
+.propvendor-section-title {
+    font-size: 2.15rem;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+    margin: 0 0 0.5rem;
+    line-height: 1.25;
+}
+
+.propvendor-section-subtitle {
+    font-size: 1rem;
+    color: #64748b;
+    max-width: 640px;
+    margin: 0 auto;
+    line-height: 1.55;
+}
+
+/* 1. Category Navigation Grid Section */
+.propvendor-category-section {
+    padding: 4.5rem 0 3.5rem;
+    background: #ffffff;
+}
+
+.propvendor-category-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.propvendor-category-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+}
+
+.propvendor-category-card {
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    overflow: hidden;
+    text-decoration: none !important;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+}
+
+.propvendor-category-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 16px 30px -6px rgba(15, 23, 42, 0.12);
+    border-color: #0d9488;
+}
+
+.propvendor-category-card:focus-visible {
+    outline: 2px solid #0d9488;
+    outline-offset: 3px;
+}
+
+.category-card-media {
+    height: 180px;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 1rem;
+}
+
+.category-card-media::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.2) 0%, rgba(15, 23, 42, 0.6) 100%);
+    transition: opacity 0.3s ease;
+}
+
+.propvendor-category-card:hover .category-card-media::before {
+    opacity: 0.8;
+}
+
+.category-tag {
+    position: relative;
+    z-index: 2;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(4px);
+    color: #ffffff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.3rem 0.65rem;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.category-card-body {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.category-card-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 0.5rem 0;
+    line-height: 1.3;
+    transition: color 0.2s ease;
+}
+
+.propvendor-category-card:hover .category-card-title {
+    color: #0d9488;
+}
+
+.category-card-desc {
+    font-size: 0.875rem;
+    color: #64748b;
+    line-height: 1.5;
+    margin: 0 0 1rem 0;
+    flex-grow: 1;
+}
+
+.category-card-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #0d9488;
+    transition: gap 0.2s ease, color 0.2s ease;
+}
+
+.propvendor-category-card:hover .category-card-link {
+    gap: 0.65rem;
+    color: #0f766e;
+}
+
+/* 2. Featured Listings Section */
+.propvendor-featured-section {
+    padding: 4.5rem 0;
+    background: #f8fafc;
+    border-top: 1px solid #eef2f7;
+    border-bottom: 1px solid #eef2f7;
+}
+
+.propvendor-featured-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.propvendor-featured-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 2rem;
+    text-align: left;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.propvendor-featured-header .header-left {
+    max-width: 680px;
+}
+
+.propvendor-featured-header .propvendor-section-title {
+    margin-bottom: 0.4rem;
+}
+
+.propvendor-featured-header .propvendor-section-subtitle {
+    margin: 0;
+}
+
+.propvendor-featured-view-all .view-all-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 600;
+    font-size: 0.92rem;
+    color: #0d9488;
+    text-decoration: none;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    border: 1px solid rgba(13, 148, 136, 0.25);
+    background: #ffffff;
+    transition: all 0.2s ease;
+}
+
+.propvendor-featured-view-all .view-all-link:hover {
+    background: #0d9488;
+    color: #ffffff;
+    border-color: #0d9488;
+}
+
+.propvendor-carousel-controls {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.propvendor-carousel-controls .carousel-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #1e293b;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.propvendor-carousel-controls .carousel-btn:hover:not(:disabled) {
+    background: #0d9488;
+    color: #ffffff;
+    border-color: #0d9488;
+}
+
+.propvendor-carousel-controls .carousel-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    background: #f1f5f9;
+    color: #94a3b8;
+    border-color: #e2e8f0;
+}
+
+/* Featured Listings Cards & Carousel Track */
+.propvendor-carousel-track.is-carousel {
+    display: flex;
+    gap: 1.5rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.5rem 0.25rem 1.5rem;
+    margin: 0;
+    scrollbar-width: none;
+}
+
+.propvendor-carousel-track.is-carousel::-webkit-scrollbar {
+    display: none;
+}
+
+.propvendor-carousel-track.is-carousel:focus-visible {
+    outline: 2px solid #0d9488;
+    outline-offset: 4px;
+    border-radius: 8px;
+}
+
+.propvendor-carousel-track.is-carousel > .propvendor-card {
+    flex: 0 0 320px;
+    max-width: 340px;
+    scroll-snap-align: start;
+}
+
+.propvendor-featured-static {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.5rem;
+    margin: 0;
+}
+
+.propvendor-featured-section .propvendor-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.propvendor-featured-section .propvendor-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 14px 28px -4px rgba(15, 23, 42, 0.1);
+    border-color: #cbd5e1;
+}
+
+.propvendor-featured-section .propvendor-card .propvendor-card-image-link {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    background: #f1f5f9;
+    position: relative;
+}
+
+.propvendor-featured-section .propvendor-card .propvendor-card-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.4s ease;
+}
+
+.propvendor-featured-section .propvendor-card:hover .propvendor-card-image {
+    transform: scale(1.05);
+}
+
+.propvendor-featured-section .propvendor-card .propvendor-card-image-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f1f5f9;
+    color: #64748b;
+    height: 100%;
+    text-decoration: none;
+}
+
+.propvendor-featured-section .propvendor-card .propvendor-badge {
+    margin: 1rem 1rem 0.35rem 1rem;
+    align-self: flex-start;
+}
+
+.propvendor-featured-section .propvendor-card .propvendor-card-category {
+    margin: 0.2rem 1rem;
+    font-size: 0.8rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.propvendor-featured-section .propvendor-card h3 {
+    margin: 0.35rem 1rem 0.5rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.35;
+}
+
+.propvendor-featured-section .propvendor-card h3 a {
+    color: #0f172a;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.propvendor-featured-section .propvendor-card h3 a:hover {
+    color: #0d9488;
+}
+
+.propvendor-featured-section .propvendor-card .propvendor-meta {
+    margin: 0 1rem 0.5rem;
+    font-size: 0.88rem;
+    color: #64748b;
+}
+
+.propvendor-featured-section .propvendor-card .propvendor-price {
+    margin: auto 1rem 0.85rem;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #0a8a4f;
+}
+
+.propvendor-featured-section .propvendor-card .propvendor-card-view {
+    margin: 0 1rem 1.25rem;
+    display: block;
+    text-align: center;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 0.55rem 1rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #1e293b;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.propvendor-featured-section .propvendor-card .propvendor-card-view:hover {
+    background: #0d9488;
+    color: #ffffff;
+    border-color: #0d9488;
+}
+
+/* Empty State */
+.propvendor-featured-empty {
+    text-align: center;
+    padding: 3.5rem 1.5rem;
+    background: #ffffff;
+    border: 1px dashed #cbd5e1;
+    border-radius: 14px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.propvendor-featured-empty .empty-icon {
+    font-size: 2.5rem;
+    color: #94a3b8;
+    margin-bottom: 1rem;
+}
+
+.propvendor-featured-empty h3 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 0.5rem;
+}
+
+.propvendor-featured-empty p {
+    font-size: 0.95rem;
+    color: #64748b;
+    margin-bottom: 1.5rem;
+    line-height: 1.5;
+}
+
+.propvendor-btn-browse {
+    display: inline-block;
+    background: #0d9488;
+    color: #ffffff;
+    font-weight: 600;
+    padding: 0.7rem 1.5rem;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: background-color 0.2s ease;
+}
+
+.propvendor-btn-browse:hover {
+    background: #0f766e;
+    color: #ffffff;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+    .propvendor-category-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .propvendor-category-section,
+    .propvendor-featured-section {
+        padding: 3rem 0;
+    }
+    .propvendor-section-title {
+        font-size: 1.75rem;
+    }
+    .propvendor-featured-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+@media (max-width: 576px) {
+    .propvendor-category-grid {
+        grid-template-columns: 1fr;
+    }
+    .propvendor-carousel-track.is-carousel > .propvendor-card {
+        flex: 0 0 280px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .propvendor-category-card,
+    .propvendor-featured-section .propvendor-card,
+    .propvendor-featured-section .propvendor-card .propvendor-card-image,
+    .propvendor-carousel-track {
+        transition: none !important;
+        scroll-behavior: auto !important;
+        transform: none !important;
     }
 }

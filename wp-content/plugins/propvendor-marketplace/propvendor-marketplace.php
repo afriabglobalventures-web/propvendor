@@ -2103,6 +2103,243 @@ function propvendor_marketplace_render_listing_details($content) {
 }
 add_filter('the_content', 'propvendor_marketplace_render_listing_details', 20);
 
+/**
+ * Phase 8B: Homepage Category Navigation Grid Shortcode.
+ *
+ * @param array $atts
+ * @return string HTML
+ */
+function propvendor_marketplace_category_grid_shortcode($atts = array()) {
+    ob_start();
+    ?>
+    <section class="propvendor-category-section" aria-label="<?php esc_attr_e('Marketplace Categories', 'propvendor-marketplace'); ?>">
+        <div class="propvendor-category-container">
+            <div class="propvendor-section-header">
+                <span class="propvendor-section-badge"><?php esc_html_e('POPULAR CATEGORIES', 'propvendor-marketplace'); ?></span>
+                <h2 class="propvendor-section-title"><?php esc_html_e('Explore by Category', 'propvendor-marketplace'); ?></h2>
+                <p class="propvendor-section-subtitle"><?php esc_html_e('Find verified homes, commercial plots, and inspected vehicles with authentic documentation across Nigeria.', 'propvendor-marketplace'); ?></p>
+            </div>
+            <div class="propvendor-category-grid">
+                <!-- 1. Residential Properties -->
+                <a href="<?php echo esc_url(home_url('/browse-listings/?pv_type=property_listing')); ?>" class="propvendor-category-card">
+                    <div class="category-card-media" style="background-image: url('https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=600&q=80');">
+                        <span class="category-tag"><?php esc_html_e('Verified Homes', 'propvendor-marketplace'); ?></span>
+                    </div>
+                    <div class="category-card-body">
+                        <h3 class="category-card-title"><?php esc_html_e('Residential Properties', 'propvendor-marketplace'); ?></h3>
+                        <p class="category-card-desc"><?php esc_html_e('Flats, duplexes, bungalows & luxury apartments for rent and sale.', 'propvendor-marketplace'); ?></p>
+                        <span class="category-card-link"><?php esc_html_e('Browse Properties', 'propvendor-marketplace'); ?> <span class="arrow" aria-hidden="true">&rarr;</span></span>
+                    </div>
+                </a>
+
+                <!-- 2. Land -->
+                <a href="<?php echo esc_url(home_url('/browse-listings/?pv_type=land_listing')); ?>" class="propvendor-category-card">
+                    <div class="category-card-media" style="background-image: url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=600&q=80');">
+                        <span class="category-tag"><?php esc_html_e('Titled Plots', 'propvendor-marketplace'); ?></span>
+                    </div>
+                    <div class="category-card-body">
+                        <h3 class="category-card-title"><?php esc_html_e('Land & Plots', 'propvendor-marketplace'); ?></h3>
+                        <p class="category-card-desc"><?php esc_html_e('Surveyed acreage with C of O, Gazette & Registered Conveyance.', 'propvendor-marketplace'); ?></p>
+                        <span class="category-card-link"><?php esc_html_e('Browse Land', 'propvendor-marketplace'); ?> <span class="arrow" aria-hidden="true">&rarr;</span></span>
+                    </div>
+                </a>
+
+                <!-- 3. Vehicles -->
+                <a href="<?php echo esc_url(home_url('/browse-listings/?pv_type=vehicle_listing')); ?>" class="propvendor-category-card">
+                    <div class="category-card-media" style="background-image: url('https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=600&q=80');">
+                        <span class="category-tag"><?php esc_html_e('Inspected Motors', 'propvendor-marketplace'); ?></span>
+                    </div>
+                    <div class="category-card-body">
+                        <h3 class="category-card-title"><?php esc_html_e('Cars & Vehicles', 'propvendor-marketplace'); ?></h3>
+                        <p class="category-card-desc"><?php esc_html_e('Verified sedans, SUVs, trucks & commercial fleet with duty papers.', 'propvendor-marketplace'); ?></p>
+                        <span class="category-card-link"><?php esc_html_e('Browse Vehicles', 'propvendor-marketplace'); ?> <span class="arrow" aria-hidden="true">&rarr;</span></span>
+                    </div>
+                </a>
+
+                <!-- 4. Commercial Properties -->
+                <a href="<?php echo esc_url(home_url('/browse-listings/?pv_type=property_listing&pv_property_subtype=Commercial+Space')); ?>" class="propvendor-category-card">
+                    <div class="category-card-media" style="background-image: url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=600&q=80');">
+                        <span class="category-tag"><?php esc_html_e('Business Hubs', 'propvendor-marketplace'); ?></span>
+                    </div>
+                    <div class="category-card-body">
+                        <h3 class="category-card-title"><?php esc_html_e('Commercial Properties', 'propvendor-marketplace'); ?></h3>
+                        <p class="category-card-desc"><?php esc_html_e('Office complexes, warehouses, shops & retail developments.', 'propvendor-marketplace'); ?></p>
+                        <span class="category-card-link"><?php esc_html_e('Browse Commercial', 'propvendor-marketplace'); ?> <span class="arrow" aria-hidden="true">&rarr;</span></span>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </section>
+    <?php
+    return ob_get_clean();
+}
+add_shortcode('propvendor_category_grid', 'propvendor_marketplace_category_grid_shortcode');
+
+/**
+ * Phase 8B: Render Featured Listings Carousel or Static Grid.
+ *
+ * @param array $listings Array of WP_Post objects.
+ * @param string $title Section header title.
+ * @return string HTML
+ */
+function propvendor_marketplace_render_featured_carousel($listings, $title = 'Featured Listings') {
+    $count = is_array($listings) ? count($listings) : 0;
+
+    // 1. Empty State
+    if ($count === 0) {
+        $output  = '<section class="propvendor-featured-section" aria-label="' . esc_attr($title) . '">';
+        $output .= '  <div class="propvendor-featured-container">';
+        $output .= '    <div class="propvendor-section-header">';
+        $output .= '      <span class="propvendor-section-badge">' . esc_html__('HANDPICKED MARKETPLACE DEALS', 'propvendor-marketplace') . '</span>';
+        $output .= '      <h2 class="propvendor-section-title">' . esc_html($title) . '</h2>';
+        $output .= '    </div>';
+        $output .= '    <div class="propvendor-featured-empty">';
+        $output .= '      <div class="empty-icon"><span class="dashicons dashicons-building"></span></div>';
+        $output .= '      <h3>' . esc_html__('No Featured Listings Available Yet', 'propvendor-marketplace') . '</h3>';
+        $output .= '      <p>' . esc_html__('Browse our verified marketplace to explore newly added homes, surveyed plots, and inspected vehicles across Nigeria.', 'propvendor-marketplace') . '</p>';
+        $output .= '      <a href="' . esc_url(home_url('/browse-listings/')) . '" class="propvendor-btn-browse">' . esc_html__('Browse All Listings', 'propvendor-marketplace') . ' &rarr;</a>';
+        $output .= '    </div>';
+        $output .= '  </div>';
+        $output .= '</section>';
+        return $output;
+    }
+
+    $is_carousel = ($count > 3);
+
+    $output  = '<section class="propvendor-featured-section" aria-label="' . esc_attr($title) . '">';
+    $output .= '  <div class="propvendor-featured-container">';
+    $output .= '    <div class="propvendor-section-header propvendor-featured-header">';
+    $output .= '      <div class="header-left">';
+    $output .= '        <span class="propvendor-section-badge">' . esc_html__('HANDPICKED MARKETPLACE DEALS', 'propvendor-marketplace') . '</span>';
+    $output .= '        <h2 class="propvendor-section-title">' . esc_html($title) . '</h2>';
+    $output .= '        <p class="propvendor-section-subtitle">' . esc_html__('Explore verified properties, titled plots, and inspected vehicles from vetted vendors.', 'propvendor-marketplace') . '</p>';
+    $output .= '      </div>';
+
+    if ($is_carousel) {
+        $output .= '      <div class="propvendor-carousel-controls">';
+        $output .= '        <button type="button" class="carousel-btn prev-btn" aria-label="' . esc_attr__('Previous featured listings', 'propvendor-marketplace') . '">';
+        $output .= '          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>';
+        $output .= '        </button>';
+        $output .= '        <button type="button" class="carousel-btn next-btn" aria-label="' . esc_attr__('Next featured listings', 'propvendor-marketplace') . '">';
+        $output .= '          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>';
+        $output .= '        </button>';
+        $output .= '      </div>';
+    } else {
+        $output .= '      <div class="propvendor-featured-view-all">';
+        $output .= '        <a href="' . esc_url(home_url('/browse-listings/')) . '" class="view-all-link">' . esc_html__('View All Listings', 'propvendor-marketplace') . ' &rarr;</a>';
+        $output .= '      </div>';
+    }
+
+    $output .= '    </div>';
+
+    // Track or Grid
+    $track_class = $is_carousel ? 'propvendor-carousel-track is-carousel' : 'propvendor-grid propvendor-featured-static';
+    $output .= '    <div class="' . esc_attr($track_class) . '" id="propvendor-featured-carousel" tabindex="0" role="region" aria-label="' . esc_attr__('Featured listings carousel', 'propvendor-marketplace') . '">';
+
+    foreach ($listings as $listing) {
+        $post_type = get_post_type($listing);
+        $type_label = array(
+            'property_listing' => 'Property',
+            'land_listing'     => 'Land',
+            'vehicle_listing'  => 'Vehicle',
+        );
+
+        $price = get_post_meta($listing->ID, 'propvendor_price', true);
+        $location = get_post_meta($listing->ID, 'propvendor_location', true);
+        $image = get_the_post_thumbnail($listing->ID, 'medium_large', array('class' => 'propvendor-card-image'));
+        $categories = get_the_terms($listing->ID, 'listing_category');
+        $category_labels = array();
+        if (is_array($categories)) {
+            foreach ($categories as $category) {
+                $category_labels[] = $category->name;
+            }
+        }
+
+        $is_direct_owner = get_post_meta($listing->ID, '_propvendor_is_direct_owner', true);
+        $direct_owner_status = get_post_meta($listing->ID, '_propvendor_direct_owner_status', true);
+
+        $output .= '<article class="propvendor-card">';
+        if ($image) {
+            $output .= '<a class="propvendor-card-image-link" href="' . esc_url(get_permalink($listing)) . '" aria-label="' . esc_attr(sprintf('View details for %s', get_the_title($listing))) . '">' . $image . '</a>';
+        } else {
+            $output .= '<a class="propvendor-card-image-link propvendor-card-image-placeholder" href="' . esc_url(get_permalink($listing)) . '" aria-label="' . esc_attr(sprintf('View details for %s', get_the_title($listing))) . '"><div class="placeholder-content"><span class="dashicons dashicons-building"></span><span>' . esc_html__('Verified Listing', 'propvendor-marketplace') . '</span></div></a>';
+        }
+        $output .= '<div class="propvendor-badge">' . esc_html($type_label[$post_type] ?? 'Listing') . '</div>';
+        if ('1' === (string) $is_direct_owner && 'approved' === (string) $direct_owner_status) {
+            $output .= '<div class="propvendor-badge propvendor-badge-direct-owner" style="background: #0a8a4f; color: #fff; font-weight: 600;">' . esc_html__('Direct from Owner — Zero Agent Fee', 'propvendor-marketplace') . '</div>';
+        }
+        if (!empty($category_labels)) {
+            $output .= '<p class="propvendor-card-category">' . esc_html(implode(', ', $category_labels)) . '</p>';
+        }
+        $output .= '<h3><a href="' . esc_url(get_permalink($listing)) . '">' . esc_html(get_the_title($listing)) . '</a></h3>';
+        $output .= '<p class="propvendor-meta">' . esc_html($location ?: 'Location not provided') . '</p>';
+        $output .= '<p class="propvendor-price">' . ( $price ? esc_html('₦ ' . number_format((float) $price, 2)) : esc_html('Price on request') ) . '</p>';
+        $output .= '<a class="propvendor-card-view" href="' . esc_url(get_permalink($listing)) . '">' . esc_html__('View Details', 'propvendor-marketplace') . '</a>';
+        $output .= '</article>';
+    }
+
+    $output .= '    </div>';
+
+    if ($is_carousel) {
+        $output .= '
+        <script>
+        (function() {
+            function initFeaturedCarousel() {
+                var track = document.getElementById("propvendor-featured-carousel");
+                var container = track ? track.closest(".propvendor-featured-section") : null;
+                if (!track || !container) return;
+
+                var prevBtn = container.querySelector(".carousel-btn.prev-btn");
+                var nextBtn = container.querySelector(".carousel-btn.next-btn");
+
+                function updateButtons() {
+                    if (!prevBtn || !nextBtn) return;
+                    prevBtn.disabled = track.scrollLeft <= 5;
+                    nextBtn.disabled = (track.scrollLeft + track.clientWidth) >= (track.scrollWidth - 5);
+                }
+
+                function getScrollAmount() {
+                    var card = track.querySelector(".propvendor-card");
+                    if (card) {
+                        return card.offsetWidth + 24;
+                    }
+                    return track.clientWidth * 0.75;
+                }
+
+                if (prevBtn) {
+                    prevBtn.addEventListener("click", function() {
+                        var prefersReduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+                        track.scrollBy({ left: -getScrollAmount(), behavior: prefersReduced ? "auto" : "smooth" });
+                    });
+                }
+
+                if (nextBtn) {
+                    nextBtn.addEventListener("click", function() {
+                        var prefersReduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+                        track.scrollBy({ left: getScrollAmount(), behavior: prefersReduced ? "auto" : "smooth" });
+                    });
+                }
+
+                track.addEventListener("scroll", updateButtons, { passive: true });
+                window.addEventListener("resize", updateButtons);
+                updateButtons();
+            }
+
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", initFeaturedCarousel);
+            } else {
+                initFeaturedCarousel();
+            }
+        })();
+        </script>';
+    }
+
+    $output .= '  </div>';
+    $output .= '</section>';
+
+    return $output;
+}
+
 function propvendor_marketplace_home_shortcode() {
     global $post;
     $output = '';
@@ -2110,8 +2347,14 @@ function propvendor_marketplace_home_shortcode() {
     if (!$post || strpos($post->post_content, '[propvendor_hero_search]') === false) {
         $output .= propvendor_marketplace_hero_search_shortcode();
     }
-    $featured = propvendor_marketplace_listings_query(4);
-    $output .= propvendor_marketplace_render_listing_cards($featured, 'Featured listings');
+    // Category Navigation Grid (unless explicitly placed elsewhere in post_content)
+    if (!$post || strpos($post->post_content, '[propvendor_category_grid]') === false) {
+        $output .= propvendor_marketplace_category_grid_shortcode();
+    }
+    // Featured Listings Carousel Section
+    $featured = propvendor_marketplace_listings_query(8);
+    $output .= propvendor_marketplace_render_featured_carousel($featured, 'Featured Listings');
+
     $output .= '<section class="propvendor-info-grid"><div><h3>How it works</h3><p>Browse by category or location, compare vendor details and request a viewing or enquiry.</p></div><div><h3>Vendor moderation</h3><p>Each listing should be reviewed before publication to improve trust and reduce fraud risk.</p></div><div><h3>Trust & safety</h3><p>Document verification, contact transparency and clear transaction terms help protect buyers and sellers.</p></div></section>';
     return $output;
 }
@@ -2986,7 +3229,49 @@ add_shortcode('propvendor_search_filters', 'propvendor_marketplace_search_filter
 function propvendor_marketplace_browse_shortcode() {
     $query = propvendor_marketplace_build_search_query($_GET);
 
+    // Active filter summary for status pill
+    $active_filter_parts = array();
+    if (!empty($_GET['pv_type'])) {
+        $type_labels = array(
+            'property_listing' => __('Property', 'propvendor-marketplace'),
+            'land_listing'     => __('Land', 'propvendor-marketplace'),
+            'vehicle_listing'  => __('Vehicles', 'propvendor-marketplace'),
+        );
+        $type_key = sanitize_key($_GET['pv_type']);
+        $active_filter_parts[] = isset($type_labels[$type_key]) ? $type_labels[$type_key] : ucfirst(str_replace('_listing', '', $type_key));
+    }
+    if (!empty($_GET['pv_state'])) {
+        $active_filter_parts[] = sanitize_text_field(wp_unslash($_GET['pv_state']));
+    }
+    if (!empty($_GET['pv_keyword'])) {
+        $active_filter_parts[] = '"' . sanitize_text_field(wp_unslash($_GET['pv_keyword'])) . '"';
+    }
+
+    $active_filters_text = !empty($active_filter_parts)
+        ? sprintf(__('Active Filters: %s', 'propvendor-marketplace'), implode(' • ', $active_filter_parts))
+        : __('Active Filters: None (Showing All)', 'propvendor-marketplace');
+
     $output  = '<section class="propvendor-browse" aria-label="' . esc_attr__('Browse Listings', 'propvendor-marketplace') . '">';
+
+    // Compact Dark Hero Header Banner
+    $output .= '
+    <div class="propvendor-browse-hero">
+        <div class="propvendor-browse-hero-overlay"></div>
+        <div class="propvendor-browse-hero-content">
+            <nav class="propvendor-browse-breadcrumb" aria-label="' . esc_attr__('Breadcrumb', 'propvendor-marketplace') . '">
+                <a href="' . esc_url(home_url('/')) . '">' . esc_html__('Home', 'propvendor-marketplace') . '</a>
+                <span class="breadcrumb-sep">/</span>
+                <span>' . esc_html__('Browse Listings', 'propvendor-marketplace') . '</span>
+            </nav>
+            <div class="propvendor-browse-status-pill">
+                <span class="trust-dot"></span>
+                <span>' . esc_html($active_filters_text) . '</span>
+            </div>
+            <h1 class="propvendor-browse-hero-title">' . esc_html__('Browse Verified Listings', 'propvendor-marketplace') . '</h1>
+            <p class="propvendor-browse-hero-subtitle">' . esc_html__('Explore properties, land, and vehicles across all 37 Nigerian states.', 'propvendor-marketplace') . '</p>
+        </div>
+    </div>';
+
     $output .= propvendor_marketplace_render_search_filters(array('action_url' => get_permalink()));
 
     $found_count = (int) $query->found_posts;
