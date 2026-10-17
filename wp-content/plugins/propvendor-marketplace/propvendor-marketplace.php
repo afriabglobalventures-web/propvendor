@@ -10370,3 +10370,236 @@ function propvendor_marketplace_deactivate() {
     propvendor_marketplace_clear_cron_jobs();
     flush_rewrite_rules();
 }
+
+// ======================================================================
+// TASK 1: HOMEPAGE HERO BANNER & PILL SEARCH SHORTCODE
+// ======================================================================
+add_shortcode('propvendor_hero_search', 'propvendor_marketplace_hero_search_shortcode');
+function propvendor_marketplace_hero_search_shortcode($atts) {
+    ob_start();
+    $states = function_exists('propvendor_marketplace_get_nigerian_states') ? propvendor_marketplace_get_nigerian_states() : array();
+    $action_url = esc_url(home_url('/browse-listings/'));
+    ?>
+    <div class="propvendor-hero">
+        <div class="propvendor-hero-overlay"></div>
+        <div class="propvendor-hero-content">
+            <div class="propvendor-hero-badge">NIGERIA'S TRUSTED VERIFIED MARKETPLACE</div>
+            <h1 class="propvendor-hero-title">Find the perfect place to <span class="highlight">call home</span></h1>
+            <p class="propvendor-hero-subtitle">Discover thousands of verified properties, land, and vehicles across all 37 Nigerian states.</p>
+
+            <div class="propvendor-pill-search-container">
+                <form action="<?php echo $action_url; ?>" method="GET" class="propvendor-pill-search" id="propvendor-hero-search-form">
+                    <div class="search-field category-field">
+                        <select name="pv_type" aria-label="Category">
+                            <option value="">All Categories</option>
+                            <option value="property_listing">Property</option>
+                            <option value="land_listing">Land</option>
+                            <option value="vehicle_listing">Vehicle</option>
+                        </select>
+                    </div>
+                    <div class="search-divider"></div>
+                    <div class="search-field state-field">
+                        <select name="pv_state" aria-label="State">
+                            <option value="">All States</option>
+                            <?php foreach ($states as $state): ?>
+                                <option value="<?php echo esc_attr($state); ?>"><?php echo esc_html($state); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="search-divider"></div>
+                    <div class="search-field keyword-field">
+                        <svg class="search-icon-input" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        <input type="text" name="pv_keyword" placeholder="Enter city, state, or area..." aria-label="Keyword">
+                    </div>
+                    <button type="submit" class="search-submit-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        Search
+                    </button>
+                </form>
+            </div>
+
+            <div class="propvendor-trust-badges">
+                <span class="trust-dot"></span> Always 100% FREE to browse &bull; Zero advance-fee inspection policy &bull; LASRERA / REDAN verified
+            </div>
+        </div>
+    </div>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var heroForm = document.getElementById('propvendor-hero-search-form');
+        if (heroForm) {
+            heroForm.addEventListener('submit', function(e) {
+                var inputs = heroForm.querySelectorAll('select, input');
+                inputs.forEach(function(input) {
+                    if (!input.value.trim()) {
+                        input.disabled = true;
+                    }
+                });
+                setTimeout(function() {
+                    inputs.forEach(function(input) { input.disabled = false; });
+                }, 50);
+            });
+        }
+    });
+    </script>
+    <?php
+    return ob_get_clean();
+}
+
+// ======================================================================
+// TASK 1: AUTOMATED NAV MENU SETUP & CLEANUP
+// ======================================================================
+add_action('admin_init', 'propvendor_marketplace_setup_default_menu');
+add_action('after_switch_theme', 'propvendor_marketplace_setup_default_menu');
+
+/**
+ * Configure standard PropVendor navigation menu and assign to Astra primary location.
+ *
+ * @param bool $force Force re-population of menu items
+ * @return int|WP_Error Menu term ID
+ */
+function propvendor_marketplace_setup_default_menu($force = false) {
+    if (!$force && get_option('propvendor_nav_menu_configured_v1')) {
+        // Ensure Astra theme mod location assignment remains active
+        $locations = get_theme_mod('nav_menu_locations');
+        $menu_obj  = wp_get_nav_menu_object('PropVendor Main Menu');
+        if ($menu_obj && is_array($locations) && (!isset($locations['primary']) || (int) $locations['primary'] !== (int) $menu_obj->term_id)) {
+            $locations['primary']     = (int) $menu_obj->term_id;
+            $locations['mobile_menu'] = (int) $menu_obj->term_id;
+            set_theme_mod('nav_menu_locations', $locations);
+        }
+        return $menu_obj ? (int) $menu_obj->term_id : 0;
+    }
+
+    $menu_name = 'PropVendor Main Menu';
+    $menu_obj  = wp_get_nav_menu_object($menu_name);
+
+    if (!$menu_obj) {
+        $menu_id = wp_create_nav_menu($menu_name);
+        if (is_wp_error($menu_id)) {
+            return $menu_id;
+        }
+    } else {
+        $menu_id = (int) $menu_obj->term_id;
+    }
+
+    // 1. Disable auto_add to prevent newly created pages from cluttering the header
+    $nav_menu_options = get_option('nav_menu_options', array());
+    if (!is_array($nav_menu_options)) {
+        $nav_menu_options = array();
+    }
+    if (!isset($nav_menu_options['auto_add']) || !is_array($nav_menu_options['auto_add'])) {
+        $nav_menu_options['auto_add'] = array();
+    }
+    $nav_menu_options['auto_add'] = array_values(array_diff($nav_menu_options['auto_add'], array($menu_id)));
+    update_option('nav_menu_options', $nav_menu_options);
+
+    // 2. Clear existing items if forcing re-population or empty
+    $existing_items = wp_get_nav_menu_items($menu_id);
+    if ($force && !empty($existing_items)) {
+        foreach ($existing_items as $item) {
+            wp_delete_post($item->ID, true);
+        }
+        $existing_items = array();
+    }
+
+    if (empty($existing_items)) {
+        // Ensure vendor-wallet page exists
+        if (!get_page_by_path('vendor-wallet')) {
+            propvendor_marketplace_create_default_pages();
+        }
+
+        $core_pages = array(
+            array(
+                'title'   => 'Home',
+                'slug'    => 'home',
+                'url'     => home_url('/'),
+                'classes' => '',
+            ),
+            array(
+                'title'   => 'Browse Listings',
+                'slug'    => 'browse-listings',
+                'url'     => home_url('/browse-listings/'),
+                'classes' => '',
+            ),
+            array(
+                'title'   => 'Submit a Listing',
+                'slug'    => array('submit-a-listing', 'submit-listing'),
+                'url'     => home_url('/submit-a-listing/'),
+                'classes' => 'propvendor-nav-cta',
+            ),
+            array(
+                'title'   => 'Vendor Dashboard',
+                'slug'    => 'vendor-dashboard',
+                'url'     => home_url('/vendor-dashboard/'),
+                'classes' => '',
+            ),
+            array(
+                'title'   => 'Vendor Wallet',
+                'slug'    => 'vendor-wallet',
+                'url'     => home_url('/vendor-wallet/'),
+                'classes' => '',
+            ),
+            array(
+                'title'   => 'About PropVendor',
+                'slug'    => 'about-propvendor',
+                'url'     => home_url('/about-propvendor/'),
+                'classes' => '',
+            ),
+            array(
+                'title'   => 'Safety Guidelines',
+                'slug'    => 'listing-and-transaction-safety-guidelines',
+                'url'     => home_url('/listing-and-transaction-safety-guidelines/'),
+                'classes' => '',
+            ),
+            array(
+                'title'   => 'Help & FAQs',
+                'slug'    => array('help-and-faqs', 'help-faqs'),
+                'url'     => home_url('/help-and-faqs/'),
+                'classes' => '',
+            ),
+        );
+
+        $order = 1;
+        foreach ($core_pages as $cfg) {
+            $page  = null;
+            $slugs = is_array($cfg['slug']) ? $cfg['slug'] : array($cfg['slug']);
+            foreach ($slugs as $s) {
+                $found = get_page_by_path($s);
+                if ($found && 'publish' === $found->post_status) {
+                    $page = $found;
+                    break;
+                }
+            }
+
+            $item_data = array(
+                'menu-item-title'    => $cfg['title'],
+                'menu-item-status'   => 'publish',
+                'menu-item-position' => $order++,
+                'menu-item-classes'  => $cfg['classes'],
+            );
+
+            if ($page) {
+                $item_data['menu-item-object-id'] = $page->ID;
+                $item_data['menu-item-object']    = 'page';
+                $item_data['menu-item-type']      = 'post_type';
+            } else {
+                $item_data['menu-item-url']       = $cfg['url'];
+                $item_data['menu-item-type']      = 'custom';
+            }
+
+            wp_update_nav_menu_item($menu_id, 0, $item_data);
+        }
+    }
+
+    // 3. Assign to Astra primary & mobile menu locations
+    $locations = get_theme_mod('nav_menu_locations');
+    if (!is_array($locations)) {
+        $locations = array();
+    }
+    $locations['primary']     = (int) $menu_id;
+    $locations['mobile_menu'] = (int) $menu_id;
+    set_theme_mod('nav_menu_locations', $locations);
+
+    update_option('propvendor_nav_menu_configured_v1', time());
+    return (int) $menu_id;
+}

@@ -2899,3 +2899,273 @@ select.form-control {
         justify-content: center;
     }
 }
+
+/* ======================================================================
+   TASK 2: HERO SECTION & PILL SEARCH CSS STYLING
+   ====================================================================== */
+.propvendor-hero {
+    position: relative;
+    min-height: 520px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: url('https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80') center center / cover no-repeat;
+    padding: 40px 20px;
+    margin: 0;
+    overflow: hidden;
+}
+.alignfull .propvendor-hero,
+.ast-container .propvendor-hero {
+    width: 100vw;
+    position: relative;
+    left: 50%;
+    right: 50%;
+    margin-left: -50vw;
+    margin-right: -50vw;
+    border-radius: 0;
+}
+.propvendor-hero-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(135deg, rgba(10, 25, 47, 0.9) 0%, rgba(10, 25, 47, 0.7) 100%);
+    z-index: 1;
+}
+.propvendor-hero-content {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    max-width: 900px;
+    width: 100%;
+    color: #ffffff;
+}
+.propvendor-hero-badge {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 6px 16px;
+    border-radius: 50px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+}
+.propvendor-hero-title {
+    font-size: 3.5rem;
+    font-weight: 800;
+    line-height: 1.2;
+    margin: 0 0 16px;
+    color: #ffffff;
+}
+.propvendor-hero-title .highlight {
+    color: #ff6b2a;
+}
+.propvendor-hero-subtitle {
+    font-size: 1.125rem;
+    font-weight: 400;
+    margin: 0 0 40px;
+    opacity: 0.9;
+}
+.propvendor-pill-search-container {
+    margin-bottom: 24px;
+}
+.propvendor-pill-search {
+    display: flex;
+    align-items: center;
+    background: #ffffff;
+    border-radius: 50px;
+    padding: 8px;
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3);
+    max-width: 800px;
+    margin: 0 auto;
+}
+.propvendor-pill-search .search-field {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    position: relative;
+}
+.propvendor-pill-search select,
+.propvendor-pill-search input {
+    width: 100%;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    height: 44px;
+    color: #333333;
+    font-size: 1rem;
+    outline: none !important;
+    padding: 0;
+    margin: 0;
+}
+.propvendor-pill-search select:focus,
+.propvendor-pill-search input:focus {
+    box-shadow: none !important;
+    outline: none !important;
+    border: none !important;
+}
+.propvendor-pill-search .keyword-field input {
+    padding-left: 8px;
+}
+.propvendor-pill-search .search-icon-input {
+    color: #6b7280;
+    flex-shrink: 0;
+}
+.propvendor-pill-search .search-divider {
+    width: 1px;
+    height: 32px;
+    background: #e5e7eb;
+    flex-shrink: 0;
+}
+.propvendor-pill-search .search-submit-btn {
+    background: #047857;
+    color: #ffffff;
+    border: none;
+    border-radius: 40px;
+    height: 48px;
+    padding: 0 32px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s ease;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+.propvendor-pill-search .search-submit-btn:hover {
+    background: #065f46;
+}
+.propvendor-trust-badges {
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+.propvendor-trust-badges .trust-dot {
+    width: 8px;
+    height: 8px;
+    background: #10b981;
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    .propvendor-hero {
+        min-height: auto;
+        padding: 60px 16px;
+    }
+    .propvendor-hero-title {
+        font-size: 2rem;
+    }
+    .propvendor-pill-search {
+        flex-direction: column;
+        border-radius: 16px;
+        padding: 16px;
+        gap: 12px;
+    }
+    .propvendor-pill-search .search-field {
+        width: 100%;
+        padding: 0;
+        background: #f9fafb;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+    }
+    .propvendor-pill-search select,
+    .propvendor-pill-search input {
+        padding: 0 16px;
+    }
+    .propvendor-pill-search .keyword-field input {
+        padding-left: 8px;
+    }
+    .propvendor-pill-search .keyword-field .search-icon-input {
+        margin-left: 16px;
+    }
+    .propvendor-pill-search .search-divider {
+        display: none;
+    }
+    .propvendor-pill-search .search-submit-btn {
+        width: 100%;
+        justify-content: center;
+        margin-left: 0;
+        margin-top: 8px;
+    }
+    .propvendor-trust-badges {
+        flex-direction: column;
+        text-align: center;
+        font-size: 0.75rem;
+    }
+}
+
+/* ======================================================================
+   PHASE 8A: ASTRA PRIMARY NAVIGATION & HEADER SINGLE-LINE LAYOUT
+   ====================================================================== */
+
+/* Ensure desktop header navigation fits comfortably on a single line */
+@media (min-width: 922px) {
+    .site-header-primary-section-right {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        flex-wrap: nowrap !important;
+    }
+
+    .main-header-bar-navigation {
+        display: flex;
+        align-items: center;
+    }
+
+    .main-navigation .main-header-menu {
+        display: flex !important;
+        align-items: center !important;
+        flex-wrap: nowrap !important;
+        gap: 4px;
+    }
+
+    .main-navigation .main-header-menu > .menu-item > a {
+        white-space: nowrap !important;
+        font-size: 14px !important;
+        padding: 0 10px !important;
+        font-weight: 500;
+        letter-spacing: -0.01em;
+    }
+
+    /* Distinct CTA button for 'Submit a Listing' */
+    .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta {
+        margin-left: 6px;
+    }
+
+    .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta > a {
+        background-color: #0d9488 !important;
+        color: #ffffff !important;
+        padding: 7px 15px !important;
+        border-radius: 6px !important;
+        font-weight: 600 !important;
+        line-height: 1.4 !important;
+        transition: all 0.2s ease-in-out !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+    }
+
+    .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta > a:hover {
+        background-color: #0f766e !important;
+        color: #ffffff !important;
+        box-shadow: 0 3px 6px -1px rgba(13, 148, 136, 0.3) !important;
+        transform: translateY(-1px);
+    }
+}
+
+/* Mobile off-canvas / dropdown styling */
+@media (max-width: 921px) {
+    #ast-hf-mobile-menu .menu-item.propvendor-nav-cta > a {
+        color: #0d9488 !important;
+        font-weight: 600 !important;
+    }
+}
