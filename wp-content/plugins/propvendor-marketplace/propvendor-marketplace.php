@@ -2122,7 +2122,7 @@ function propvendor_marketplace_category_grid_shortcode($atts = array()) {
             <div class="propvendor-category-grid">
                 <!-- 1. Residential Properties -->
                 <a href="<?php echo esc_url(home_url('/browse-listings/?pv_type=property_listing')); ?>" class="propvendor-category-card">
-                    <div class="category-card-media" style="background-image: url('https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=600&q=80');">
+                    <div class="category-card-media propvendor-cat-img" style="background-image: url('https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=600&q=80');">
                         <span class="category-tag"><?php esc_html_e('Verified Homes', 'propvendor-marketplace'); ?></span>
                     </div>
                     <div class="category-card-body">
@@ -2134,7 +2134,7 @@ function propvendor_marketplace_category_grid_shortcode($atts = array()) {
 
                 <!-- 2. Land -->
                 <a href="<?php echo esc_url(home_url('/browse-listings/?pv_type=land_listing')); ?>" class="propvendor-category-card">
-                    <div class="category-card-media" style="background-image: url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=600&q=80');">
+                    <div class="category-card-media propvendor-cat-img" style="background-image: url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=600&q=80');">
                         <span class="category-tag"><?php esc_html_e('Titled Plots', 'propvendor-marketplace'); ?></span>
                     </div>
                     <div class="category-card-body">
@@ -2146,7 +2146,7 @@ function propvendor_marketplace_category_grid_shortcode($atts = array()) {
 
                 <!-- 3. Vehicles -->
                 <a href="<?php echo esc_url(home_url('/browse-listings/?pv_type=vehicle_listing')); ?>" class="propvendor-category-card">
-                    <div class="category-card-media" style="background-image: url('https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=600&q=80');">
+                    <div class="category-card-media propvendor-cat-img" style="background-image: url('https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=600&q=80');">
                         <span class="category-tag"><?php esc_html_e('Inspected Motors', 'propvendor-marketplace'); ?></span>
                     </div>
                     <div class="category-card-body">
@@ -2158,7 +2158,7 @@ function propvendor_marketplace_category_grid_shortcode($atts = array()) {
 
                 <!-- 4. Commercial Properties -->
                 <a href="<?php echo esc_url(home_url('/browse-listings/?pv_type=property_listing&pv_property_subtype=Commercial+Space')); ?>" class="propvendor-category-card">
-                    <div class="category-card-media" style="background-image: url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=600&q=80');">
+                    <div class="category-card-media propvendor-cat-img" style="background-image: url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=600&q=80');">
                         <span class="category-tag"><?php esc_html_e('Business Hubs', 'propvendor-marketplace'); ?></span>
                     </div>
                     <div class="category-card-body">
@@ -2246,7 +2246,26 @@ function propvendor_marketplace_render_featured_carousel($listings, $title = 'Fe
 
         $price = get_post_meta($listing->ID, 'propvendor_price', true);
         $location = get_post_meta($listing->ID, 'propvendor_location', true);
-        $image = get_the_post_thumbnail($listing->ID, 'medium_large', array('class' => 'propvendor-card-image'));
+        // Task 4: Thumbnail extraction with verified category fallback and onerror safeguard
+        $category_fallbacks = array(
+            'property_listing' => 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=600&q=80',
+            'land_listing'     => 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=600&q=80',
+            'vehicle_listing'  => 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=600&q=80',
+        );
+        $default_fallback = 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=600&q=80';
+        $fallback_url     = isset($category_fallbacks[$post_type]) ? $category_fallbacks[$post_type] : $default_fallback;
+
+        $thumb_id      = get_post_thumbnail_id($listing->ID);
+        $thumb_url     = $thumb_id ? get_the_post_thumbnail_url($listing->ID, 'medium_large') : false;
+        $attached_file = $thumb_id ? get_attached_file($thumb_id) : '';
+
+        // If thumbnail is missing or referenced file does not exist on disk, use high-res fallback
+        if ($thumb_url && !empty($attached_file) && file_exists($attached_file)) {
+            $image_src = $thumb_url;
+        } else {
+            $image_src = $fallback_url;
+        }
+
         $categories = get_the_terms($listing->ID, 'listing_category');
         $category_labels = array();
         if (is_array($categories)) {
@@ -2259,11 +2278,8 @@ function propvendor_marketplace_render_featured_carousel($listings, $title = 'Fe
         $direct_owner_status = get_post_meta($listing->ID, '_propvendor_direct_owner_status', true);
 
         $output .= '<article class="propvendor-card">';
-        if ($image) {
-            $output .= '<a class="propvendor-card-image-link" href="' . esc_url(get_permalink($listing)) . '" aria-label="' . esc_attr(sprintf('View details for %s', get_the_title($listing))) . '">' . $image . '</a>';
-        } else {
-            $output .= '<a class="propvendor-card-image-link propvendor-card-image-placeholder" href="' . esc_url(get_permalink($listing)) . '" aria-label="' . esc_attr(sprintf('View details for %s', get_the_title($listing))) . '"><div class="placeholder-content"><span class="dashicons dashicons-building"></span><span>' . esc_html__('Verified Listing', 'propvendor-marketplace') . '</span></div></a>';
-        }
+        $image_html = '<img src="' . esc_url($image_src) . '" class="propvendor-card-image wp-post-image" alt="' . esc_attr(get_the_title($listing)) . '" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=\'' . esc_url($fallback_url) . '\';" />';
+        $output .= '<a class="propvendor-card-image-link" href="' . esc_url(get_permalink($listing)) . '" aria-label="' . esc_attr(sprintf('View details for %s', get_the_title($listing))) . '">' . $image_html . '</a>';
         $output .= '<div class="propvendor-badge">' . esc_html($type_label[$post_type] ?? 'Listing') . '</div>';
         if ('1' === (string) $is_direct_owner && 'approved' === (string) $direct_owner_status) {
             $output .= '<div class="propvendor-badge propvendor-badge-direct-owner" style="background: #0a8a4f; color: #fff; font-weight: 600;">' . esc_html__('Direct from Owner — Zero Agent Fee', 'propvendor-marketplace') . '</div>';
@@ -2960,9 +2976,23 @@ function propvendor_marketplace_render_search_filters($atts = array()) {
     $output .= '<label for="pv_state">State</label>';
     $output .= '<select id="pv_state" name="pv_state">';
     $output .= '<option value="">All States</option>';
-    foreach (propvendor_marketplace_get_nigerian_states() as $st) {
-        $output .= '<option value="' . esc_attr($st) . '"' . selected($p_state_norm, $st, false) . '>' . esc_html($st) . '</option>';
+    $output .= '<optgroup label="Top Commercial Hubs">';
+    $commercial_hubs = array('Lagos', 'FCT - Abuja', 'Rivers', 'Ogun', 'Oyo', 'Kano', 'Enugu');
+    $hub_matched = false;
+    foreach ($commercial_hubs as $hub) {
+        $is_sel = ($p_state_norm === $hub);
+        if ($is_sel) {
+            $hub_matched = true;
+        }
+        $output .= '<option value="' . esc_attr($hub) . '"' . ($is_sel ? ' selected="selected"' : '') . '>' . esc_html($hub) . '</option>';
     }
+    $output .= '</optgroup>';
+    $output .= '<optgroup label="All 37 States (A–Z)">';
+    foreach (propvendor_marketplace_get_nigerian_states() as $st) {
+        $is_sel = (!$hub_matched && $p_state_norm === $st);
+        $output .= '<option value="' . esc_attr($st) . '"' . ($is_sel ? ' selected="selected"' : '') . '>' . esc_html($st) . '</option>';
+    }
+    $output .= '</optgroup>';
     $output .= '</select>';
     $output .= '</div>';
 
@@ -3006,18 +3036,27 @@ function propvendor_marketplace_render_search_filters($atts = array()) {
     $output .= '</div>';
 
     // Property-Specific Fields
-    $prop_subtypes = array(
+    $residential_subtypes = array(
         'Flat / Apartment',
+        'Detached House',
         'Detached Duplex',
         'Semi-Detached Duplex',
+        'Terraced Duplex',
         'Terraced House',
         'Bungalow',
         'Mansion',
+        'Penthouse',
+        'Maisonette',
+        'Shortlet / Serviced Apartment',
+    );
+    $commercial_subtypes = array(
+        'Commercial Space',
         'Commercial Property',
+        'Office',
         'Office Space',
+        'Shop',
         'Shop / Retail',
         'Warehouse',
-        'Shortlet / Serviced Apartment',
         'Other',
     );
     $prop_style = ($is_prop || empty($p_type)) ? '' : ' style="display:none;"';
@@ -3028,9 +3067,16 @@ function propvendor_marketplace_render_search_filters($atts = array()) {
     $output .= '<label for="pv_property_subtype">Property Subtype</label>';
     $output .= '<select id="pv_property_subtype" name="pv_property_subtype">';
     $output .= '<option value="">All Property Types</option>';
-    foreach ($prop_subtypes as $stype) {
+    $output .= '<optgroup label="Residential Properties">';
+    foreach ($residential_subtypes as $stype) {
         $output .= '<option value="' . esc_attr($stype) . '"' . selected($p_prop_subtype, $stype, false) . '>' . esc_html($stype) . '</option>';
     }
+    $output .= '</optgroup>';
+    $output .= '<optgroup label="Commercial Properties">';
+    foreach ($commercial_subtypes as $stype) {
+        $output .= '<option value="' . esc_attr($stype) . '"' . selected($p_prop_subtype, $stype, false) . '>' . esc_html($stype) . '</option>';
+    }
+    $output .= '</optgroup>';
     $output .= '</select>';
     $output .= '</div>';
 
@@ -3512,9 +3558,35 @@ function propvendor_marketplace_submit_listing_form_shortcode() {
     $fields .= '<h4>Property Details</h4>';
     $fields .= '<div class="propvendor-form-grid-3">';
     $fields .= '<label>Property Subtype<select name="propvendor_property_subtype"' . $prop_disabled . '><option value="">Select Property Subtype</option>';
-    foreach (propvendor_marketplace_get_property_subtypes() as $opt) {
+    $subtypes_residential = array(
+        'Flat / Apartment',
+        'Detached House',
+        'Semi-Detached Duplex',
+        'Terraced Duplex',
+        'Maisonette',
+        'Bungalow',
+        'Penthouse',
+    );
+    $subtypes_commercial = array(
+        'Commercial Space',
+        'Office',
+        'Shop',
+        'Warehouse',
+        'Other',
+    );
+    if (!empty($property_subtype_val) && !in_array($property_subtype_val, $subtypes_residential, true) && !in_array($property_subtype_val, $subtypes_commercial, true)) {
+        $subtypes_residential[] = $property_subtype_val;
+    }
+    $fields .= '<optgroup label="Residential Properties">';
+    foreach ($subtypes_residential as $opt) {
         $fields .= '<option value="' . esc_attr($opt) . '" ' . selected($property_subtype_val, $opt, false) . '>' . esc_html($opt) . '</option>';
     }
+    $fields .= '</optgroup>';
+    $fields .= '<optgroup label="Commercial Properties">';
+    foreach ($subtypes_commercial as $opt) {
+        $fields .= '<option value="' . esc_attr($opt) . '" ' . selected($property_subtype_val, $opt, false) . '>' . esc_html($opt) . '</option>';
+    }
+    $fields .= '</optgroup>';
     $fields .= '</select></label>';
     $fields .= '<label>Purpose<select name="propvendor_purpose"' . $prop_disabled . '>';
     foreach (propvendor_marketplace_get_property_purposes() as $opt) {
@@ -9564,9 +9636,13 @@ function propvendor_marketplace_vendor_wallet_shortcode($atts = array()) {
                 ?>
                     <div class="propvendor-pricing-card <?php echo $is_vip_plan ? 'featured-plan' : ''; ?>" data-plan-id="<?php echo esc_attr($plan->id); ?>">
                         <?php if ($is_vip_plan) : ?>
-                            <div class="propvendor-card-badge"><?php esc_html_e('Most Popular', 'propvendor-marketplace'); ?></div>
+                            <div class="propvendor-card-badge popular-badge"><?php esc_html_e('POPULAR', 'propvendor-marketplace'); ?></div>
+                        <?php elseif ($plan->credits >= 28) : ?>
+                            <div class="propvendor-card-badge pro-savings-badge"><?php esc_html_e('PRO SAVINGS', 'propvendor-marketplace'); ?></div>
                         <?php elseif ($plan->credits >= 12) : ?>
-                            <div class="propvendor-card-badge best-value-badge"><?php esc_html_e('Best Value', 'propvendor-marketplace'); ?></div>
+                            <div class="propvendor-card-badge best-value-badge"><?php esc_html_e('BEST VALUE', 'propvendor-marketplace'); ?></div>
+                        <?php elseif ($plan->credits >= 5) : ?>
+                            <div class="propvendor-card-badge starter-badge"><?php esc_html_e('STARTER', 'propvendor-marketplace'); ?></div>
                         <?php endif; ?>
 
                         <div class="propvendor-plan-header">
@@ -10694,13 +10770,45 @@ function propvendor_marketplace_hero_search_shortcode($atts = array()) {
                         </select>
                     </div>
                     <div class="search-divider"></div>
-                    <div class="search-field state-field">
-                        <select name="pv_state" aria-label="Nigerian State">
+                    <div class="search-field state-field propvendor-state-dropdown-wrap" id="propvendor-state-field-wrap">
+                        <button type="button" class="propvendor-state-toggle-btn" id="propvendor-state-toggle-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Select Nigerian State">
+                            <span class="propvendor-state-label" id="propvendor-state-label">All States</span>
+                            <svg class="propvendor-state-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </button>
+                        <select name="pv_state" id="pv-hero-state-select" class="propvendor-hero-state-select" aria-label="Nigerian State">
                             <option value="">All States</option>
-                            <?php foreach ($states as $state): ?>
-                                <option value="<?php echo esc_attr($state); ?>"><?php echo esc_html($state); ?></option>
-                            <?php endforeach; ?>
+                            <optgroup label="Top Commercial Hubs">
+                                <option value="Lagos">Lagos</option>
+                                <option value="Abuja (FCT)">Abuja (FCT)</option>
+                                <option value="Rivers">Rivers</option>
+                                <option value="Ogun">Ogun</option>
+                                <option value="Oyo">Oyo</option>
+                                <option value="Kano">Kano</option>
+                                <option value="Enugu">Enugu</option>
+                            </optgroup>
+                            <optgroup label="All 37 States (A–Z)">
+                                <?php foreach ($states as $state): ?>
+                                    <option value="<?php echo esc_attr($state); ?>"><?php echo esc_html($state); ?></option>
+                                <?php endforeach; ?>
+                            </optgroup>
                         </select>
+                        <div class="propvendor-state-menu" id="propvendor-state-menu" role="listbox" aria-label="Nigerian States" tabindex="-1">
+                            <div class="propvendor-state-menu-scroll">
+                                <div class="propvendor-state-group-label">Top Commercial Hubs</div>
+                                <div role="option" class="propvendor-state-option is-selected" data-value="" aria-selected="true">All States (Nigeria)</div>
+                                <div role="option" class="propvendor-state-option" data-value="Lagos">Lagos</div>
+                                <div role="option" class="propvendor-state-option" data-value="Abuja (FCT)">Abuja (FCT)</div>
+                                <div role="option" class="propvendor-state-option" data-value="Rivers">Rivers</div>
+                                <div role="option" class="propvendor-state-option" data-value="Ogun">Ogun</div>
+                                <div role="option" class="propvendor-state-option" data-value="Oyo">Oyo</div>
+                                <div role="option" class="propvendor-state-option" data-value="Kano">Kano</div>
+                                <div role="option" class="propvendor-state-option" data-value="Enugu">Enugu</div>
+                                <div class="propvendor-state-group-label">All 37 States (A–Z)</div>
+                                <?php foreach ($states as $state): ?>
+                                    <div role="option" class="propvendor-state-option" data-value="<?php echo esc_attr($state); ?>"><?php echo esc_html($state); ?></div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
                     </div>
                     <div class="search-divider"></div>
                     <div class="search-field keyword-field">
@@ -10733,6 +10841,59 @@ function propvendor_marketplace_hero_search_shortcode($atts = array()) {
                         slides[currentSlide].classList.add('active');
                     }, 5500);
                 }
+            }
+
+            // State Custom Dropdown Logic
+            var stateWrap = document.getElementById('propvendor-state-field-wrap');
+            var stateToggle = document.getElementById('propvendor-state-toggle-btn');
+            var stateMenu = document.getElementById('propvendor-state-menu');
+            var stateLabel = document.getElementById('propvendor-state-label');
+            var stateSelect = document.getElementById('pv-hero-state-select');
+
+            if (stateWrap && stateToggle && stateMenu && stateSelect) {
+                stateWrap.classList.add('js-enabled');
+
+                function toggleMenu(show) {
+                    var isOpen = typeof show === 'boolean' ? show : !stateMenu.classList.contains('is-open');
+                    stateMenu.classList.toggle('is-open', isOpen);
+                    stateToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                }
+
+                stateToggle.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleMenu();
+                });
+
+                var options = stateMenu.querySelectorAll('.propvendor-state-option');
+                options.forEach(function(opt) {
+                    opt.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        var val = opt.getAttribute('data-value') || '';
+                        stateSelect.value = val;
+                        stateLabel.textContent = val ? opt.textContent : 'All States';
+                        options.forEach(function(o) {
+                            o.classList.remove('is-selected');
+                            o.setAttribute('aria-selected', 'false');
+                        });
+                        opt.classList.add('is-selected');
+                        opt.setAttribute('aria-selected', 'true');
+                        toggleMenu(false);
+                    });
+                });
+
+                document.addEventListener('click', function(e) {
+                    if (!stateWrap.contains(e.target)) {
+                        toggleMenu(false);
+                    }
+                });
+
+                document.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape' && stateMenu.classList.contains('is-open')) {
+                        toggleMenu(false);
+                        stateToggle.focus();
+                    }
+                });
             }
 
             var heroForm = document.getElementById('propvendor-hero-search-form');
@@ -10775,18 +10936,6 @@ add_action('after_switch_theme', 'propvendor_marketplace_setup_default_menu');
  * @return int|WP_Error Menu term ID
  */
 function propvendor_marketplace_setup_default_menu($force = false) {
-    if (!$force && get_option('propvendor_nav_menu_configured_v1')) {
-        // Ensure Astra theme mod location assignment remains active
-        $locations = get_theme_mod('nav_menu_locations');
-        $menu_obj  = wp_get_nav_menu_object('PropVendor Main Menu');
-        if ($menu_obj && is_array($locations) && (!isset($locations['primary']) || (int) $locations['primary'] !== (int) $menu_obj->term_id)) {
-            $locations['primary']     = (int) $menu_obj->term_id;
-            $locations['mobile_menu'] = (int) $menu_obj->term_id;
-            set_theme_mod('nav_menu_locations', $locations);
-        }
-        return $menu_obj ? (int) $menu_obj->term_id : 0;
-    }
-
     $menu_name = 'PropVendor Main Menu';
     $menu_obj  = wp_get_nav_menu_object($menu_name);
 
@@ -10797,6 +10946,19 @@ function propvendor_marketplace_setup_default_menu($force = false) {
         }
     } else {
         $menu_id = (int) $menu_obj->term_id;
+    }
+
+    $is_deduplicated = (bool) get_option('propvendor_menu_deduplicated_v2');
+
+    // If already configured and deduplicated, ensure Astra theme mod locations remain active
+    if (!$force && $is_deduplicated && get_option('propvendor_nav_menu_configured_v1')) {
+        $locations = get_theme_mod('nav_menu_locations');
+        if (is_array($locations) && (!isset($locations['primary']) || (int) $locations['primary'] !== $menu_id)) {
+            $locations['primary']     = $menu_id;
+            $locations['mobile_menu'] = $menu_id;
+            set_theme_mod('nav_menu_locations', $locations);
+        }
+        return $menu_id;
     }
 
     // 1. Disable auto_add to prevent newly created pages from cluttering the header
@@ -10810,100 +10972,136 @@ function propvendor_marketplace_setup_default_menu($force = false) {
     $nav_menu_options['auto_add'] = array_values(array_diff($nav_menu_options['auto_add'], array($menu_id)));
     update_option('nav_menu_options', $nav_menu_options);
 
-    // 2. Clear existing items if forcing re-population or empty
+    // 2. Fetch existing items and deduplicate to ensure each of the 8 core items appears exactly once
     $existing_items = wp_get_nav_menu_items($menu_id);
-    if ($force && !empty($existing_items)) {
-        foreach ($existing_items as $item) {
-            wp_delete_post($item->ID, true);
-        }
+    if (!is_array($existing_items)) {
         $existing_items = array();
     }
 
-    if (empty($existing_items)) {
-        // Ensure vendor-wallet page exists
-        if (!get_page_by_path('vendor-wallet')) {
-            propvendor_marketplace_create_default_pages();
+    // Ensure default pages exist
+    if (!get_page_by_path('vendor-wallet')) {
+        propvendor_marketplace_create_default_pages();
+    }
+
+    $core_pages = array(
+        array(
+            'title'   => 'Home',
+            'slug'    => 'home',
+            'url'     => home_url('/'),
+            'classes' => '',
+        ),
+        array(
+            'title'   => 'Browse Listings',
+            'slug'    => 'browse-listings',
+            'url'     => home_url('/browse-listings/'),
+            'classes' => '',
+        ),
+        array(
+            'title'   => 'Submit a Listing',
+            'slug'    => array('submit-a-listing', 'submit-listing'),
+            'url'     => home_url('/submit-a-listing/'),
+            'classes' => 'propvendor-nav-cta',
+        ),
+        array(
+            'title'   => 'Vendor Dashboard',
+            'slug'    => 'vendor-dashboard',
+            'url'     => home_url('/vendor-dashboard/'),
+            'classes' => '',
+        ),
+        array(
+            'title'   => 'Vendor Wallet',
+            'slug'    => 'vendor-wallet',
+            'url'     => home_url('/vendor-wallet/'),
+            'classes' => '',
+        ),
+        array(
+            'title'   => 'About PropVendor',
+            'slug'    => 'about-propvendor',
+            'url'     => home_url('/about-propvendor/'),
+            'classes' => '',
+        ),
+        array(
+            'title'   => 'Safety Guidelines',
+            'slug'    => 'listing-and-transaction-safety-guidelines',
+            'url'     => home_url('/listing-and-transaction-safety-guidelines/'),
+            'classes' => '',
+        ),
+        array(
+            'title'   => 'Help & FAQs',
+            'slug'    => array('help-and-faqs', 'help-faqs'),
+            'url'     => home_url('/help-and-faqs/'),
+            'classes' => '',
+        ),
+    );
+
+    $matched_core = array();
+    $to_delete    = array();
+
+    foreach ($existing_items as $item) {
+        $item_url   = rtrim(strtolower($item->url), '/');
+        $item_title = strtolower(trim($item->title));
+        $matched_idx = null;
+
+        foreach ($core_pages as $idx => $cfg) {
+            $cfg_url   = rtrim(strtolower($cfg['url']), '/');
+            $cfg_title = strtolower(trim($cfg['title']));
+            if ($item_url === $cfg_url || $item_title === $cfg_title) {
+                $matched_idx = $idx;
+                break;
+            }
         }
 
-        $core_pages = array(
-            array(
-                'title'   => 'Home',
-                'slug'    => 'home',
-                'url'     => home_url('/'),
-                'classes' => '',
-            ),
-            array(
-                'title'   => 'Browse Listings',
-                'slug'    => 'browse-listings',
-                'url'     => home_url('/browse-listings/'),
-                'classes' => '',
-            ),
-            array(
-                'title'   => 'Submit a Listing',
-                'slug'    => array('submit-a-listing', 'submit-listing'),
-                'url'     => home_url('/submit-a-listing/'),
-                'classes' => 'propvendor-nav-cta',
-            ),
-            array(
-                'title'   => 'Vendor Dashboard',
-                'slug'    => 'vendor-dashboard',
-                'url'     => home_url('/vendor-dashboard/'),
-                'classes' => '',
-            ),
-            array(
-                'title'   => 'Vendor Wallet',
-                'slug'    => 'vendor-wallet',
-                'url'     => home_url('/vendor-wallet/'),
-                'classes' => '',
-            ),
-            array(
-                'title'   => 'About PropVendor',
-                'slug'    => 'about-propvendor',
-                'url'     => home_url('/about-propvendor/'),
-                'classes' => '',
-            ),
-            array(
-                'title'   => 'Safety Guidelines',
-                'slug'    => 'listing-and-transaction-safety-guidelines',
-                'url'     => home_url('/listing-and-transaction-safety-guidelines/'),
-                'classes' => '',
-            ),
-            array(
-                'title'   => 'Help & FAQs',
-                'slug'    => array('help-and-faqs', 'help-faqs'),
-                'url'     => home_url('/help-and-faqs/'),
-                'classes' => '',
-            ),
+        if ($matched_idx !== null) {
+            if (isset($matched_core[$matched_idx])) {
+                // Duplicate occurrence: delete redundant menu post
+                $to_delete[] = $item->ID;
+            } else {
+                // First occurrence: retain
+                $matched_core[$matched_idx] = $item;
+            }
+        } elseif ($force) {
+            $to_delete[] = $item->ID;
+        }
+    }
+
+    // Delete redundant duplicates
+    foreach ($to_delete as $del_id) {
+        wp_delete_post($del_id, true);
+    }
+
+    // Ensure all 8 core items exist and have exact positions and classes
+    foreach ($core_pages as $idx => $cfg) {
+        $position = $idx + 1;
+        $page     = null;
+        $slugs    = is_array($cfg['slug']) ? $cfg['slug'] : array($cfg['slug']);
+        foreach ($slugs as $s) {
+            $found = get_page_by_path($s);
+            if ($found && 'publish' === $found->post_status) {
+                $page = $found;
+                break;
+            }
+        }
+
+        $item_data = array(
+            'menu-item-title'    => $cfg['title'],
+            'menu-item-status'   => 'publish',
+            'menu-item-position' => $position,
+            'menu-item-classes'  => $cfg['classes'],
         );
 
-        $order = 1;
-        foreach ($core_pages as $cfg) {
-            $page  = null;
-            $slugs = is_array($cfg['slug']) ? $cfg['slug'] : array($cfg['slug']);
-            foreach ($slugs as $s) {
-                $found = get_page_by_path($s);
-                if ($found && 'publish' === $found->post_status) {
-                    $page = $found;
-                    break;
-                }
-            }
+        if ($page) {
+            $item_data['menu-item-object-id'] = $page->ID;
+            $item_data['menu-item-object']    = 'page';
+            $item_data['menu-item-type']      = 'post_type';
+        } else {
+            $item_data['menu-item-url']       = $cfg['url'];
+            $item_data['menu-item-type']      = 'custom';
+        }
 
-            $item_data = array(
-                'menu-item-title'    => $cfg['title'],
-                'menu-item-status'   => 'publish',
-                'menu-item-position' => $order++,
-                'menu-item-classes'  => $cfg['classes'],
-            );
-
-            if ($page) {
-                $item_data['menu-item-object-id'] = $page->ID;
-                $item_data['menu-item-object']    = 'page';
-                $item_data['menu-item-type']      = 'post_type';
-            } else {
-                $item_data['menu-item-url']       = $cfg['url'];
-                $item_data['menu-item-type']      = 'custom';
-            }
-
+        if (isset($matched_core[$idx])) {
+            $existing_item_id = $matched_core[$idx]->ID;
+            wp_update_nav_menu_item($menu_id, $existing_item_id, $item_data);
+        } else {
             wp_update_nav_menu_item($menu_id, 0, $item_data);
         }
     }
@@ -10917,6 +11115,7 @@ function propvendor_marketplace_setup_default_menu($force = false) {
     $locations['mobile_menu'] = (int) $menu_id;
     set_theme_mod('nav_menu_locations', $locations);
 
+    update_option('propvendor_menu_deduplicated_v2', true);
     update_option('propvendor_nav_menu_configured_v1', time());
     return (int) $menu_id;
 }
