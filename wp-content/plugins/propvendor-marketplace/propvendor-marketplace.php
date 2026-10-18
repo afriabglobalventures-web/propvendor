@@ -8741,6 +8741,129 @@ function propvendor_marketplace_get_plan_by_key($plan_key) {
 }
 
 /**
+ * Get available marketplace packages array in standardized display order from left to right:
+ *
+ * Card 1: free_basic  — Free Basic Plan (₦0 / 3 active listings included)
+ * Card 2: starter_5   — Starter Pack (5 Leads / ₦5,000)
+ * Card 3: pro_28      — Pro Pack (28 Leads / ₦20,000)
+ * Card 4: vip_monthly — VIP Agent Monthly (₦30,000 / 30 days)
+ *
+ * @return array
+ */
+function propvendor_marketplace_get_available_packages() {
+    $plan_starter = propvendor_marketplace_get_plan_by_key('credit_pack_starter');
+    $plan_pro     = propvendor_marketplace_get_plan_by_key('credit_pack_pro');
+    $plan_vip     = propvendor_marketplace_get_plan_by_key('vip_agent_monthly');
+
+    return array(
+        'free_basic' => array(
+            'id'            => 'free_basic',
+            'plan_id'       => 0,
+            'plan_key'      => 'free_basic',
+            'name'          => __('Free Basic Plan', 'propvendor-marketplace'),
+            'product_type'  => 'free_listing',
+            'price_naira'   => '0',
+            'price_ngn'     => 0,
+            'price_kobo'    => 0,
+            'credits'       => 0,
+            'listing_quota' => 3,
+            'duration_days' => 0,
+            'badge'         => __('FREE', 'propvendor-marketplace'),
+            'badge_class'   => 'free-badge',
+            'description'   => __('Free Basic Plan (₦0 / 3 active listings included)', 'propvendor-marketplace'),
+            'features'      => array(
+                __('3 Active Listings Included', 'propvendor-marketplace'),
+                __('Standard Discovery Search Placement', 'propvendor-marketplace'),
+                __('Customer Inquiries via Marketplace Inbox', 'propvendor-marketplace'),
+                __('Pay-as-you-go Contact Lead Unlocks', 'propvendor-marketplace'),
+            ),
+            'cta_text'      => __('Current Plan', 'propvendor-marketplace'),
+            'is_current'    => true,
+            'is_vip'        => false,
+            'is_featured'   => false,
+        ),
+        'starter_5' => array(
+            'id'            => 'starter_5',
+            'plan_id'       => $plan_starter ? (int) $plan_starter->id : 2,
+            'plan_key'      => 'credit_pack_starter',
+            'name'          => __('Starter Pack (5 Leads)', 'propvendor-marketplace'),
+            'product_type'  => 'credit_pack',
+            'price_naira'   => '5,000',
+            'price_ngn'     => 5000,
+            'price_kobo'    => 500000,
+            'credits'       => 5,
+            'listing_quota' => 0,
+            'duration_days' => 0,
+            'badge'         => __('STARTER', 'propvendor-marketplace'),
+            'badge_class'   => 'starter-badge',
+            'description'   => __('5 Contact Unlocks (₦1,000 per lead). Credits never expire.', 'propvendor-marketplace'),
+            'features'      => array(
+                __('5 Contact Unlocks (Phone & Email)', 'propvendor-marketplace'),
+                __('Credits Never Expire', 'propvendor-marketplace'),
+                __('Use Anytime Across All Inquiries', 'propvendor-marketplace'),
+                __('Unlock Leads One At A Time As Needed', 'propvendor-marketplace'),
+            ),
+            'cta_text'      => __('Buy Credits Now', 'propvendor-marketplace'),
+            'is_current'    => false,
+            'is_vip'        => false,
+            'is_featured'   => false,
+        ),
+        'pro_28' => array(
+            'id'            => 'pro_28',
+            'plan_id'       => $plan_pro ? (int) $plan_pro->id : 4,
+            'plan_key'      => 'credit_pack_pro',
+            'name'          => __('Pro Pack (28 Leads)', 'propvendor-marketplace'),
+            'product_type'  => 'credit_pack',
+            'price_naira'   => '20,000',
+            'price_ngn'     => 20000,
+            'price_kobo'    => 2000000,
+            'credits'       => 28,
+            'listing_quota' => 0,
+            'duration_days' => 0,
+            'badge'         => __('PRO SAVINGS', 'propvendor-marketplace'),
+            'badge_class'   => 'pro-savings-badge',
+            'description'   => __('28 Contact Unlocks (₦714 per lead). Highest volume discount. Credits never expire.', 'propvendor-marketplace'),
+            'features'      => array(
+                __('28 Contact Unlocks (Phone & Email)', 'propvendor-marketplace'),
+                __('Credits Never Expire', 'propvendor-marketplace'),
+                __('Highest Volume Discount (28% Savings)', 'propvendor-marketplace'),
+                __('Unlock Leads One At A Time As Needed', 'propvendor-marketplace'),
+            ),
+            'cta_text'      => __('Buy Credits Now', 'propvendor-marketplace'),
+            'is_current'    => false,
+            'is_vip'        => false,
+            'is_featured'   => false,
+        ),
+        'vip_monthly' => array(
+            'id'            => 'vip_monthly',
+            'plan_id'       => $plan_vip ? (int) $plan_vip->id : 1,
+            'plan_key'      => 'vip_agent_monthly',
+            'name'          => __('VIP Agent Monthly', 'propvendor-marketplace'),
+            'product_type'  => 'vip_agent',
+            'price_naira'   => '30,000',
+            'price_ngn'     => 30000,
+            'price_kobo'    => 3000000,
+            'credits'       => 0,
+            'listing_quota' => 0,
+            'duration_days' => 30,
+            'badge'         => __('POPULAR', 'propvendor-marketplace'),
+            'badge_class'   => 'popular-badge',
+            'description'   => __('Unlimited leads and contact unlocks for 30 days plus VIP badge on all listings.', 'propvendor-marketplace'),
+            'features'      => array(
+                __('Unlimited Direct Lead Phone & Email Unlocks', 'propvendor-marketplace'),
+                __('Verified VIP Agent Badge On All Listings', 'propvendor-marketplace'),
+                __('Priority Placement In Discovery Search', 'propvendor-marketplace'),
+                __('Instant WhatsApp Customer Direct Chat', 'propvendor-marketplace'),
+            ),
+            'cta_text'      => __('Upgrade to VIP Agent', 'propvendor-marketplace'),
+            'is_current'    => false,
+            'is_vip'        => true,
+            'is_featured'   => true,
+        ),
+    );
+}
+
+/**
  * Create a new pending order tracking record.
  *
  * @param int $vendor_id
@@ -9630,56 +9753,51 @@ function propvendor_marketplace_vendor_wallet_shortcode($atts = array()) {
             </div>
 
             <div class="propvendor-pricing-grid">
-                <?php foreach ($plans as $plan) :
-                    $is_vip_plan = ('vip_agent' === $plan->product_type);
-                    $price_naira = number_format($plan->price_kobo / 100);
+                <?php
+                $available_packages = propvendor_marketplace_get_available_packages();
+                foreach ($available_packages as $pkg_key => $pkg) :
+                    $is_vip_plan  = !empty($pkg['is_vip']);
+                    $is_free_plan = ('free_basic' === $pkg_key);
+                    $card_plan_id = !empty($pkg['plan_id']) ? $pkg['plan_id'] : $pkg['id'];
                 ?>
-                    <div class="propvendor-pricing-card <?php echo $is_vip_plan ? 'featured-plan' : ''; ?>" data-plan-id="<?php echo esc_attr($plan->id); ?>">
-                        <?php if ($is_vip_plan) : ?>
-                            <div class="propvendor-card-badge popular-badge"><?php esc_html_e('POPULAR', 'propvendor-marketplace'); ?></div>
-                        <?php elseif ($plan->credits >= 28) : ?>
-                            <div class="propvendor-card-badge pro-savings-badge"><?php esc_html_e('PRO SAVINGS', 'propvendor-marketplace'); ?></div>
-                        <?php elseif ($plan->credits >= 12) : ?>
-                            <div class="propvendor-card-badge best-value-badge"><?php esc_html_e('BEST VALUE', 'propvendor-marketplace'); ?></div>
-                        <?php elseif ($plan->credits >= 5) : ?>
-                            <div class="propvendor-card-badge starter-badge"><?php esc_html_e('STARTER', 'propvendor-marketplace'); ?></div>
+                    <div class="propvendor-pricing-card <?php echo $is_vip_plan ? 'featured-plan' : ''; ?><?php echo $is_free_plan ? ' free-plan' : ''; ?>" data-plan-id="<?php echo esc_attr($card_plan_id); ?>">
+                        <?php if (!empty($pkg['badge'])) : ?>
+                            <div class="propvendor-card-badge <?php echo esc_attr($pkg['badge_class']); ?>"><?php echo esc_html($pkg['badge']); ?></div>
                         <?php endif; ?>
 
                         <div class="propvendor-plan-header">
-                            <h3 class="propvendor-plan-title"><?php echo esc_html($plan->name); ?></h3>
+                            <h3 class="propvendor-plan-title"><?php echo esc_html($pkg['name']); ?></h3>
                             <div class="propvendor-plan-price">
-                                <span class="currency">&#8358;</span><span class="amount"><?php echo esc_html($price_naira); ?></span>
-                                <?php if ($is_vip_plan) : ?>
-                                    <span class="period">/ <?php printf(esc_html__('%d days', 'propvendor-marketplace'), (int) $plan->duration_days); ?></span>
+                                <span class="currency">&#8358;</span><span class="amount"><?php echo esc_html($pkg['price_naira']); ?></span>
+                                <?php if ($is_vip_plan && !empty($pkg['duration_days'])) : ?>
+                                    <span class="period">/ <?php printf(esc_html__('%d days', 'propvendor-marketplace'), (int) $pkg['duration_days']); ?></span>
                                 <?php endif; ?>
                             </div>
                         </div>
 
                         <div class="propvendor-plan-body">
-                            <p class="propvendor-plan-desc"><?php echo esc_html($plan->description); ?></p>
+                            <p class="propvendor-plan-desc"><?php echo esc_html($pkg['description']); ?></p>
                             <ul class="propvendor-plan-features">
-                                <?php if ($is_vip_plan) : ?>
-                                    <li><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e('Unlimited Direct Lead Phone & Email Unlocks', 'propvendor-marketplace'); ?></li>
-                                    <li><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e('Verified VIP Agent Badge On All Listings', 'propvendor-marketplace'); ?></li>
-                                    <li><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e('Priority Placement In Discovery Search', 'propvendor-marketplace'); ?></li>
-                                    <li><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e('Instant WhatsApp Customer Direct Chat', 'propvendor-marketplace'); ?></li>
-                                <?php else : ?>
-                                    <li><span class="dashicons dashicons-yes-alt"></span> <?php printf(esc_html__('%d Contact Unlocks (Phone & Email)', 'propvendor-marketplace'), (int) $plan->credits); ?></li>
-                                    <li><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e('Credits Never Expire', 'propvendor-marketplace'); ?></li>
-                                    <li><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e('Use Anytime Across All Inquiries', 'propvendor-marketplace'); ?></li>
-                                    <li><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e('Unlock Leads One At A Time As Needed', 'propvendor-marketplace'); ?></li>
-                                <?php endif; ?>
+                                <?php foreach ($pkg['features'] as $feat) : ?>
+                                    <li><span class="dashicons dashicons-yes-alt"></span> <?php echo esc_html($feat); ?></li>
+                                <?php endforeach; ?>
                             </ul>
                         </div>
 
                         <div class="propvendor-plan-footer">
-                            <button type="button"
-                                class="button button-primary propvendor-checkout-btn"
-                                data-plan-id="<?php echo esc_attr($plan->id); ?>"
-                                data-plan-name="<?php echo esc_attr($plan->name); ?>"
-                                data-price-kobo="<?php echo esc_attr($plan->price_kobo); ?>">
-                                <?php echo $is_vip_plan ? esc_html__('Upgrade to VIP Agent', 'propvendor-marketplace') : esc_html__('Buy Credits Now', 'propvendor-marketplace'); ?>
-                            </button>
+                            <?php if ($is_free_plan) : ?>
+                                <a href="<?php echo esc_url(home_url('/submit-listing/')); ?>" class="button button-secondary propvendor-free-plan-btn" data-plan-id="free_basic" style="display: inline-block; width: 100%; text-align: center; text-decoration: none; padding: 10px 16px; border-radius: 8px; font-weight: 600;">
+                                    <?php echo esc_html($pkg['cta_text']); ?>
+                                </a>
+                            <?php else : ?>
+                                <button type="button"
+                                    class="button button-primary propvendor-checkout-btn"
+                                    data-plan-id="<?php echo esc_attr($pkg['plan_id']); ?>"
+                                    data-plan-name="<?php echo esc_attr($pkg['name']); ?>"
+                                    data-price-kobo="<?php echo esc_attr($pkg['price_kobo']); ?>">
+                                    <?php echo esc_html($pkg['cta_text']); ?>
+                                </button>
+                            <?php endif; ?>
                         </div>
                     </div>
                 <?php endforeach; ?>

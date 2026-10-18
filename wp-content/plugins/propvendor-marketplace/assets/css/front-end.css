@@ -2455,6 +2455,10 @@ select.form-control {
     z-index: 2;
 }
 
+.propvendor-card-badge.free-badge {
+    background: #64748b;
+}
+
 .propvendor-card-badge.popular-badge {
     background: #2563eb;
 }
@@ -2469,6 +2473,18 @@ select.form-control {
 
 .propvendor-card-badge.pro-savings-badge {
     background: #7c3aed;
+}
+
+.propvendor-free-plan-btn {
+    background: #f1f5f9 !important;
+    color: #475569 !important;
+    border: 1px solid #cbd5e1 !important;
+    transition: all 0.2s ease !important;
+}
+
+.propvendor-free-plan-btn:hover {
+    background: #e2e8f0 !important;
+    color: #0f172a !important;
 }
 
 .propvendor-plan-header {
