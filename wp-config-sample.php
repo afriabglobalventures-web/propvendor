@@ -89,7 +89,28 @@ define( 'WP_DEBUG', false );
 
 /* Add any custom values between this line and the "stop editing" line. */
 
+/**
+ * Environment & Security Configuration Template (Phase 10B.1)
+ *
+ * Supported values: 'local', 'development', 'staging', or 'production'.
+ */
+define( 'WP_ENVIRONMENT_TYPE', 'staging' );
 
+/**
+ * Safe Debugging Configuration:
+ * Logs errors to wp-content/debug.log while suppressing public error display.
+ */
+define( 'WP_DEBUG_LOG', true );
+define( 'WP_DEBUG_DISPLAY', false );
+@ini_set( 'display_errors', 0 );
+
+/**
+ * Staging / Production Security Recommendations:
+ * Uncomment the following settings on HTTPS staging and production environments:
+ *
+ * define( 'FORCE_SSL_ADMIN', true );
+ * define( 'DISALLOW_FILE_EDIT', true );
+ */
 
 /* That's all, stop editing! Happy publishing. */
 
