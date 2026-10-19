@@ -5397,14 +5397,29 @@ footer.site-footer .ast-footer-copyright a:focus-visible {
 
 .propvendor-category-header h2,
 .propvendor-category-section h2,
-.propvendor-category-section .propvendor-section-title {
+.propvendor-category-section .propvendor-section-title,
+.propvendor-section-header h2 {
+    font-size: clamp(1.4rem, 5vw, 2.25rem) !important;
+    white-space: nowrap !important;
     text-align: center !important;
     margin: 0 auto 10px !important;
+    line-height: 1.25 !important;
     color: var(--pv-color-navy, #142B3B);
-    font-size: 2.25rem;
     font-weight: 800;
     letter-spacing: -0.02em;
 }
+
+/* Fallback for ultra-narrow devices (< 360px) to prevent viewport clipping */
+@media (max-width: 359px) {
+    .propvendor-category-header h2,
+    .propvendor-category-section h2,
+    .propvendor-category-section .propvendor-section-title,
+    .propvendor-section-header h2 {
+        font-size: 1.25rem !important;
+        white-space: normal !important;
+    }
+}
+
 
 .propvendor-category-header p,
 .propvendor-category-section p,
