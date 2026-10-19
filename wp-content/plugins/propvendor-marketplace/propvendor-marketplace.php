@@ -456,6 +456,7 @@ function propvendor_marketplace_render_vendor_quota_card($user_id) {
 
     if ($is_over_limit) {
         $output .= '<div class="propvendor-quota-alert propvendor-quota-alert-warning">';
+        $output .= '<div class="propvendor-quota-alert-content">';
         $output .= sprintf(
             esc_html__('Your account has %d active listings, which exceeds the free limit of %d. Existing listings remain safe and editable, but new listing submissions are blocked until your active count is below %d or you upgrade to a VIP plan.', 'propvendor-marketplace'),
             $active_count,
@@ -463,13 +464,18 @@ function propvendor_marketplace_render_vendor_quota_card($user_id) {
             $limit
         );
         $output .= '</div>';
+        $output .= '<div class="propvendor-quota-alert-action"><a href="' . esc_url(home_url('/vendor-wallet/')) . '" class="propvendor-btn-upgrade">' . esc_html__('Upgrade to VIP Agent', 'propvendor-marketplace') . ' &rarr;</a></div>';
+        $output .= '</div>';
     } elseif (!$is_vip && $active_count >= $limit) {
         $output .= '<div class="propvendor-quota-alert propvendor-quota-alert-warning">';
+        $output .= '<div class="propvendor-quota-alert-content">';
         $output .= sprintf(
             esc_html__('Active listing limit reached (%d of %d). To create new listings, remove or mark an existing listing as sold or unavailable, or contact a marketplace administrator to upgrade to a VIP plan.', 'propvendor-marketplace'),
             $active_count,
             $limit
         );
+        $output .= '</div>';
+        $output .= '<div class="propvendor-quota-alert-action"><a href="' . esc_url(home_url('/vendor-wallet/')) . '" class="propvendor-btn-upgrade">' . esc_html__('Upgrade to VIP Agent', 'propvendor-marketplace') . ' &rarr;</a></div>';
         $output .= '</div>';
     } elseif (!$is_vip) {
         $output .= '<div class="propvendor-quota-info-note">';
@@ -3928,11 +3934,695 @@ function propvendor_marketplace_vendor_dashboard_shortcode() {
 }
 add_shortcode('propvendor_vendor_dashboard', 'propvendor_marketplace_vendor_dashboard_shortcode');
 
+/**
+ * =========================================================================
+ * PHASE 9G — STATIC CONTENT, TRUST PAGES & WEBSITE COMPLETION
+ * Professional static pages, buyer/vendor guides & global footer architecture
+ * =========================================================================
+ */
+
+/**
+ * Handle Contact Form submission
+ */
+function propvendor_marketplace_handle_contact_submission() {
+    if (!isset($_POST['propvendor_contact_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['propvendor_contact_nonce'])), 'propvendor_contact_action')) {
+        return array('status' => 'error', 'message' => esc_html__('Security verification failed. Please try again.', 'propvendor-marketplace'));
+    }
+
+    $name = sanitize_text_field(wp_unslash($_POST['pv_contact_name'] ?? ''));
+    $email = sanitize_email(wp_unslash($_POST['pv_contact_email'] ?? ''));
+    $phone = sanitize_text_field(wp_unslash($_POST['pv_contact_phone'] ?? ''));
+    $topic = sanitize_text_field(wp_unslash($_POST['pv_contact_topic'] ?? 'General Enquiry'));
+    $message = sanitize_textarea_field(wp_unslash($_POST['pv_contact_message'] ?? ''));
+
+    if (empty($name) || empty($email) || empty($message)) {
+        return array('status' => 'error', 'message' => esc_html__('Please fill in all required fields (Name, Email, and Message).', 'propvendor-marketplace'));
+    }
+
+    if (!is_email($email)) {
+        return array('status' => 'error', 'message' => esc_html__('Please provide a valid email address.', 'propvendor-marketplace'));
+    }
+
+    $admin_email = get_option('admin_email', 'afriabglobalventures@gmail.com');
+    $subject = sprintf('[PropVendor Enquiry] %s: %s', $topic, $name);
+    $body = sprintf(
+        "New Contact Form Submission on PropVendor:\n\nName: %s\nEmail: %s\nPhone: %s\nTopic: %s\n\nMessage:\n%s\n\nSubmitted on: %s\nIP: %s",
+        $name,
+        $email,
+        $phone ? $phone : 'Not provided',
+        $topic,
+        $message,
+        current_time('mysql'),
+        sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'] ?? 'Unknown'))
+    );
+    $headers = array('Reply-To: ' . $name . ' <' . $email . '>');
+
+    // Send email to admin
+    @wp_mail($admin_email, $subject, $body, $headers);
+
+    return array('status' => 'success', 'message' => esc_html__('Thank you for contacting PropVendor. Your message has been received by our support team, and we will follow up with you shortly via your verified email.', 'propvendor-marketplace'));
+}
+
+/**
+ * 1. Contact Form Shortcode [propvendor_contact_form]
+ */
 function propvendor_marketplace_contact_form_shortcode() {
-    $output = '<div class="propvendor-form-box"><h3>Send a message</h3><form class="propvendor-form"><label>Name<input type="text" placeholder="Full name" /></label><label>Email<input type="email" placeholder="Email address" /></label><label>Topic<select><option>Listing enquiry</option><option>Vendor support</option><option>Fraud report</option></select></label><label>Message<textarea rows="5" placeholder="How can we help?"></textarea></label><button type="button">Send enquiry</button></form></div>';
+    $submission_result = null;
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['propvendor_contact_submit'])) {
+        $submission_result = propvendor_marketplace_handle_contact_submission();
+    }
+
+    $verified_email = 'afriabglobalventures@gmail.com';
+
+    $output = '<div class="propvendor-static-page propvendor-contact-page">';
+    $output .= '<header class="propvendor-static-header">';
+    $output .= '<span class="pv-badge pv-badge-primary">' . esc_html__('Get in Touch', 'propvendor-marketplace') . '</span>';
+    $output .= '<h1 class="propvendor-static-title">' . esc_html__('Contact the PropVendor Team', 'propvendor-marketplace') . '</h1>';
+    $output .= '<p class="propvendor-static-lead">' . esc_html__('We are here to assist buyers, verified vendors, and partners across Nigeria with enquiries, listing guidance, and account support.', 'propvendor-marketplace') . '</p>';
+    $output .= '</header>';
+
+    $output .= '<div class="propvendor-contact-grid">';
+
+    // Left column: Verified info & staged notice
+    $output .= '<div class="propvendor-contact-info-col">';
+    $output .= '<div class="pv-card propvendor-contact-card">';
+    $output .= '<div class="propvendor-contact-method">';
+    $output .= '<div class="propvendor-contact-icon">&#9993;</div>';
+    $output .= '<div class="propvendor-contact-details">';
+    $output .= '<h3>' . esc_html__('Official Support Channel', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p><a href="mailto:' . esc_attr($verified_email) . '" class="propvendor-contact-link">' . esc_html($verified_email) . '</a></p>';
+    $output .= '<span class="propvendor-contact-subtext">' . esc_html__('Direct enquiries, platform feedback, and urgent safety reports are monitored and responded to promptly.', 'propvendor-marketplace') . '</span>';
+    $output .= '</div></div>';
+
+    $output .= '<div class="propvendor-contact-method">';
+    $output .= '<div class="propvendor-contact-icon">&#128340;</div>';
+    $output .= '<div class="propvendor-contact-details">';
+    $output .= '<h3>' . esc_html__('Support Hours (WAT)', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p class="propvendor-contact-hours">' . esc_html__('Monday to Friday: 9:00 AM – 5:00 PM West Africa Time', 'propvendor-marketplace') . '</p>';
+    $output .= '<span class="propvendor-contact-subtext">' . esc_html__('Weekend and public holiday inquiries are reviewed on the next Nigerian business day.', 'propvendor-marketplace') . '</span>';
+    $output .= '</div></div>';
+
+    $output .= '<div class="propvendor-contact-method propvendor-staged-notice">';
+    $output .= '<div class="propvendor-contact-icon">&#128737;</div>';
+    $output .= '<div class="propvendor-contact-details">';
+    $output .= '<div class="propvendor-method-header"><span class="pv-badge pv-badge-accent">' . esc_html__('Staged Verification', 'propvendor-marketplace') . '</span></div>';
+    $output .= '<h3>' . esc_html__('Physical Office & Phone Verification', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('PropVendor\'s dedicated regional physical support centers and direct phone helplines are currently undergoing staged operational verification prior to general availability. All official support is handled securely via our verified email channel.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div></div>';
+
+    $output .= '</div>'; // pv-card
+    $output .= '</div>'; // propvendor-contact-info-col
+
+    // Right column: Contact form
+    $output .= '<div class="propvendor-contact-form-col">';
+    $output .= '<div class="pv-card propvendor-form-card">';
+    $output .= '<h3>' . esc_html__('Send Us a Message', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p class="propvendor-form-intro">' . esc_html__('Fill out the form below and our team will get back to you within 24 business hours.', 'propvendor-marketplace') . '</p>';
+
+    if ($submission_result) {
+        $alert_class = $submission_result['status'] === 'success' ? 'pv-alert-success' : 'pv-alert-danger';
+        $output .= '<div class="propvendor-alert ' . esc_attr($alert_class) . '">' . esc_html($submission_result['message']) . '</div>';
+    }
+
+    $output .= '<form method="post" action="" class="propvendor-contact-form-element">';
+    $output .= wp_nonce_field('propvendor_contact_action', 'propvendor_contact_nonce', true, false);
+
+    $output .= '<div class="propvendor-form-row">';
+    $output .= '<div class="propvendor-form-group">';
+    $output .= '<label for="pv_contact_name">' . esc_html__('Full Name', 'propvendor-marketplace') . ' <span class="required">*</span></label>';
+    $output .= '<input type="text" id="pv_contact_name" name="pv_contact_name" class="pv-input" placeholder="' . esc_attr__('e.g. Chukwuma Adebayo', 'propvendor-marketplace') . '" required />';
+    $output .= '</div>';
+
+    $output .= '<div class="propvendor-form-group">';
+    $output .= '<label for="pv_contact_email">' . esc_html__('Email Address', 'propvendor-marketplace') . ' <span class="required">*</span></label>';
+    $output .= '<input type="email" id="pv_contact_email" name="pv_contact_email" class="pv-input" placeholder="' . esc_attr__('e.g. name@example.com', 'propvendor-marketplace') . '" required />';
+    $output .= '</div>';
+    $output .= '</div>'; // row
+
+    $output .= '<div class="propvendor-form-row">';
+    $output .= '<div class="propvendor-form-group">';
+    $output .= '<label for="pv_contact_phone">' . esc_html__('Phone Number', 'propvendor-marketplace') . ' <span class="optional">(' . esc_html__('Optional', 'propvendor-marketplace') . ')</span></label>';
+    $output .= '<input type="tel" id="pv_contact_phone" name="pv_contact_phone" class="pv-input" placeholder="' . esc_attr__('e.g. 0801 234 5678', 'propvendor-marketplace') . '" />';
+    $output .= '</div>';
+
+    $output .= '<div class="propvendor-form-group">';
+    $output .= '<label for="pv_contact_topic">' . esc_html__('Enquiry Topic', 'propvendor-marketplace') . ' <span class="required">*</span></label>';
+    $output .= '<select id="pv_contact_topic" name="pv_contact_topic" class="pv-select" required>';
+    $output .= '<option value="Listing Enquiry">' . esc_html__('Listing Enquiry / Assistance', 'propvendor-marketplace') . '</option>';
+    $output .= '<option value="Vendor Registration">' . esc_html__('Vendor Registration & Onboarding', 'propvendor-marketplace') . '</option>';
+    $output .= '<option value="VIP Plans & Wallet">' . esc_html__('VIP Agent Plans & Wallet Credits', 'propvendor-marketplace') . '</option>';
+    $output .= '<option value="Fraud / Safety Report">' . esc_html__('Fraud or Safety Report', 'propvendor-marketplace') . '</option>';
+    $output .= '<option value="Technical Support">' . esc_html__('Technical Support / Account Issue', 'propvendor-marketplace') . '</option>';
+    $output .= '</select>';
+    $output .= '</div>';
+    $output .= '</div>'; // row
+
+    $output .= '<div class="propvendor-form-group">';
+    $output .= '<label for="pv_contact_message">' . esc_html__('Message', 'propvendor-marketplace') . ' <span class="required">*</span></label>';
+    $output .= '<textarea id="pv_contact_message" name="pv_contact_message" class="pv-textarea" rows="5" placeholder="' . esc_attr__('How can our team assist you?', 'propvendor-marketplace') . '" required></textarea>';
+    $output .= '</div>';
+
+    $output .= '<div class="propvendor-form-safety-notice">';
+    $output .= '<small>' . esc_html__('PropVendor will never request your banking passwords, ATM PINs, or direct cash transfers to personal accounts.', 'propvendor-marketplace') . '</small>';
+    $output .= '</div>';
+
+    $output .= '<button type="submit" name="propvendor_contact_submit" class="pv-btn-primary propvendor-btn-submit">' . esc_html__('Send Message', 'propvendor-marketplace') . ' &rarr;</button>';
+    $output .= '</form>';
+
+    $output .= '</div>'; // pv-card
+    $output .= '</div>'; // propvendor-contact-form-col
+
+    $output .= '</div>'; // propvendor-contact-grid
+    $output .= '</div>'; // propvendor-static-page
+
     return $output;
 }
 add_shortcode('propvendor_contact_form', 'propvendor_marketplace_contact_form_shortcode');
+
+/**
+ * 2. About PropVendor Shortcode [propvendor_about]
+ */
+function propvendor_marketplace_about_shortcode() {
+    $output = '<div class="propvendor-static-page propvendor-about-page">';
+    $output .= '<header class="propvendor-static-header">';
+    $output .= '<span class="pv-badge pv-badge-primary">' . esc_html__('About PropVendor', 'propvendor-marketplace') . '</span>';
+    $output .= '<h1 class="propvendor-static-title">' . esc_html__('Nigeria\'s Trusted Property & Vehicle Marketplace', 'propvendor-marketplace') . '</h1>';
+    $output .= '<p class="propvendor-static-lead">' . esc_html__('PropVendor connects verified real estate developers, licensed property agents, automotive dealerships, and prospective buyers across all 36 States and the Federal Capital Territory with transparency, verified listings, and secure communications.', 'propvendor-marketplace') . '</p>';
+    $output .= '</header>';
+
+    // Core Pillars Grid
+    $output .= '<div class="propvendor-static-grid propvendor-pillars-grid">';
+
+    // Pillar 1
+    $output .= '<div class="pv-card propvendor-pillar-card">';
+    $output .= '<div class="propvendor-pillar-icon">&#127970;</div>';
+    $output .= '<h3>' . esc_html__('Verified Vendor Standards', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('We empower legitimate real estate agencies, independent developers, and automotive dealerships across Nigeria with verified profiles, quota-governed listing integrity, and direct customer inquiry channels.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    // Pillar 2
+    $output .= '<div class="pv-card propvendor-pillar-card">';
+    $output .= '<div class="propvendor-pillar-icon">&#128737;</div>';
+    $output .= '<h3>' . esc_html__('Safety & Anti-Fraud Protection', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('Navigating Nigeria\'s property and vehicle markets requires vigilance. PropVendor emphasizes mandatory physical inspections, independent legal title searches, and masked lead management to prevent impersonation and fraudulent advance fees.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    // Pillar 3
+    $output .= '<div class="pv-card propvendor-pillar-card">';
+    $output .= '<div class="propvendor-pillar-icon">&#128506;</div>';
+    $output .= '<h3>' . esc_html__('Pan-Nigerian Marketplace Coverage', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('From residential apartments in Lagos, Ibadan, and Abuja to commercial plots in Rivers, agricultural lands in Ogun, and inspected vehicles nationwide, PropVendor connects buyers with inventory across all 37 Nigerian administrative territories.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    $output .= '</div>'; // propvendor-pillars-grid
+
+    // Marketplace Key Highlights Bar
+    $output .= '<div class="propvendor-about-stats-banner">';
+    $output .= '<div class="propvendor-stat-item"><span class="propvendor-stat-num">37</span><span class="propvendor-stat-lbl">' . esc_html__('States & FCT Covered', 'propvendor-marketplace') . '</span></div>';
+    $output .= '<div class="propvendor-stat-item"><span class="propvendor-stat-num">100%</span><span class="propvendor-stat-lbl">' . esc_html__('Direct Vendor Enquiries', 'propvendor-marketplace') . '</span></div>';
+    $output .= '<div class="propvendor-stat-item"><span class="propvendor-stat-num">&#8358;0</span><span class="propvendor-stat-lbl">' . esc_html__('Free Tier to Start Listing', 'propvendor-marketplace') . '</span></div>';
+    $output .= '<div class="propvendor-stat-item"><span class="propvendor-stat-num">Paystack</span><span class="propvendor-stat-lbl">' . esc_html__('Secure NGN Payments', 'propvendor-marketplace') . '</span></div>';
+    $output .= '</div>';
+
+    // Staged Verification Note
+    $output .= '<div class="propvendor-staged-box">';
+    $output .= '<h4>' . esc_html__('Operational Verification Notice', 'propvendor-marketplace') . '</h4>';
+    $output .= '<p>' . esc_html__('PropVendor\'s regional customer walkthrough centers and dedicated telephone helplines are currently undergoing staged operational verification prior to nationwide deployment. Inquiries and official support are handled directly via afriabglobalventures@gmail.com.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    // CTA Banner
+    $output .= '<div class="propvendor-static-cta-banner">';
+    $output .= '<h2>' . esc_html__('Ready to Explore or List on PropVendor?', 'propvendor-marketplace') . '</h2>';
+    $output .= '<p>' . esc_html__('Whether you are searching for your next property, an investment land plot, a reliable car, or seeking serious buyers for your inventory, get started today.', 'propvendor-marketplace') . '</p>';
+    $output .= '<div class="propvendor-cta-buttons">';
+    $output .= '<a href="' . esc_url(home_url('/browse-listings/')) . '" class="pv-btn-primary">' . esc_html__('Browse All Listings', 'propvendor-marketplace') . ' &rarr;</a>';
+    $output .= '<a href="' . esc_url(home_url('/vendor-registration/')) . '" class="pv-btn-accent">' . esc_html__('Register as a Vendor', 'propvendor-marketplace') . ' &rarr;</a>';
+    $output .= '</div>';
+    $output .= '</div>';
+
+    $output .= '</div>'; // propvendor-static-page
+    return $output;
+}
+add_shortcode('propvendor_about', 'propvendor_marketplace_about_shortcode');
+
+/**
+ * 3. Help & FAQs Shortcode [propvendor_help_faqs]
+ */
+function propvendor_marketplace_help_faqs_shortcode() {
+    $output = '<div class="propvendor-static-page propvendor-faq-page">';
+    $output .= '<header class="propvendor-static-header">';
+    $output .= '<span class="pv-badge pv-badge-primary">' . esc_html__('Support & Knowledge Base', 'propvendor-marketplace') . '</span>';
+    $output .= '<h1 class="propvendor-static-title">' . esc_html__('Frequently Asked Questions', 'propvendor-marketplace') . '</h1>';
+    $output .= '<p class="propvendor-static-lead">' . esc_html__('Clear, factual answers regarding searching listings, vendor quotas, lead credits, VIP Agent subscriptions, and transaction safety in Nigeria.', 'propvendor-marketplace') . '</p>';
+    $output .= '</header>';
+
+    // Section 1: For Buyers
+    $output .= '<div class="propvendor-faq-group">';
+    $output .= '<h2 class="propvendor-faq-group-title">&#128065; ' . esc_html__('For Buyers & Searchers', 'propvendor-marketplace') . '</h2>';
+
+    $output .= '<div class="pv-card propvendor-faq-card">';
+    $output .= '<h3>' . esc_html__('How do I enquire about a property, land plot, or vehicle?', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('Every listing on PropVendor has a direct enquiry form. When you submit your name, phone number, email, and inquiry message, your request is securely routed to the listing vendor\'s dashboard and customer inbox. The verified vendor will follow up directly via phone or email.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    $output .= '<div class="pv-card propvendor-faq-card">';
+    $output .= '<h3>' . esc_html__('Are listings physically inspected by PropVendor?', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('Listings are submitted by independent registered vendors, real estate agents, developers, and car dealerships. While we verify vendor registration credentials, we strictly urge all prospective buyers to conduct an independent physical inspection, vehicle diagnostic scan, and legal title search at the relevant State Lands Bureau before releasing any payment.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    $output .= '<div class="pv-card propvendor-faq-card">';
+    $output .= '<h3>' . esc_html__('Does PropVendor charge buyers a fee to search or enquire?', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('No. Browsing listings, filtering by state, local government area, or property/vehicle category, and submitting purchase inquiries is 100% free for all prospective buyers.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    $output .= '</div>'; // faq-group 1
+
+    // Section 2: For Vendors
+    $output .= '<div class="propvendor-faq-group">';
+    $output .= '<h2 class="propvendor-faq-group-title">&#128188; ' . esc_html__('For Vendors, Real Estate Agents & Auto Dealers', 'propvendor-marketplace') . '</h2>';
+
+    $output .= '<div class="pv-card propvendor-faq-card">';
+    $output .= '<h3>' . esc_html__('What is the Free Tier listing allowance for vendors?', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('Registered vendors start with a Free Basic tier allowing up to 3 concurrently active listings across all categories at no charge (₦0). If you have 3 active listings, you can manage, edit, or mark them as sold, or upgrade to a VIP plan to publish unlimited listings.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    $output .= '<div class="pv-card propvendor-faq-card">';
+    $output .= '<h3>' . esc_html__('How does the VIP Agent Monthly subscription work?', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('The VIP Agent subscription costs ₦30,000 for a 30-day period. It provides unlimited active listing slots, priority marketplace search ranking, and the official VIP Agent badge on all your listings. Subscriptions can be activated directly from your Vendor Wallet using Paystack.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    $output .= '<div class="pv-card propvendor-faq-card">';
+    $output .= '<h3>' . esc_html__('How do buyer contact unlocks and lead credits work?', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('To protect buyer privacy and prevent spam, buyer contact details (phone number and email) are masked in your vendor dashboard. Vendors unlock leads using credits: 1 credit unlocks 1 full buyer lead. Credit packs are available in your Vendor Wallet: Starter Pack (5 credits for ₦5,000) and Pro Pack (28 credits for ₦20,000, which includes bonus credits).', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    $output .= '<div class="pv-card propvendor-faq-card">';
+    $output .= '<h3>' . esc_html__('What payment methods are supported on PropVendor?', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('All wallet top-ups, credit pack purchases, and VIP Agent subscriptions are securely processed through Paystack in Nigerian Naira (₦ NGN). We accept Nigerian Debit Cards (Mastercard, Visa, Verve), Bank Transfers, and USSD.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    $output .= '</div>'; // faq-group 2
+
+    // Section 3: Safety & Inboxes
+    $output .= '<div class="propvendor-faq-group">';
+    $output .= '<h2 class="propvendor-faq-group-title">&#128737; ' . esc_html__('Account Security, Inboxes & Safety', 'propvendor-marketplace') . '</h2>';
+
+    $output .= '<div class="pv-card propvendor-faq-card">';
+    $output .= '<h3>' . esc_html__('Where do I track my messages and buyer enquiries?', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('Vendors can view their complete enquiry history and unlocked leads inside the Vendor Dashboard and Customer Inbox (/customer-inbox/). Registered buyers can also track their inquiries through their account portal.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    $output .= '<div class="pv-card propvendor-faq-card">';
+    $output .= '<h3>' . esc_html__('What should I do if a vendor requests an advance inspection fee?', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('Never pay any inspection fee, deposit, or commitment charge before seeing a property or vehicle in person. Report suspicious vendors immediately via our Contact Us form under "Fraud or Safety Report" or email afriabglobalventures@gmail.com.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    $output .= '</div>'; // faq-group 3
+
+    // Help Footer CTA
+    $output .= '<div class="propvendor-static-cta-banner">';
+    $output .= '<h2>' . esc_html__('Need Additional Assistance?', 'propvendor-marketplace') . '</h2>';
+    $output .= '<p>' . esc_html__('Our support team is available Monday to Friday, 9:00 AM – 5:00 PM WAT.', 'propvendor-marketplace') . '</p>';
+    $output .= '<div class="propvendor-cta-buttons">';
+    $output .= '<a href="' . esc_url(home_url('/contact-us/')) . '" class="pv-btn-primary">' . esc_html__('Contact Support', 'propvendor-marketplace') . ' &rarr;</a>';
+    $output .= '<a href="' . esc_url(home_url('/listing-and-transaction-safety-guidelines/')) . '" class="pv-btn-secondary">' . esc_html__('Read Safety Guidelines', 'propvendor-marketplace') . ' &rarr;</a>';
+    $output .= '</div>';
+    $output .= '</div>';
+
+    $output .= '</div>'; // propvendor-static-page
+    return $output;
+}
+add_shortcode('propvendor_help_faqs', 'propvendor_marketplace_help_faqs_shortcode');
+
+/**
+ * 4. Safety Guidelines Shortcode [propvendor_safety_guidelines]
+ */
+function propvendor_marketplace_safety_guidelines_shortcode() {
+    $output = '<div class="propvendor-static-page propvendor-safety-page">';
+    $output .= '<header class="propvendor-static-header">';
+    $output .= '<span class="pv-badge pv-badge-accent">' . esc_html__('Consumer & Vendor Protection', 'propvendor-marketplace') . '</span>';
+    $output .= '<h1 class="propvendor-static-title">' . esc_html__('Listing & Transaction Safety Guidelines', 'propvendor-marketplace') . '</h1>';
+    $output .= '<p class="propvendor-static-lead">' . esc_html__('Essential safety protocols, legal due diligence standards, and anti-fraud guidelines for Nigerian property, land, and vehicle transactions.', 'propvendor-marketplace') . '</p>';
+    $output .= '</header>';
+
+    // Golden Rule Alert
+    $output .= '<div class="propvendor-safety-golden-rule">';
+    $output .= '<div class="propvendor-golden-icon">&#9888;</div>';
+    $output .= '<div class="propvendor-golden-content">';
+    $output .= '<h2>' . esc_html__('The Cardinal Safety Rule', 'propvendor-marketplace') . '</h2>';
+    $output .= '<p><strong>' . esc_html__('NEVER send money, pay "booking deposits", or pay "inspection fees" to any vendor, agent, or individual before physically inspecting the property or vehicle and legally verifying ownership documents.', 'propvendor-marketplace') . '</strong> ' . esc_html__('PropVendor does not hold custody of funds for property or vehicle transactions.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div></div>';
+
+    // Section 1: Property & Land Due Diligence
+    $output .= '<div class="propvendor-safety-section">';
+    $output .= '<h2>&#127969; ' . esc_html__('Property & Land Due Diligence Protocols', 'propvendor-marketplace') . '</h2>';
+    $output .= '<div class="propvendor-safety-steps-grid">';
+
+    $output .= '<div class="pv-card propvendor-step-card">';
+    $output .= '<span class="propvendor-step-number">01</span>';
+    $output .= '<h3>' . esc_html__('Daylight Physical Inspection', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('Always inspect land or buildings in person during daylight. Verify boundary beacon coordinates, topography, road access, drainage, and neighborhood developments. Never rely solely on photos or video walkthroughs.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    $output .= '<div class="pv-card propvendor-step-card">';
+    $output .= '<span class="propvendor-step-number">02</span>';
+    $output .= '<h3>' . esc_html__('State Lands Bureau Title Search', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('Never accept photocopied documents. Conduct an official title search at the relevant State Lands Bureau (e.g. Lands Bureau Alausa for Lagos State; AGIS for Abuja FCT). Confirm valid Certificate of Occupancy (C of O), Governor\'s Consent, Gazette, or Excision status.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    $output .= '<div class="pv-card propvendor-step-card">';
+    $output .= '<span class="propvendor-step-number">03</span>';
+    $output .= '<h3>' . esc_html__('Engage Certified Professionals', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('Hire a SURCON-registered surveyor to chart coordinate beacons against government committed acquisition records, and a Nigerian Bar Association (NBA) registered legal practitioner to examine deeds and prepare contracts.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    $output .= '<div class="pv-card propvendor-step-card">';
+    $output .= '<span class="propvendor-step-number">04</span>';
+    $output .= '<h3>' . esc_html__('Family / Community Land Checks', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('For uncommitted family or community land (\'Omonile\'), ensure the principal family head and accredited representatives execute the Deed of Assignment, and verify there is no pending court litigation or competing claimants.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    $output .= '</div></div>'; // steps-grid & section 1
+
+    // Section 2: Vehicle & Automotive Protocols
+    $output .= '<div class="propvendor-safety-section">';
+    $output .= '<h2>&#128663; ' . esc_html__('Vehicle & Automotive Buying Protocols', 'propvendor-marketplace') . '</h2>';
+    $output .= '<div class="propvendor-safety-steps-grid">';
+
+    $output .= '<div class="pv-card propvendor-step-card">';
+    $output .= '<span class="propvendor-step-number">01</span>';
+    $output .= '<h3>' . esc_html__('Meet in a Public Daylight Location', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('Arrange vehicle inspections in open, secure public locations such as an established automotive repair center or a busy commercial mall parking lot. Never inspect vehicles in remote or unlit areas.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    $output .= '<div class="pv-card propvendor-step-card">';
+    $output .= '<span class="propvendor-step-number">02</span>';
+    $output .= '<h3>' . esc_html__('Independent Mechanical Diagnostic', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('Bring your own trusted mechanic to run an OBD-II diagnostic scan, check engine compression, evaluate transmission responsiveness, and check for hidden flood, frame, or collision damage.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    $output .= '<div class="pv-card propvendor-step-card">';
+    $output .= '<span class="propvendor-step-number">03</span>';
+    $output .= '<h3>' . esc_html__('Customs Duty & Registration Verification', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('For imported (Tokunbo) cars, verify the Single Goods Declaration (SGD) customs document and confirm customs duty payment through the Nigeria Customs Service verification portal. For Nigerian-used vehicles, confirm original vehicle license, proof of ownership certificate, and roadworthiness records with FRSC and State VIO.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    $output .= '<div class="pv-card propvendor-step-card">';
+    $output .= '<span class="propvendor-step-number">04</span>';
+    $output .= '<h3>' . esc_html__('Chassis & VIN Cross-Check', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('Carefully cross-reference the 17-character VIN stamped on the chassis frame, engine bay, door jamb, and lower windshield against all registration papers to ensure no tampering or vehicle cloning.', 'propvendor-marketplace') . '</p>';
+    $output .= '</div>';
+
+    $output .= '</div></div>'; // steps-grid & section 2
+
+    // Section 3: Red Flags to Avoid
+    $output .= '<div class="propvendor-safety-section">';
+    $output .= '<h2>&#9888; ' . esc_html__('High-Risk Red Flags to Avoid', 'propvendor-marketplace') . '</h2>';
+    $output .= '<div class="pv-card propvendor-red-flags-card">';
+    $output .= '<ul class="propvendor-flags-list">';
+    $output .= '<li><strong>' . esc_html__('Unrealistically low prices:', 'propvendor-marketplace') . '</strong> ' . esc_html__('If a prime plot in Lekki or an immaculate SUV is priced at a fraction of prevailing market value, it is almost certainly fraudulent.', 'propvendor-marketplace') . '</li>';
+    $output .= '<li><strong>' . esc_html__('Advance "Inspection" or "Fuel" Fees:', 'propvendor-marketplace') . '</strong> ' . esc_html__('Legitimate vendors do not charge prospective buyers to inspect available inventory.', 'propvendor-marketplace') . '</li>';
+    $output .= '<li><strong>' . esc_html__('High-pressure urgency tactics:', 'propvendor-marketplace') . '</strong> ' . esc_html__('Claims that "three other buyers have their cash ready" to rush you into paying without legal searches.', 'propvendor-marketplace') . '</li>';
+    $output .= '<li><strong>' . esc_html__('Refusal to meet in person or provide title copies for searches:', 'propvendor-marketplace') . '</strong> ' . esc_html__('Never proceed if a vendor insists on communicating only via unverified chat channels or refuses physical meetings.', 'propvendor-marketplace') . '</li>';
+    $output .= '</ul>';
+    $output .= '</div></div>';
+
+    $output .= '<div class="propvendor-static-cta-banner">';
+    $output .= '<h2>' . esc_html__('Notice Something Suspicious?', 'propvendor-marketplace') . '</h2>';
+    $output .= '<p>' . esc_html__('Help keep the PropVendor marketplace secure for all Nigerians. Report fraudulent listings or unverified vendors immediately.', 'propvendor-marketplace') . '</p>';
+    $output .= '<div class="propvendor-cta-buttons">';
+    $output .= '<a href="' . esc_url(home_url('/contact-us/')) . '" class="pv-btn-primary">' . esc_html__('Report Suspicious Activity', 'propvendor-marketplace') . ' &rarr;</a>';
+    $output .= '<a href="' . esc_url(home_url('/browse-listings/')) . '" class="pv-btn-secondary">' . esc_html__('Browse Verified Listings', 'propvendor-marketplace') . ' &rarr;</a>';
+    $output .= '</div>';
+    $output .= '</div>';
+
+    $output .= '</div>'; // propvendor-static-page
+    return $output;
+}
+add_shortcode('propvendor_safety_guidelines', 'propvendor_marketplace_safety_guidelines_shortcode');
+
+/**
+ * 5. Login & My Account Portal Shortcode [propvendor_login_account]
+ */
+function propvendor_marketplace_login_account_shortcode() {
+    $output = '<div class="propvendor-static-page propvendor-account-page">';
+
+    if (is_user_logged_in()) {
+        $current_user = wp_get_current_user();
+        $user_id = $current_user->ID;
+        $is_vip = function_exists('propvendor_marketplace_is_user_vip') ? propvendor_marketplace_is_user_vip($user_id) : false;
+        $balance = function_exists('propvendor_marketplace_get_user_credit_balance') ? propvendor_marketplace_get_user_credit_balance($user_id) : 0;
+
+        $output .= '<header class="propvendor-static-header">';
+        $output .= '<span class="pv-badge ' . ($is_vip ? 'pv-badge-accent' : 'pv-badge-primary') . '">' . ($is_vip ? esc_html__('VIP Agent Member', 'propvendor-marketplace') : esc_html__('Registered Account', 'propvendor-marketplace')) . '</span>';
+        $output .= '<h1 class="propvendor-static-title">' . sprintf(esc_html__('Welcome back, %s!', 'propvendor-marketplace'), esc_html($current_user->display_name)) . '</h1>';
+        $output .= '<p class="propvendor-static-lead">' . esc_html__('Manage your marketplace listings, monitor buyer leads, review customer inquiries, and access your vendor wallet.', 'propvendor-marketplace') . '</p>';
+        $output .= '</header>';
+
+        // Account Quick Actions Grid
+        $output .= '<div class="propvendor-account-grid">';
+
+        $output .= '<a href="' . esc_url(home_url('/vendor-dashboard/')) . '" class="pv-card propvendor-account-card">';
+        $output .= '<div class="propvendor-account-icon">&#128202;</div>';
+        $output .= '<h3>' . esc_html__('Vendor Dashboard', 'propvendor-marketplace') . '</h3>';
+        $output .= '<p>' . esc_html__('View active listings, listing quotas, enquiry totals, and manage inventory.', 'propvendor-marketplace') . '</p>';
+        $output .= '<span class="propvendor-card-link">' . esc_html__('Open Dashboard', 'propvendor-marketplace') . ' &rarr;</span>';
+        $output .= '</a>';
+
+        $output .= '<a href="' . esc_url(home_url('/vendor-wallet/')) . '" class="pv-card propvendor-account-card">';
+        $output .= '<div class="propvendor-account-icon">&#128179;</div>';
+        $output .= '<h3>' . esc_html__('Vendor Wallet & Credits', 'propvendor-marketplace') . '</h3>';
+        $output .= '<p>' . sprintf(esc_html__('Balance: %d Lead Credits. Buy credit packs or upgrade to VIP Monthly.', 'propvendor-marketplace'), $balance) . '</p>';
+        $output .= '<span class="propvendor-card-link">' . esc_html__('Manage Wallet', 'propvendor-marketplace') . ' &rarr;</span>';
+        $output .= '</a>';
+
+        $output .= '<a href="' . esc_url(home_url('/customer-inbox/')) . '" class="pv-card propvendor-account-card">';
+        $output .= '<div class="propvendor-account-icon">&#9993;</div>';
+        $output .= '<h3>' . esc_html__('Customer Inbox', 'propvendor-marketplace') . '</h3>';
+        $output .= '<p>' . esc_html__('Review incoming buyer leads, communications, and unlocked contact details.', 'propvendor-marketplace') . '</p>';
+        $output .= '<span class="propvendor-card-link">' . esc_html__('View Messages', 'propvendor-marketplace') . ' &rarr;</span>';
+        $output .= '</a>';
+
+        $output .= '<a href="' . esc_url(home_url('/vendor-profile/')) . '" class="pv-card propvendor-account-card">';
+        $output .= '<div class="propvendor-account-icon">&#128100;</div>';
+        $output .= '<h3>' . esc_html__('Vendor Profile', 'propvendor-marketplace') . '</h3>';
+        $output .= '<p>' . esc_html__('Update your agency name, verified phone number, state location, and bio.', 'propvendor-marketplace') . '</p>';
+        $output .= '<span class="propvendor-card-link">' . esc_html__('Edit Profile', 'propvendor-marketplace') . ' &rarr;</span>';
+        $output .= '</a>';
+
+        $output .= '<a href="' . esc_url(home_url('/submit-a-listing/')) . '" class="pv-card propvendor-account-card">';
+        $output .= '<div class="propvendor-account-icon">&#10133;</div>';
+        $output .= '<h3>' . esc_html__('Submit a Listing', 'propvendor-marketplace') . '</h3>';
+        $output .= '<p>' . esc_html__('Create and publish a new property, land plot, or automotive listing.', 'propvendor-marketplace') . '</p>';
+        $output .= '<span class="propvendor-card-link">' . esc_html__('Create Listing', 'propvendor-marketplace') . ' &rarr;</span>';
+        $output .= '</a>';
+
+        $output .= '<a href="' . esc_url(home_url('/browse-listings/')) . '" class="pv-card propvendor-account-card">';
+        $output .= '<div class="propvendor-account-icon">&#128269;</div>';
+        $output .= '<h3>' . esc_html__('Browse Marketplace', 'propvendor-marketplace') . '</h3>';
+        $output .= '<p>' . esc_html__('Search and discover property and vehicle listings across all Nigerian States.', 'propvendor-marketplace') . '</p>';
+        $output .= '<span class="propvendor-card-link">' . esc_html__('Explore Listings', 'propvendor-marketplace') . ' &rarr;</span>';
+        $output .= '</a>';
+
+        $output .= '</div>'; // propvendor-account-grid
+
+        // Account Footer with Logout
+        $output .= '<div class="propvendor-account-footer-actions">';
+        $output .= '<p class="propvendor-logged-as">' . sprintf(esc_html__('Signed in as %s (%s).', 'propvendor-marketplace'), esc_html($current_user->user_email), esc_html($current_user->user_login)) . '</p>';
+        $output .= '<a href="' . esc_url(wp_logout_url(home_url('/login-and-my-account/'))) . '" class="pv-btn-secondary propvendor-btn-logout">' . esc_html__('Log Out of Account', 'propvendor-marketplace') . ' &rarr;</a>';
+        $output .= '</div>';
+
+    } else {
+        $output .= '<header class="propvendor-static-header">';
+        $output .= '<span class="pv-badge pv-badge-primary">' . esc_html__('Account Access', 'propvendor-marketplace') . '</span>';
+        $output .= '<h1 class="propvendor-static-title">' . esc_html__('Login to Your PropVendor Account', 'propvendor-marketplace') . '</h1>';
+        $output .= '<p class="propvendor-static-lead">' . esc_html__('Sign in to access your vendor dashboard, manage your listings, unlock buyer leads, and view transactions.', 'propvendor-marketplace') . '</p>';
+        $output .= '</header>';
+
+        $output .= '<div class="propvendor-auth-wrapper">';
+        $output .= '<div class="pv-card propvendor-auth-card">';
+
+        // Render WordPress login form
+        $login_args = array(
+            'echo' => false,
+            'redirect' => home_url('/vendor-dashboard/'),
+            'form_id' => 'propvendor-loginform',
+            'label_username' => __('Username or Email Address', 'propvendor-marketplace'),
+            'label_password' => __('Password', 'propvendor-marketplace'),
+            'label_remember' => __('Remember Me', 'propvendor-marketplace'),
+            'label_log_in' => __('Sign In to PropVendor', 'propvendor-marketplace'),
+            'remember' => true,
+        );
+        $output .= wp_login_form($login_args);
+
+        $output .= '<div class="propvendor-auth-links">';
+        $output .= '<p><a href="' . esc_url(wp_lostpassword_url()) . '" class="propvendor-forgot-link">' . esc_html__('Forgot your password?', 'propvendor-marketplace') . '</a></p>';
+        $output .= '<hr class="propvendor-auth-divider" />';
+        $output .= '<p class="propvendor-register-prompt">' . esc_html__('Don\'t have an account yet?', 'propvendor-marketplace') . ' <a href="' . esc_url(home_url('/vendor-registration/')) . '" class="propvendor-register-link"><strong>' . esc_html__('Register as a Vendor &rarr;', 'propvendor-marketplace') . '</strong></a></p>';
+        $output .= '</div>';
+
+        $output .= '</div>'; // pv-card
+        $output .= '</div>'; // propvendor-auth-wrapper
+    }
+
+    $output .= '</div>'; // propvendor-static-page
+    return $output;
+}
+add_shortcode('propvendor_login_account', 'propvendor_marketplace_login_account_shortcode');
+
+/**
+ * 6. Property Details Informational Guide Shortcode [propvendor_property_details_guide]
+ */
+function propvendor_marketplace_property_details_guide_shortcode() {
+    $output = '<div class="propvendor-static-page propvendor-guide-page">';
+    $output .= '<header class="propvendor-static-header">';
+    $output .= '<span class="pv-badge pv-badge-primary">' . esc_html__('Listing Directory Guide', 'propvendor-marketplace') . '</span>';
+    $output .= '<h1 class="propvendor-static-title">' . esc_html__('Property & Land Detail Experience', 'propvendor-marketplace') . '</h1>';
+    $output .= '<p class="propvendor-static-lead">' . esc_html__('Every property and land parcel listed on PropVendor has a dedicated detail page featuring comprehensive specifications, verified media, and direct vendor enquiry options.', 'propvendor-marketplace') . '</p>';
+    $output .= '</header>';
+
+    $output .= '<div class="propvendor-guide-content-grid">';
+
+    $output .= '<div class="pv-card propvendor-guide-info-card">';
+    $output .= '<h2>' . esc_html__('What You Find on Every Property Listing', 'propvendor-marketplace') . '</h2>';
+    $output .= '<ul class="propvendor-feature-list">';
+    $output .= '<li><strong>' . esc_html__('Comprehensive Architectural Specs:', 'propvendor-marketplace') . '</strong> ' . esc_html__('Bedrooms, bathrooms, toilets, parking spaces, furnishing status, and land area dimensions.', 'propvendor-marketplace') . '</li>';
+    $output .= '<li><strong>' . esc_html__('Nigerian Land Title Verification:', 'propvendor-marketplace') . '</strong> ' . esc_html__('Document type indicators including Certificate of Occupancy (C of O), Governor\'s Consent, Gazette, Excision, or Registered Deed of Assignment.', 'propvendor-marketplace') . '</li>';
+    $output .= '<li><strong>' . esc_html__('State & Local Government Mapping:', 'propvendor-marketplace') . '</strong> ' . esc_html__('Specific Nigerian State and LGA classification for transparent neighborhood context.', 'propvendor-marketplace') . '</li>';
+    $output .= '<li><strong>' . esc_html__('Direct Vendor Contact Routing:', 'propvendor-marketplace') . '</strong> ' . esc_html__('Secure enquiry channel sending your viewing and purchase requests directly to verified real estate agents and developers.', 'propvendor-marketplace') . '</li>';
+    $output .= '</ul>';
+    $output .= '</div>';
+
+    $output .= '<div class="pv-card propvendor-guide-action-card">';
+    $output .= '<h3>' . esc_html__('Explore Active Property Listings', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('Looking for residential houses, commercial offices, or investment plots of land? Browse our live marketplace catalogue right now.', 'propvendor-marketplace') . '</p>';
+    $output .= '<a href="' . esc_url(home_url('/browse-listings/?category=properties')) . '" class="pv-btn-primary propvendor-guide-btn">' . esc_html__('Browse Properties & Land', 'propvendor-marketplace') . ' &rarr;</a>';
+    $output .= '<hr class="propvendor-guide-divider" />';
+    $output .= '<h3>' . esc_html__('Are You a Property Owner or Agent?', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('Publish your residential and commercial properties to reach serious Nigerian buyers nationwide.', 'propvendor-marketplace') . '</p>';
+    $output .= '<a href="' . esc_url(home_url('/submit-a-listing/')) . '" class="pv-btn-secondary propvendor-guide-btn">' . esc_html__('Submit a Property Listing', 'propvendor-marketplace') . ' &rarr;</a>';
+    $output .= '</div>';
+
+    $output .= '</div>'; // guide-content-grid
+    $output .= '</div>'; // propvendor-static-page
+    return $output;
+}
+add_shortcode('propvendor_property_details_guide', 'propvendor_marketplace_property_details_guide_shortcode');
+
+/**
+ * 7. Vehicle Details Informational Guide Shortcode [propvendor_vehicle_details_guide]
+ */
+function propvendor_marketplace_vehicle_details_guide_shortcode() {
+    $output = '<div class="propvendor-static-page propvendor-guide-page">';
+    $output .= '<header class="propvendor-static-header">';
+    $output .= '<span class="pv-badge pv-badge-primary">' . esc_html__('Listing Directory Guide', 'propvendor-marketplace') . '</span>';
+    $output .= '<h1 class="propvendor-static-title">' . esc_html__('Vehicle & Automotive Detail Experience', 'propvendor-marketplace') . '</h1>';
+    $output .= '<p class="propvendor-static-lead">' . esc_html__('Vehicle detail pages on PropVendor showcase cars, SUVs, trucks, and commercial vehicles listed by verified dealerships and private sellers across Nigeria.', 'propvendor-marketplace') . '</p>';
+    $output .= '</header>';
+
+    $output .= '<div class="propvendor-guide-content-grid">';
+
+    $output .= '<div class="pv-card propvendor-guide-info-card">';
+    $output .= '<h2>' . esc_html__('What You Find on Every Vehicle Listing', 'propvendor-marketplace') . '</h2>';
+    $output .= '<ul class="propvendor-feature-list">';
+    $output .= '<li><strong>' . esc_html__('Detailed Mechanical & Trim Specs:', 'propvendor-marketplace') . '</strong> ' . esc_html__('Make, model, year of manufacture, mileage, transmission (Automatic/Manual), and engine size.', 'propvendor-marketplace') . '</li>';
+    $output .= '<li><strong>' . esc_html__('Accurate Vehicle Condition:', 'propvendor-marketplace') . '</strong> ' . esc_html__('Transparent categorization: Brand New, Foreign Used (Tokunbo), or Nigerian Used.', 'propvendor-marketplace') . '</li>';
+    $output .= '<li><strong>' . esc_html__('Verified Nigerian Pricing:', 'propvendor-marketplace') . '</strong> ' . esc_html__('Clear Naira (₦ NGN) asking prices with flexible outright purchase and rental options.', 'propvendor-marketplace') . '</li>';
+    $output .= '<li><strong>' . esc_html__('Direct Dealership Enquiries:', 'propvendor-marketplace') . '</strong> ' . esc_html__('Connect directly with verified auto dealers for test drives and diagnostic inspections.', 'propvendor-marketplace') . '</li>';
+    $output .= '</ul>';
+    $output .= '</div>';
+
+    $output .= '<div class="pv-card propvendor-guide-action-card">';
+    $output .= '<h3>' . esc_html__('Explore Active Vehicle Listings', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('Searching for a reliable Tokunbo SUV, luxury sedan, or commercial van? Browse our live vehicle inventory right now.', 'propvendor-marketplace') . '</p>';
+    $output .= '<a href="' . esc_url(home_url('/browse-listings/?category=vehicles')) . '" class="pv-btn-primary propvendor-guide-btn">' . esc_html__('Browse Vehicles & Automotives', 'propvendor-marketplace') . ' &rarr;</a>';
+    $output .= '<hr class="propvendor-guide-divider" />';
+    $output .= '<h3>' . esc_html__('Are You an Auto Dealer or Car Owner?', 'propvendor-marketplace') . '</h3>';
+    $output .= '<p>' . esc_html__('Reach thousands of prospective car buyers across Lagos, Abuja, Port Harcourt, and nationwide.', 'propvendor-marketplace') . '</p>';
+    $output .= '<a href="' . esc_url(home_url('/submit-a-listing/')) . '" class="pv-btn-secondary propvendor-guide-btn">' . esc_html__('Submit a Vehicle Listing', 'propvendor-marketplace') . ' &rarr;</a>';
+    $output .= '</div>';
+
+    $output .= '</div>'; // guide-content-grid
+    $output .= '</div>'; // propvendor-static-page
+    return $output;
+}
+add_shortcode('propvendor_vehicle_details_guide', 'propvendor_marketplace_vehicle_details_guide_shortcode');
+
+/**
+ * 8. Global Multi-Column Marketplace Footer
+ */
+function propvendor_marketplace_render_global_footer() {
+    if (is_admin()) {
+        return;
+    }
+
+    $verified_email = 'afriabglobalventures@gmail.com';
+
+    echo '<footer class="propvendor-global-footer" role="contentinfo">';
+    echo '<div class="propvendor-footer-container">';
+    echo '<div class="propvendor-footer-grid">';
+
+    // Column 1: Brand & Contact
+    echo '<div class="propvendor-footer-col propvendor-footer-brand-col">';
+    echo '<div class="propvendor-footer-logo"><span class="pv-logo-text">Prop<span class="pv-logo-accent">Vendor</span></span></div>';
+    echo '<p class="propvendor-footer-desc">' . esc_html__('Nigeria\'s trusted multi-vendor marketplace connecting verified real estate developers, property agents, automotive dealerships, and buyers across all 36 States and Abuja FCT.', 'propvendor-marketplace') . '</p>';
+    echo '<div class="propvendor-footer-contact">';
+    echo '<p><strong>' . esc_html__('Official Support:', 'propvendor-marketplace') . '</strong> <a href="mailto:' . esc_attr($verified_email) . '">' . esc_html($verified_email) . '</a></p>';
+    echo '<p class="propvendor-footer-hours">' . esc_html__('Mon – Fri: 9:00 AM – 5:00 PM WAT', 'propvendor-marketplace') . '</p>';
+    echo '</div>';
+    echo '</div>';
+
+    // Column 2: Marketplace Discovery
+    echo '<div class="propvendor-footer-col">';
+    echo '<h4 class="propvendor-footer-heading">' . esc_html__('Marketplace Discovery', 'propvendor-marketplace') . '</h4>';
+    echo '<ul class="propvendor-footer-links">';
+    echo '<li><a href="' . esc_url(home_url('/browse-listings/')) . '">' . esc_html__('Browse All Listings', 'propvendor-marketplace') . '</a></li>';
+    echo '<li><a href="' . esc_url(home_url('/browse-listings/?category=properties')) . '">' . esc_html__('Properties & Apartments', 'propvendor-marketplace') . '</a></li>';
+    echo '<li><a href="' . esc_url(home_url('/browse-listings/?category=land')) . '">' . esc_html__('Land & Plots for Sale', 'propvendor-marketplace') . '</a></li>';
+    echo '<li><a href="' . esc_url(home_url('/browse-listings/?category=vehicles')) . '">' . esc_html__('Vehicles & Automotives', 'propvendor-marketplace') . '</a></li>';
+    echo '<li><a href="' . esc_url(home_url('/submit-a-listing/')) . '">' . esc_html__('Submit a Listing', 'propvendor-marketplace') . '</a></li>';
+    echo '</ul>';
+    echo '</div>';
+
+    // Column 3: Vendors & Partners
+    echo '<div class="propvendor-footer-col">';
+    echo '<h4 class="propvendor-footer-heading">' . esc_html__('Vendors & Agents', 'propvendor-marketplace') . '</h4>';
+    echo '<ul class="propvendor-footer-links">';
+    echo '<li><a href="' . esc_url(home_url('/vendor-registration/')) . '">' . esc_html__('Vendor Registration', 'propvendor-marketplace') . '</a></li>';
+    echo '<li><a href="' . esc_url(home_url('/vendor-dashboard/')) . '">' . esc_html__('Vendor Dashboard', 'propvendor-marketplace') . '</a></li>';
+    echo '<li><a href="' . esc_url(home_url('/vendor-profile/')) . '">' . esc_html__('Vendor Profile', 'propvendor-marketplace') . '</a></li>';
+    echo '<li><a href="' . esc_url(home_url('/vendor-wallet/')) . '">' . esc_html__('Vendor Wallet & Pricing', 'propvendor-marketplace') . '</a></li>';
+    echo '<li><a href="' . esc_url(home_url('/customer-inbox/')) . '">' . esc_html__('Customer Lead Inbox', 'propvendor-marketplace') . '</a></li>';
+    echo '</ul>';
+    echo '</div>';
+
+    // Column 4: Trust, Safety & Legal
+    echo '<div class="propvendor-footer-col">';
+    echo '<h4 class="propvendor-footer-heading">' . esc_html__('Trust, Help & Legal', 'propvendor-marketplace') . '</h4>';
+    echo '<ul class="propvendor-footer-links">';
+    echo '<li><a href="' . esc_url(home_url('/about-propvendor/')) . '">' . esc_html__('About PropVendor', 'propvendor-marketplace') . '</a></li>';
+    echo '<li><a href="' . esc_url(home_url('/contact-us/')) . '">' . esc_html__('Contact Support', 'propvendor-marketplace') . '</a></li>';
+    echo '<li><a href="' . esc_url(home_url('/help-and-faqs/')) . '">' . esc_html__('Help & FAQs', 'propvendor-marketplace') . '</a></li>';
+    echo '<li><a href="' . esc_url(home_url('/listing-and-transaction-safety-guidelines/')) . '">' . esc_html__('Safety Guidelines', 'propvendor-marketplace') . '</a></li>';
+    echo '<li><a href="' . esc_url(home_url('/terms-and-conditions/')) . '">' . esc_html__('Terms and Conditions', 'propvendor-marketplace') . '</a></li>';
+    echo '<li><a href="' . esc_url(home_url('/privacy-policy/')) . '">' . esc_html__('Privacy Policy', 'propvendor-marketplace') . '</a></li>';
+    echo '</ul>';
+    echo '</div>';
+
+    echo '</div>'; // propvendor-footer-grid
+
+    // Marketplace Disclaimer
+    echo '<div class="propvendor-footer-disclaimer">';
+    echo '<p><strong>' . esc_html__('Marketplace Notice & Legal Disclaimer:', 'propvendor-marketplace') . '</strong> ';
+    echo esc_html__('PropVendor is an online multi-vendor listing platform connecting independent property developers, licensed real estate agents, automotive dealerships, and prospective buyers. PropVendor does not own, physically inspect, manage, or hold custody of any listed asset. Prospective buyers must conduct independent physical inspections, vehicle diagnostic assessments, and formal legal title searches at the appropriate State Lands Bureau prior to releasing any transaction funds. Never send advance inspection fees or deposits to personal bank accounts.', 'propvendor-marketplace');
+    echo '</p>';
+    echo '</div>';
+
+    echo '</div>'; // propvendor-footer-container
+    echo '</footer>';
+}
+add_action('astra_footer_before', 'propvendor_marketplace_render_global_footer');
+
 
 function propvendor_marketplace_handle_vendor_registration() {
     if (!isset($_POST['propvendor_register_vendor_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['propvendor_register_vendor_nonce'])), 'propvendor_register_vendor')) {

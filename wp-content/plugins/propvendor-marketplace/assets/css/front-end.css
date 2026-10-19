@@ -638,16 +638,60 @@ textarea.pv-form-control {
 
 .propvendor-info-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 1rem;
-    margin: 2rem 0;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    max-width: 1200px;
+    margin: 3.5rem auto 4.5rem;
+    padding: 0 20px;
 }
 
 .propvendor-info-grid > div {
-    background: #f7fafc;
-    border: 1px solid #eef2f7;
-    border-radius: 1rem;
-    padding: 1.2rem;
+    background: var(--pv-color-surface, #ffffff);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    border-radius: var(--pv-radius-lg, 12px);
+    padding: 2rem 1.5rem;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--pv-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.propvendor-info-grid > div::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--pv-color-teal, #087F8C), var(--pv-color-gold, #F3B64C));
+}
+
+.propvendor-info-grid > div:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--pv-shadow-md, 0 8px 20px -4px rgba(13, 28, 39, 0.08));
+}
+
+.propvendor-info-grid h3 {
+    color: var(--pv-color-navy, #142B3B);
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin: 0 0 0.75rem 0;
+    letter-spacing: -0.01em;
+}
+
+.propvendor-info-grid p {
+    color: var(--pv-text-secondary, #475569);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin: 0;
+}
+
+@media (max-width: 992px) {
+    .propvendor-info-grid {
+        grid-template-columns: 1fr;
+        gap: 1.25rem;
+        margin: 2.5rem auto 3.5rem;
+    }
 }
 
 .propvendor-form-box {
@@ -704,74 +748,129 @@ select.form-control {
 }
 
 .propvendor-dashboard {
-    padding: 1.5rem;
-    margin: 1.5rem 0;
+    padding: 2.25rem 2rem;
+    margin: 2rem auto 3rem;
+    max-width: 1240px;
+    background: var(--pv-color-surface, #ffffff);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    border-radius: var(--pv-radius-lg, 14px);
+    box-shadow: 0 4px 16px rgba(20, 43, 59, 0.05);
 }
 
 .propvendor-dashboard-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 1rem;
-    margin-bottom: 1.25rem;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
 }
 
 .propvendor-dashboard-header h2 {
     margin: 0;
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--pv-color-navy, #142B3B);
+    letter-spacing: -0.02em;
 }
 
 .propvendor-dashboard-header p {
     margin: 0.35rem 0 0;
-    color: #52667d;
+    color: var(--pv-text-secondary, #475569);
+    font-size: 0.95rem;
 }
 
 .propvendor-dashboard-add {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
     flex: 0 0 auto;
-    padding: 0.7rem 1rem;
-    border-radius: 0.6rem;
-    background: #0d5aa7;
-    color: #fff;
+    padding: 0.65rem 1.25rem;
+    border-radius: var(--pv-radius-md, 8px);
+    background: var(--pv-color-teal, #087F8C);
+    color: #ffffff !important;
     font-weight: 700;
+    font-size: 0.92rem;
     text-decoration: none;
+    box-shadow: 0 2px 4px rgba(8, 127, 140, 0.25);
+    transition: all 0.2s ease;
 }
 
 .propvendor-dashboard-add:hover,
 .propvendor-dashboard-add:focus {
-    background: #0b477f;
-    color: #fff;
+    background: var(--pv-color-teal-hover, #066772);
+    color: #ffffff !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(8, 127, 140, 0.35);
 }
 
 .propvendor-dashboard-empty {
-    padding: 1.25rem;
-    border: 1px dashed #d9e3ee;
-    border-radius: 0.75rem;
+    padding: 3.5rem 2rem;
+    border: 2px dashed var(--pv-color-border, #cbd5e1);
+    border-radius: var(--pv-radius-lg, 12px);
+    background: var(--pv-color-surface-alt, #f8fafc);
     text-align: center;
+    margin: 1.5rem 0;
+}
+
+.propvendor-dashboard-empty p.propvendor-empty {
+    font-size: 1.05rem;
+    color: var(--pv-text-secondary, #475569);
+    margin: 0 0 1.5rem;
+}
+
+.propvendor-dashboard-empty .propvendor-dashboard-add {
+    margin: 0 auto;
 }
 
 .propvendor-dashboard-table-wrap {
     overflow-x: auto;
-    border: 1px solid #e6edf4;
-    border-radius: 0.75rem;
+    border: 1.5px solid var(--pv-color-border-hover, #cbd5e1);
+    border-radius: var(--pv-radius-lg, 12px);
+    background: var(--pv-color-surface, #ffffff);
+    box-shadow: 0 1px 4px rgba(20, 43, 59, 0.04);
+    margin-bottom: 2rem;
 }
 
 .propvendor-dashboard-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     text-align: left;
 }
 
 .propvendor-dashboard-table th,
 .propvendor-dashboard-table td {
-    padding: 0.85rem 0.75rem;
-    border-bottom: 1px solid #edf2f8;
+    padding: 1rem 1.15rem;
+    border-bottom: 1px solid var(--pv-color-border, #e2e8f0);
     vertical-align: middle;
 }
 
 .propvendor-dashboard-table th {
-    background: #f7fafc;
-    color: #1b2d3d;
-    font-size: 0.85rem;
+    background: var(--pv-color-surface-alt, #f8fafc);
+    color: var(--pv-color-navy, #142B3B);
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 2px solid var(--pv-color-border-hover, #cbd5e1);
+    white-space: nowrap;
+}
+
+.propvendor-dashboard-table tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+.propvendor-dashboard-table tbody tr:hover td {
+    background-color: #f8fafc;
+}
+
+.propvendor-dashboard-table td {
+    color: var(--pv-text-main, #0f172a);
+}
+
+.propvendor-dashboard-table td strong {
+    color: var(--pv-color-navy, #142B3B);
+    font-size: 0.95rem;
 }
 
 .propvendor-dashboard-table tr:last-child td {
@@ -779,31 +878,48 @@ select.form-control {
 }
 
 .propvendor-dashboard-status {
-    display: inline-block;
-    padding: 0.3rem 0.55rem;
-    border-radius: 999px;
-    background: #edf2f8;
-    color: #33485e;
-    font-size: 0.8rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.35rem 0.75rem;
+    border-radius: var(--pv-radius-full, 9999px);
+    font-size: 0.78rem;
     font-weight: 700;
+    letter-spacing: 0.02em;
     white-space: nowrap;
+    line-height: 1.3;
 }
 
 .propvendor-dashboard-status-pending-review {
-    background: #fff4d6;
-    color: #7b5700;
+    background: var(--pv-status-warning-bg, #fef3c7);
+    color: var(--pv-status-warning-text, #92400e);
+    border: 1px solid var(--pv-status-warning-border, #fde68a);
 }
 
 .propvendor-dashboard-status-published {
-    background: #e5f7ed;
-    color: #12653a;
+    background: var(--pv-status-success-bg, #e8f8f0);
+    color: var(--pv-status-success-text, #065f46);
+    border: 1px solid var(--pv-status-success-border, #a7f3d0);
 }
 
-.propvendor-dashboard-status-rejected,
+.propvendor-dashboard-status-rejected {
+    background: var(--pv-status-danger-bg, #fee2e2);
+    color: var(--pv-status-danger-text, #991b1b);
+    border: 1px solid var(--pv-status-danger-border, #fecaca);
+}
+
+.propvendor-dashboard-status-sold,
+.propvendor-dashboard-status-rented {
+    background: var(--pv-status-info-bg, #e0f2fe);
+    color: var(--pv-status-info-text, #0369a1);
+    border: 1px solid var(--pv-status-info-border, #bae6fd);
+}
+
 .propvendor-dashboard-status-expired,
 .propvendor-dashboard-status-unavailable {
-    background: #fce9e8;
-    color: #8c2822;
+    background: #f1f5f9;
+    color: var(--pv-text-secondary, #475569);
+    border: 1px solid #cbd5e1;
 }
 
 .propvendor-dashboard-actions {
@@ -811,8 +927,44 @@ select.form-control {
 }
 
 .propvendor-dashboard-actions a {
-    margin-right: 0.55rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: var(--pv-radius-sm, 6px);
+    font-size: 0.84rem;
     font-weight: 700;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    margin-right: 0.35rem;
+}
+
+.propvendor-dashboard-actions a[href*="propvendor_edit_listing"] {
+    background: var(--pv-color-surface, #ffffff);
+    color: var(--pv-color-navy, #142B3B);
+    border: 1px solid var(--pv-color-border-hover, #cbd5e1);
+}
+
+.propvendor-dashboard-actions a[href*="propvendor_edit_listing"]:hover,
+.propvendor-dashboard-actions a[href*="propvendor_edit_listing"]:focus {
+    background: var(--pv-color-teal, #087F8C);
+    color: #ffffff !important;
+    border-color: var(--pv-color-teal, #087F8C);
+    box-shadow: 0 2px 4px rgba(8, 127, 140, 0.2);
+}
+
+.propvendor-dashboard-actions a:not([href*="propvendor_edit_listing"]) {
+    background: var(--pv-color-teal-subtle, #e6f4f6);
+    color: var(--pv-color-teal, #087F8C);
+    border: 1px solid rgba(8, 127, 140, 0.25);
+}
+
+.propvendor-dashboard-actions a:not([href*="propvendor_edit_listing"]):hover,
+.propvendor-dashboard-actions a:not([href*="propvendor_edit_listing"]):focus {
+    background: var(--pv-color-teal, #087F8C);
+    color: #ffffff !important;
+    border-color: var(--pv-color-teal, #087F8C);
+    box-shadow: 0 2px 4px rgba(8, 127, 140, 0.2);
 }
 
 .propvendor-dashboard-list {
@@ -825,18 +977,37 @@ select.form-control {
 }
 
 .propvendor-detail-top {
-    margin-bottom: 1rem;
+    margin-bottom: 1.25rem;
 }
 
 .propvendor-detail-back {
-    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--pv-color-teal, #087F8C);
     text-decoration: none;
+    padding: 0.45rem 0.9rem;
+    border-radius: var(--pv-radius-md, 8px);
+    background: var(--pv-color-surface, #ffffff);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    box-shadow: var(--pv-shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.04));
+    transition: all 0.2s ease;
+}
+
+.propvendor-detail-back:hover,
+.propvendor-detail-back:focus {
+    background: var(--pv-color-surface-alt, #f8fafc);
+    color: var(--pv-color-teal-hover, #066772);
+    border-color: var(--pv-color-teal, #087F8C);
+    transform: translateX(-2px);
 }
 
 .propvendor-detail-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1.7fr) minmax(260px, 0.8fr);
-    gap: 1.5rem;
+    grid-template-columns: minmax(0, 1.8fr) minmax(320px, 1fr);
+    gap: 2rem;
     align-items: start;
 }
 
@@ -844,54 +1015,65 @@ select.form-control {
 .propvendor-detail-facts,
 .propvendor-detail-contact {
     min-width: 0;
-    padding: 1.25rem;
-    border: 1px solid #e6edf4;
-    border-radius: 1rem;
-    background: #fff;
-    box-shadow: 0 10px 26px rgba(16, 28, 45, 0.06);
+    padding: 1.75rem;
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    border-radius: var(--pv-radius-lg, 12px);
+    background: var(--pv-color-surface, #ffffff);
+    box-shadow: var(--pv-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
 }
 
 .propvendor-detail-gallery {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
-    gap: 0.75rem;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.85rem;
+    margin-bottom: 1.75rem;
 }
 
 .propvendor-detail-gallery figure {
     min-width: 0;
     margin: 0;
     overflow: hidden;
-    border-radius: 0.65rem;
-    background: #f0f4f8;
+    border-radius: var(--pv-radius-md, 8px);
+    background: var(--pv-color-surface-alt, #f8fafc);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    position: relative;
 }
 
 .propvendor-detail-gallery figure:first-child {
     grid-column: 1 / -1;
+    border-radius: var(--pv-radius-lg, 12px);
 }
 
 .propvendor-detail-image {
     display: block;
     width: 100%;
-    max-height: 560px;
+    height: 100%;
+    max-height: 520px;
     aspect-ratio: 16 / 10;
     object-fit: cover;
+    transition: transform 0.35s ease;
+}
+
+.propvendor-detail-gallery figure:hover .propvendor-detail-image {
+    transform: scale(1.02);
 }
 
 .propvendor-detail-no-image {
     display: grid;
-    min-height: 200px;
+    min-height: 220px;
     place-items: center;
     margin: 0;
-    padding: 1rem;
-    border: 1px dashed #d9e3ee;
-    border-radius: 0.65rem;
-    background: #f7fafc;
-    color: #52667d;
+    padding: 2rem;
+    border: 1px dashed var(--pv-color-border, #cbd5e1);
+    border-radius: var(--pv-radius-lg, 12px);
+    background: var(--pv-color-surface-alt, #f8fafc);
+    color: var(--pv-text-muted, #64748b);
     text-align: center;
+    font-size: 0.95rem;
 }
 
 .propvendor-detail-description {
-    margin-top: 1.5rem;
+    margin-top: 1.75rem;
     overflow-wrap: anywhere;
 }
 
@@ -899,6 +1081,20 @@ select.form-control {
 .propvendor-detail-facts h2,
 .propvendor-detail-contact h2 {
     margin-top: 0;
+    margin-bottom: 1rem;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--pv-color-navy, #142B3B);
+    letter-spacing: -0.01em;
+    border-bottom: 2px solid var(--pv-color-border-subtle, #f1f5f9);
+    padding-bottom: 0.65rem;
+}
+
+.propvendor-detail-description p {
+    color: var(--pv-text-secondary, #475569);
+    font-size: 1rem;
+    line-height: 1.7;
+    margin-bottom: 1.25rem;
 }
 
 .propvendor-detail-facts dl {
@@ -910,9 +1106,10 @@ select.form-control {
 .propvendor-detail-facts dl > div {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     gap: 1rem;
-    padding: 0.75rem 0;
-    border-bottom: 1px solid #edf2f8;
+    padding: 0.8rem 0;
+    border-bottom: 1px solid var(--pv-color-border-subtle, #edf2f8);
 }
 
 .propvendor-detail-facts dl > div:last-child {
@@ -920,20 +1117,23 @@ select.form-control {
 }
 
 .propvendor-detail-facts dt {
-    color: #52667d;
+    color: var(--pv-text-secondary, #64748b);
     font-weight: 600;
+    font-size: 0.9rem;
 }
 
 .propvendor-detail-facts dd {
     margin: 0;
     font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--pv-color-navy, #142B3B);
     text-align: right;
     overflow-wrap: anywhere;
 }
 
 .propvendor-detail-sidebar {
     display: grid;
-    gap: 1rem;
+    gap: 1.5rem;
 }
 
 .propvendor-detail-contact {
@@ -949,28 +1149,46 @@ select.form-control {
 .propvendor-contact-action {
     display: block;
     padding: 0.75rem 1rem;
-    border-radius: 0.55rem;
-    background: #0d5aa7;
-    color: #fff;
+    border-radius: var(--pv-radius-md, 8px);
+    background: var(--pv-color-teal, #087F8C);
+    color: #ffffff !important;
     font-weight: 700;
+    font-size: 0.95rem;
     text-align: center;
     text-decoration: none;
+    box-shadow: 0 2px 4px rgba(8, 127, 140, 0.25);
+    transition: all 0.2s ease;
+    margin-top: 0.5rem;
 }
 
 .propvendor-contact-action:hover,
 .propvendor-contact-action:focus {
-    background: #0b477f;
-    color: #fff;
+    background: var(--pv-color-teal-hover, #066772);
+    color: #ffffff !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(8, 127, 140, 0.35);
 }
 
-.propvendor-contact-detail,
+.propvendor-contact-detail {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--pv-color-navy, #142B3B);
+    margin: 0.4rem 0;
+    text-align: center;
+}
+
 .propvendor-detail-muted {
-    color: #52667d;
+    font-size: 0.85rem;
+    color: var(--pv-text-muted, #64748b);
+    font-style: italic;
     overflow-wrap: anywhere;
+    margin-top: 0.35rem;
 }
 
 .propvendor-related-listings {
-    margin-top: 1.5rem;
+    margin-top: 3.5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--pv-color-border, #e2e8f0);
 }
 
 .propvendor-browse {
@@ -1046,38 +1264,134 @@ select.form-control {
 }
 
 .propvendor-results-count {
-    margin: 1.25rem 0 0.75rem;
-    color: #52667d;
-    font-weight: 700;
+    margin: 1.5rem 0 1rem;
+    color: var(--pv-text-secondary, #475569);
+    font-weight: 600;
+    font-size: 0.95rem;
 }
 
 .propvendor-browse .propvendor-grid {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    margin: 1.5rem 0 2.5rem;
 }
 
 .propvendor-browse .propvendor-card {
+    background: var(--pv-color-surface, #ffffff);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    border-radius: var(--pv-radius-lg, 12px);
     overflow: hidden;
     padding: 0;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--pv-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.propvendor-browse .propvendor-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--pv-shadow-md, 0 8px 24px -4px rgba(13, 28, 39, 0.12));
+    border-color: var(--pv-color-border-hover, #cbd5e1);
+}
+
+.propvendor-browse .propvendor-card-image-link {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    background: #f1f5f9;
 }
 
 .propvendor-browse .propvendor-card-image {
     display: block;
     width: 100%;
-    aspect-ratio: 16 / 10;
+    height: 100%;
     object-fit: cover;
     background: #f0f4f8;
+    transition: transform 0.35s ease;
 }
 
-.propvendor-browse .propvendor-card-image-link {
+.propvendor-browse .propvendor-card:hover .propvendor-card-image {
+    transform: scale(1.03);
+}
+
+.propvendor-browse .propvendor-card .propvendor-badge {
+    margin: 1rem 1.1rem 0.35rem;
+    align-self: flex-start;
+    color: var(--pv-color-teal, #087F8C);
+    background: var(--pv-color-teal-subtle, #E6F4F6);
+    border-radius: var(--pv-radius-full, 9999px);
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.3rem 0.65rem;
+}
+
+.propvendor-browse .propvendor-card .propvendor-badge-direct-owner {
+    background: var(--pv-status-success, #0A8A4F) !important;
+    color: #ffffff !important;
+}
+
+.propvendor-browse .propvendor-card .propvendor-card-category {
+    margin: 0.2rem 1.1rem;
+    font-size: 0.8rem;
+    color: var(--pv-text-muted, #64748b);
+    font-weight: 500;
+}
+
+.propvendor-browse .propvendor-card h3 {
+    margin: 0.35rem 1.1rem 0.5rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.35;
+}
+
+.propvendor-browse .propvendor-card h3 a {
+    color: var(--pv-color-navy, #142B3B);
+    text-decoration: none;
+    transition: color 0.15s ease;
+}
+
+.propvendor-browse .propvendor-card h3 a:hover {
+    color: var(--pv-color-teal, #087F8C);
+}
+
+.propvendor-browse .propvendor-card .propvendor-meta {
+    margin: 0 1.1rem 0.5rem;
+    font-size: 0.88rem;
+    color: var(--pv-text-secondary, #64748b);
+}
+
+.propvendor-browse .propvendor-card .propvendor-price {
+    margin: auto 1.1rem 0.85rem;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--pv-status-success, #0A8A4F);
+}
+
+.propvendor-browse .propvendor-card .propvendor-card-view {
+    margin: 0 1.1rem 1.25rem;
     display: block;
+    text-align: center;
+    background: var(--pv-color-surface-alt, #f8fafc);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    border-radius: var(--pv-radius-md, 8px);
+    padding: 0.6rem 1rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--pv-color-navy, #142B3B);
+    text-decoration: none;
+    transition: all 0.2s ease;
 }
 
-.propvendor-listing-card-content {
-    padding: 1.1rem;
+.propvendor-browse .propvendor-card .propvendor-card-view:hover {
+    background: var(--pv-color-teal, #087F8C);
+    color: #ffffff;
+    border-color: var(--pv-color-teal, #087F8C);
 }
 
 .propvendor-pagination {
-    margin: 1.5rem 0;
+    margin: 2.5rem 0 1.5rem;
 }
 
 .propvendor-pagination .page-numbers {
@@ -1092,16 +1406,60 @@ select.form-control {
 
 .propvendor-pagination .page-numbers a,
 .propvendor-pagination .page-numbers span {
-    display: inline-block;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid #d9e3ee;
-    border-radius: 0.45rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    height: 42px;
+    padding: 0 0.85rem;
+    border: 1px solid var(--pv-color-border, #d9e3ee);
+    border-radius: var(--pv-radius-md, 8px);
+    background: var(--pv-color-surface, #ffffff);
+    color: var(--pv-color-navy, #142B3B);
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.15s ease;
+}
+
+.propvendor-pagination .page-numbers a:hover {
+    background: var(--pv-color-surface-alt, #f8fafc);
+    border-color: var(--pv-color-teal, #087F8C);
+    color: var(--pv-color-teal, #087F8C);
 }
 
 .propvendor-pagination .page-numbers .current {
-    border-color: #0d5aa7;
-    background: #0d5aa7;
-    color: #fff;
+    border-color: var(--pv-color-teal, #087F8C) !important;
+    background: var(--pv-color-teal, #087F8C) !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 6px rgba(8, 127, 140, 0.3);
+}
+
+.propvendor-pagination .page-numbers a:focus-visible {
+    outline: 2px solid var(--pv-color-teal, #087F8C);
+    outline-offset: 2px;
+}
+
+@media (max-width: 992px) {
+    .propvendor-browse .propvendor-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .propvendor-detail-layout {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 1.75rem;
+    }
+    .propvendor-detail-gallery {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .propvendor-browse .propvendor-grid {
+        grid-template-columns: 1fr;
+    }
+    .propvendor-detail-gallery {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 767px) {
@@ -1117,7 +1475,7 @@ select.form-control {
     .propvendor-detail-facts,
     .propvendor-detail-contact,
     .propvendor-detail-enquiry {
-        padding: 1rem;
+        padding: 1.25rem;
     }
 
     .propvendor-filter-form {
@@ -1135,12 +1493,26 @@ select.form-control {
     }
 
     .propvendor-dashboard {
-        padding: 1rem;
+        padding: 1.25rem 1rem;
+        margin: 1.25rem 0 2rem;
     }
 
     .propvendor-dashboard-header {
         align-items: flex-start;
         flex-direction: column;
+        gap: 0.85rem;
+    }
+
+    .propvendor-dashboard-add {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .propvendor-dashboard-table-wrap {
+        border: none;
+        background: transparent;
+        box-shadow: none;
+        margin-bottom: 1.5rem;
     }
 
     .propvendor-dashboard-table,
@@ -1164,44 +1536,107 @@ select.form-control {
     }
 
     .propvendor-dashboard-table tr {
-        padding: 0.4rem 0.85rem;
-        border-bottom: 1px solid #e6edf4;
+        background: var(--pv-color-surface, #ffffff);
+        border: 1.5px solid var(--pv-color-border-hover, #cbd5e1);
+        border-radius: var(--pv-radius-lg, 12px);
+        padding: 1.15rem 1.25rem;
+        margin-bottom: 1.25rem;
+        box-shadow: var(--pv-shadow-sm, 0 2px 6px rgba(20, 43, 59, 0.05));
     }
 
     .propvendor-dashboard-table tr:last-child {
-        border-bottom: 0;
+        margin-bottom: 0;
     }
 
     .propvendor-dashboard-table td {
         display: flex;
         justify-content: space-between;
+        align-items: center;
         gap: 1rem;
-        padding: 0.55rem 0;
-        border-bottom: 1px solid #f0f3f7;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid var(--pv-color-border-subtle, #f1f5f9);
         text-align: right;
         overflow-wrap: anywhere;
+        font-size: 0.92rem;
+        color: var(--pv-text-main, #0f172a);
     }
 
     .propvendor-dashboard-table td::before {
         content: attr(data-label);
         flex: 0 0 38%;
-        color: #52667d;
+        color: var(--pv-text-secondary, #475569);
         font-weight: 700;
+        font-size: 0.85rem;
         text-align: left;
     }
 
     .propvendor-dashboard-table td:last-child {
         border-bottom: 0;
+        padding-top: 1rem;
+        display: block;
+        width: 100%;
+        text-align: center;
+    }
+
+    .propvendor-dashboard-table td:last-child::before {
+        display: none;
+    }
+
+    .propvendor-dashboard-actions {
+        display: flex;
+        gap: 0.75rem;
+        width: 100%;
+        justify-content: stretch;
+        flex-wrap: wrap;
+    }
+
+    .propvendor-dashboard-actions a {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 0.65rem 1rem;
+        font-size: 0.9rem;
+        font-weight: 700;
+        justify-content: center;
+        text-align: center;
+        flex: 1 1 calc(50% - 0.5rem);
+        border-radius: var(--pv-radius-md, 8px);
+        box-sizing: border-box;
+    }
+
+    .propvendor-quota-alert {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.85rem;
+    }
+
+    .propvendor-quota-alert-action {
+        width: 100%;
+    }
+
+    .propvendor-btn-upgrade {
+        width: 100%;
+        justify-content: center;
+        min-height: 44px;
+        box-sizing: border-box;
     }
 
     .propvendor-dashboard-nav {
         flex-direction: column;
         align-items: stretch;
+        gap: 0.5rem;
+    }
+
+    .propvendor-dashboard-tab {
+        text-align: center;
+        justify-content: center;
+        min-height: 44px;
     }
 
     .propvendor-dashboard-tab-action {
         margin-left: 0;
         text-align: center;
+        justify-content: center;
+        min-height: 44px;
     }
 
     .propvendor-vendor-header {
@@ -1233,52 +1668,58 @@ select.form-control {
    ========================================================================== */
 .propvendor-dashboard-nav {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.65rem;
     flex-wrap: wrap;
     align-items: center;
-    margin-bottom: 1.5rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid #e6edf4;
+    margin-bottom: 2rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 2px solid var(--pv-color-border-subtle, #f1f5f9);
 }
 
 .propvendor-dashboard-tab {
-    display: inline-block;
-    padding: 0.55rem 1rem;
-    border-radius: 0.5rem;
-    font-weight: 700;
-    font-size: 0.95rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.6rem 1.15rem;
+    border-radius: var(--pv-radius-md, 8px);
+    font-weight: 600;
+    font-size: 0.92rem;
     text-decoration: none;
-    color: #52667d;
-    background: #f7fafc;
-    border: 1px solid #e2e8f0;
+    color: var(--pv-text-secondary, #475569);
+    background: var(--pv-color-surface-alt, #f8fafc);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
     transition: all 0.2s ease;
 }
 
 .propvendor-dashboard-tab:hover,
 .propvendor-dashboard-tab:focus {
-    color: #0d5aa7;
-    border-color: #0d5aa7;
-    background: #edf5ff;
+    color: var(--pv-color-teal, #087F8C);
+    border-color: var(--pv-color-teal, #087F8C);
+    background: var(--pv-color-teal-subtle, #e6f4f6);
 }
 
 .propvendor-dashboard-tab.active {
-    background: #0d5aa7;
-    color: #fff;
-    border-color: #0d5aa7;
+    background: var(--pv-color-navy, #142B3B) !important;
+    color: #ffffff !important;
+    border-color: var(--pv-color-navy, #142B3B) !important;
+    box-shadow: 0 2px 4px rgba(20, 43, 59, 0.2);
 }
 
 .propvendor-dashboard-tab-action {
     margin-left: auto;
-    background: #0a8a4f;
-    color: #fff;
-    border-color: #0a8a4f;
+    background: var(--pv-color-teal, #087F8C) !important;
+    color: #ffffff !important;
+    border-color: var(--pv-color-teal, #087F8C) !important;
+    box-shadow: 0 2px 4px rgba(8, 127, 140, 0.25);
 }
 
 .propvendor-dashboard-tab-action:hover,
 .propvendor-dashboard-tab-action:focus {
-    background: #087342;
-    color: #fff;
-    border-color: #087342;
+    background: var(--pv-color-teal-hover, #066772) !important;
+    color: #ffffff !important;
+    border-color: var(--pv-color-teal-hover, #066772) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(8, 127, 140, 0.35);
 }
 
 /* ==========================================================================
@@ -1442,19 +1883,25 @@ select.form-control {
    ========================================================================== */
 .propvendor-profile-edit-box {
     margin: 1.5rem 0;
+    padding: 2rem;
+    background: var(--pv-color-surface, #ffffff);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    border-radius: var(--pv-radius-lg, 12px);
+    box-shadow: var(--pv-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
 }
 
 .propvendor-form-subtext {
-    margin: 0.25rem 0 1.25rem;
-    color: #52667d;
+    margin: 0.25rem 0 1.5rem;
+    color: var(--pv-text-secondary, #475569);
+    font-size: 0.95rem;
 }
 
 .propvendor-profile-photo-field {
-    background: #f7fafc;
-    border: 1px dashed #d9e3ee;
-    padding: 1.25rem;
-    border-radius: 0.75rem;
-    margin-bottom: 0.75rem;
+    background: var(--pv-color-surface-alt, #f8fafc);
+    border: 2px dashed var(--pv-color-border, #cbd5e1);
+    padding: 1.5rem;
+    border-radius: var(--pv-radius-md, 8px);
+    margin-bottom: 1.25rem;
 }
 
 .propvendor-photo-current {
@@ -1465,11 +1912,12 @@ select.form-control {
 }
 
 .propvendor-photo-thumb {
-    width: 70px;
-    height: 70px;
+    width: 80px;
+    height: 80px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid #d9e3ee;
+    border: 3px solid var(--pv-color-surface, #ffffff);
+    box-shadow: var(--pv-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.1));
 }
 
 .propvendor-checkbox-label {
@@ -1477,7 +1925,7 @@ select.form-control {
     align-items: center !important;
     gap: 0.5rem !important;
     font-weight: 500 !important;
-    color: #33485e !important;
+    color: var(--pv-text-secondary, #33485e) !important;
     cursor: pointer;
 }
 
@@ -1487,20 +1935,21 @@ select.form-control {
 }
 
 .propvendor-form-section-divider {
-    margin: 1.5rem 0 0.75rem;
-    padding-top: 1rem;
-    border-top: 1px solid #edf2f8;
+    margin: 2rem 0 1rem;
+    padding-top: 1.5rem;
+    border-top: 2px solid var(--pv-color-border-subtle, #f1f5f9);
 }
 
 .propvendor-form-section-divider h4 {
     margin: 0 0 0.35rem;
-    font-size: 1.1rem;
-    color: #1b2d3d;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--pv-color-navy, #142B3B);
 }
 
 .propvendor-field-hint {
     font-size: 0.85rem;
-    color: #64748b;
+    color: var(--pv-text-muted, #64748b);
     margin: 0.25rem 0 0;
 }
 
@@ -1508,7 +1957,44 @@ select.form-control {
     display: flex;
     gap: 1rem;
     align-items: center;
-    margin-top: 1rem;
+    margin-top: 1.5rem;
+}
+
+.propvendor-form-actions button[type="submit"] {
+    background: var(--pv-color-teal, #087F8C);
+    color: #ffffff !important;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--pv-radius-md, 8px);
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(8, 127, 140, 0.25);
+    transition: all 0.2s ease;
+}
+
+.propvendor-form-actions button[type="submit"]:hover,
+.propvendor-form-actions button[type="submit"]:focus {
+    background: var(--pv-color-teal-hover, #066772);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(8, 127, 140, 0.35);
+}
+
+.propvendor-form-actions .propvendor-btn.secondary {
+    background: var(--pv-color-surface-alt, #f8fafc);
+    color: var(--pv-text-secondary, #475569) !important;
+    border: 1px solid var(--pv-color-border, #cbd5e1);
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--pv-radius-md, 8px);
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.propvendor-form-actions .propvendor-btn.secondary:hover,
+.propvendor-form-actions .propvendor-btn.secondary:focus {
+    background: #ffffff;
+    color: var(--pv-color-navy, #142B3B) !important;
+    border-color: var(--pv-color-navy, #142B3B);
 }
 
 .propvendor-detail-vendor-name {
@@ -1533,55 +2019,59 @@ select.form-control {
    Customer Enquiry System
    ========================================================================== */
 .propvendor-detail-enquiry {
-    background: #fff;
-    border: 1px solid #e6edf4;
-    border-radius: 0.85rem;
-    padding: 1.5rem;
-    box-shadow: 0 4px 14px rgba(16, 28, 45, 0.05);
+    background: var(--pv-color-surface, #ffffff);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    border-radius: var(--pv-radius-lg, 12px);
+    padding: 1.75rem;
+    box-shadow: var(--pv-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
 }
 
 .propvendor-detail-enquiry h2 {
     margin-top: 0;
     margin-bottom: 0.5rem;
-    font-size: 1.35rem;
-    color: #102a43;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--pv-color-navy, #142B3B);
+    letter-spacing: -0.01em;
+    border-bottom: 2px solid var(--pv-color-border-subtle, #f1f5f9);
+    padding-bottom: 0.65rem;
 }
 
 .propvendor-enquiry-intro {
     font-size: 0.9rem;
-    color: #52667d;
-    margin-bottom: 1.25rem;
-    line-height: 1.45;
+    color: var(--pv-text-secondary, #475569);
+    margin-bottom: 1.15rem;
+    line-height: 1.5;
 }
 
 .propvendor-enquiry-listing-meta {
-    background: #f0f6fc;
-    border: 1px solid #d0e2ff;
-    border-radius: 0.5rem;
-    padding: 0.65rem 0.85rem;
-    font-size: 0.88rem;
-    color: #0b477f;
+    background: var(--pv-color-surface-alt, #f8fafc);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    border-radius: var(--pv-radius-md, 8px);
+    padding: 0.75rem 0.9rem;
+    font-size: 0.85rem;
+    color: var(--pv-text-secondary, #475569);
     margin-bottom: 1.15rem;
-    line-height: 1.4;
+    line-height: 1.45;
     overflow-wrap: anywhere;
 }
 
 .propvendor-enquiry-listing-meta strong {
-    color: #081b2d;
+    color: var(--pv-color-navy, #142B3B);
 }
 
 .propvendor-enquiry-ref {
     display: inline-block;
-    color: #52667d;
-    font-size: 0.82rem;
+    color: var(--pv-text-muted, #94a3b8);
+    font-size: 0.8rem;
     margin-left: 0.25rem;
 }
 
 .propvendor-enquiry-form label {
     display: block;
     font-weight: 600;
-    font-size: 0.9rem;
-    color: #243b53;
+    font-size: 0.85rem;
+    color: var(--pv-color-navy, #142B3B);
     margin-bottom: 0.85rem;
 }
 
@@ -1592,12 +2082,12 @@ select.form-control {
     display: block;
     width: 100%;
     margin-top: 0.35rem;
-    padding: 0.65rem 0.85rem;
-    border: 1px solid #c9d7e4;
-    border-radius: 0.5rem;
+    padding: 0.7rem 0.85rem;
+    border: 1px solid var(--pv-color-border, #cbd5e1);
+    border-radius: var(--pv-radius-md, 8px);
     font-size: 0.95rem;
-    color: #102a43;
-    background-color: #fff;
+    color: var(--pv-text-primary, #0F172A);
+    background-color: #ffffff;
     box-sizing: border-box;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -1605,32 +2095,46 @@ select.form-control {
 .propvendor-enquiry-form input:focus,
 .propvendor-enquiry-form textarea:focus {
     outline: none;
-    border-color: #0d5aa7;
-    box-shadow: 0 0 0 3px rgba(13, 90, 167, 0.15);
+    border-color: var(--pv-color-teal, #087F8C);
+    box-shadow: 0 0 0 3px rgba(8, 127, 140, 0.15);
 }
 
 .propvendor-enquiry-form textarea {
     resize: vertical;
-    min-height: 90px;
+    min-height: 100px;
+    line-height: 1.5;
 }
 
 .propvendor-enquiry-submit {
     width: 100%;
     margin-top: 0.5rem;
-    padding: 0.75rem 1rem;
+    padding: 0.8rem 1.25rem;
     font-size: 1rem;
     font-weight: 700;
     text-align: center;
-    border-radius: 0.5rem;
+    border: none;
+    border-radius: var(--pv-radius-md, 8px);
+    background: var(--pv-color-teal, #087F8C);
+    color: #ffffff !important;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(8, 127, 140, 0.25);
+    transition: all 0.2s ease;
+}
+
+.propvendor-enquiry-submit:hover,
+.propvendor-enquiry-submit:focus {
+    background: var(--pv-color-teal-hover, #066772);
+    box-shadow: 0 4px 8px rgba(8, 127, 140, 0.35);
+    transform: translateY(-1px);
 }
 
 .propvendor-enquiry-privacy-note {
-    font-size: 0.78rem;
-    color: #64748b;
+    font-size: 0.8rem;
+    color: var(--pv-text-muted, #64748b);
     margin-top: 0.85rem;
     margin-bottom: 0;
     text-align: center;
-    line-height: 1.35;
+    line-height: 1.4;
 }
 
 /* ==========================================================================
@@ -1653,7 +2157,7 @@ select.form-control {
 
 .propvendor-dashboard-tab.active .pv-badge-unread {
     background: #ffffff;
-    color: #0d5aa7;
+    color: var(--pv-color-navy, #142B3B);
 }
 
 /* Two-column Inbox Container */
@@ -2043,16 +2547,23 @@ select.form-control {
 }
 
 /* Stage 2: Owner-Direct & Trust Safeguard Badges and Notices */
-.propvendor-badge-direct-owner {
-    background: #0a8a4f !important;
+.propvendor-badge-direct-owner,
+.propvendor-detail-owner-badge .propvendor-badge-direct-owner {
+    background: var(--pv-status-success, #0A8A4F) !important;
     color: #ffffff !important;
+    font-size: 0.88rem !important;
     font-weight: 700 !important;
-    letter-spacing: 0.04em;
-    box-shadow: 0 1px 3px rgba(10, 138, 79, 0.2);
+    letter-spacing: 0.02em !important;
+    border-radius: var(--pv-radius-md, 8px) !important;
+    padding: 0.45rem 1rem !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    box-shadow: 0 2px 4px rgba(10, 138, 79, 0.2) !important;
 }
 
 .propvendor-detail-owner-badge {
-    margin: 0.5rem 0 1rem 0;
+    margin: 0.5rem 0 1.25rem 0;
 }
 
 .propvendor-badge-regulatory-verified {
@@ -2063,30 +2574,33 @@ select.form-control {
     box-shadow: 0 1px 3px rgba(11, 83, 148, 0.2);
 }
 
-.propvendor-safety-notice-card {
-    margin: 1.25rem 0;
-    padding: 1rem 1.25rem;
-    background: #fff8e6;
-    border: 1px solid #ffd591;
-    border-left: 4px solid #fa8c16;
-    border-radius: 6px;
-    color: #873800;
-    font-size: 0.92rem;
-    line-height: 1.5;
-    font-weight: 500;
+.propvendor-safety-notice-card,
+.propvendor-anti-fraud-card {
+    margin: 1.25rem 0 1.75rem !important;
+    padding: 1rem 1.25rem !important;
+    background: var(--pv-status-warning-bg, #FEF3C7) !important;
+    border: 1px solid var(--pv-status-warning-border, #FDE68A) !important;
+    border-left: 4px solid var(--pv-status-warning, #D97706) !important;
+    border-radius: var(--pv-radius-md, 8px) !important;
+    color: var(--pv-status-warning-text, #92400E) !important;
+    font-size: 0.92rem !important;
+    line-height: 1.55 !important;
+    font-weight: 500 !important;
+    box-shadow: var(--pv-shadow-sm, 0 1px 2px rgba(20, 43, 59, 0.05)) !important;
 }
 
 .propvendor-vehicle-legal-notice-card {
-    margin: 1.25rem 0;
-    padding: 1rem 1.25rem;
-    background: #f0f5ff;
-    border: 1px solid #adc6ff;
-    border-left: 4px solid #2f54eb;
-    border-radius: 6px;
-    color: #10239e;
-    font-size: 0.92rem;
-    line-height: 1.5;
-    font-weight: 500;
+    margin: 1.25rem 0 1.75rem !important;
+    padding: 1rem 1.25rem !important;
+    background: var(--pv-status-info-bg, #E0F2FE) !important;
+    border: 1px solid var(--pv-status-info-border, #BAE6FD) !important;
+    border-left: 4px solid var(--pv-status-info, #0284C7) !important;
+    border-radius: var(--pv-radius-md, 8px) !important;
+    color: var(--pv-status-info-text, #0369A1) !important;
+    font-size: 0.92rem !important;
+    line-height: 1.55 !important;
+    font-weight: 500 !important;
+    box-shadow: var(--pv-shadow-sm, 0 1px 2px rgba(20, 43, 59, 0.05)) !important;
 }
 
 /* Category-Specific Form Sections & Dynamic Fields */
@@ -2153,8 +2667,8 @@ select.form-control {
 .propvendor-category-fields select:focus,
 .propvendor-category-fields input:focus {
     outline: none !important;
-    border-color: #2563eb !important;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+    border-color: var(--pv-color-teal, #087F8C) !important;
+    box-shadow: 0 0 0 3px rgba(8, 127, 140, 0.15) !important;
 }
 
 /* Optgroup Styling for Clean Hierarchy */
@@ -2165,8 +2679,8 @@ select.form-control {
 #pv_state optgroup {
     font-weight: 700;
     font-size: 0.85rem;
-    color: #0f172a;
-    background-color: #f1f5f9;
+    color: var(--pv-color-navy, #142B3B);
+    background-color: var(--pv-color-surface-alt, #f8fafc);
     padding: 6px 4px;
 }
 
@@ -2177,7 +2691,7 @@ select.form-control {
 #pv_state optgroup option {
     font-weight: 400;
     font-size: 0.9rem;
-    color: #334155;
+    color: var(--pv-text-secondary, #334155);
     background-color: #ffffff;
     padding: 6px 12px;
 }
@@ -2379,14 +2893,14 @@ select.form-control {
     line-height: 1.35;
 }
 
-/* Stage 3: Vendor Listing Quota Styles */
+/* Stage 3 & Phase 9E: Vendor Listing Quota Styles */
 .propvendor-quota-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 1.25rem 1.5rem;
-    margin-bottom: 1.5rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    background: var(--pv-color-surface, #ffffff);
+    border: 1.5px solid var(--pv-color-border-hover, #cbd5e1);
+    border-radius: var(--pv-radius-lg, 12px);
+    padding: 1.6rem 1.75rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 8px rgba(20, 43, 59, 0.05);
 }
 
 .propvendor-quota-header {
@@ -2395,139 +2909,200 @@ select.form-control {
     align-items: center;
     flex-wrap: wrap;
     gap: 0.75rem;
-    margin-bottom: 1rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid #f1f5f9;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px solid var(--pv-color-border-subtle, #f1f5f9);
 }
 
 .propvendor-quota-title {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.65rem;
     font-size: 0.95rem;
 }
 
 .propvendor-quota-label {
-    font-weight: 600;
-    color: #475569;
+    font-weight: 700;
+    color: var(--pv-color-navy, #142B3B);
 }
 
 .propvendor-quota-badge {
-    display: inline-block;
-    padding: 0.25rem 0.65rem;
-    border-radius: 9999px;
-    font-size: 0.8rem;
-    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.35rem 0.85rem;
+    border-radius: var(--pv-radius-full, 9999px);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
     line-height: 1.2;
 }
 
 .propvendor-quota-badge-vip {
-    background: #dbeafe;
-    color: #1e40af;
-    border: 1px solid #bfdbfe;
+    background: var(--pv-color-teal-subtle, #e6f4f6);
+    color: var(--pv-color-teal, #087F8C);
+    border: 1px solid rgba(8, 127, 140, 0.35);
 }
 
 .propvendor-quota-badge-free {
     background: #f1f5f9;
-    color: #475569;
+    color: var(--pv-color-navy, #142B3B);
     border: 1px solid #cbd5e1;
 }
 
 .propvendor-quota-badge-expired {
-    background: #fef3c7;
-    color: #92400e;
-    border: 1px solid #fde68a;
+    background: var(--pv-status-warning-bg, #fef3c7);
+    color: var(--pv-status-warning-text, #92400e);
+    border: 1px solid var(--pv-status-warning-border, #fde68a);
 }
 
 .propvendor-quota-expiry {
-    font-size: 0.85rem;
-    color: #64748b;
+    font-size: 0.88rem;
+    color: var(--pv-text-secondary, #475569);
     font-weight: 500;
 }
 
 .propvendor-quota-body {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
 }
 
 .propvendor-quota-stats {
     display: flex;
-    gap: 1.5rem;
+    gap: 2rem;
     align-items: baseline;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.85rem;
     flex-wrap: wrap;
 }
 
 .propvendor-quota-stat-item {
     display: flex;
     align-items: baseline;
-    gap: 0.35rem;
+    gap: 0.5rem;
+}
+
+.propvendor-quota-stat-label {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--pv-text-secondary, #475569);
 }
 
 .propvendor-quota-stat-num {
-    font-size: 1.35rem;
-    font-weight: 700;
-    color: #1e293b;
+    font-size: 1.65rem;
+    font-weight: 800;
+    color: var(--pv-color-navy, #142B3B);
     line-height: 1;
+    letter-spacing: -0.01em;
 }
 
 .propvendor-quota-stat-text {
-    font-size: 0.9rem;
-    color: #64748b;
+    font-size: 0.92rem;
+    color: var(--pv-text-secondary, #475569);
     font-weight: 500;
 }
 
+.propvendor-quota-progress,
 .propvendor-quota-progress-track {
     width: 100%;
-    height: 8px;
-    background: #f1f5f9;
-    border-radius: 4px;
+    height: 10px;
+    background: #e2e8f0;
+    border-radius: var(--pv-radius-full, 9999px);
     overflow: hidden;
-    margin-top: 0.5rem;
+    margin-top: 0.65rem;
 }
 
 .propvendor-quota-progress-bar {
     height: 100%;
-    background: #2563eb;
-    border-radius: 4px;
-    transition: width 0.3s ease;
+    background: var(--pv-color-teal, #087F8C);
+    border-radius: var(--pv-radius-full, 9999px);
+    transition: width 0.4s ease;
 }
 
 .propvendor-quota-progress-bar.full {
-    background: #e11d48;
+    background: #d97706;
 }
 
+.propvendor-quota-alert,
 .propvendor-quota-limit-banner {
-    background: #fff1f2;
-    border-left: 4px solid #e11d48;
-    color: #9f1239;
-    padding: 0.75rem 1rem;
-    border-radius: 4px;
-    margin-top: 0.85rem;
-    font-size: 0.9rem;
-    line-height: 1.4;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-left: 5px solid var(--pv-color-gold, #F3B64C);
+    color: #78350f;
+    padding: 1.15rem 1.35rem;
+    border-radius: var(--pv-radius-md, 8px);
+    margin-top: 1.25rem;
+    font-size: 0.93rem;
+    line-height: 1.55;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    box-shadow: 0 1px 3px rgba(243, 182, 76, 0.15);
+}
+
+.propvendor-quota-alert-content {
+    flex: 1 1 320px;
+}
+
+.propvendor-quota-alert-action {
+    flex: 0 0 auto;
+}
+
+.propvendor-quota-alert-warning {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-left: 5px solid var(--pv-color-gold, #F3B64C);
+    color: #78350f;
 }
 
 .propvendor-quota-info-note {
-    font-size: 0.85rem;
-    color: #64748b;
-    margin-top: 0.75rem;
-    line-height: 1.4;
+    font-size: 0.88rem;
+    color: var(--pv-text-secondary, #475569);
+    margin-top: 0.85rem;
+    line-height: 1.5;
+}
+
+.propvendor-btn-upgrade {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 44px;
+    padding: 0.65rem 1.25rem;
+    background: var(--pv-color-teal, #087F8C);
+    color: #ffffff !important;
+    border-radius: var(--pv-radius-md, 8px);
+    font-size: 0.92rem;
+    font-weight: 700;
+    text-decoration: none !important;
+    box-shadow: 0 2px 4px rgba(8, 127, 140, 0.25);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.propvendor-btn-upgrade:hover,
+.propvendor-btn-upgrade:focus {
+    background: var(--pv-color-teal-hover, #066772);
+    color: #ffffff !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(8, 127, 140, 0.35);
+    text-decoration: none !important;
 }
 
 .propvendor-quota-exceeded-box {
-    border-left: 4px solid #e11d48 !important;
+    border-left: 4px solid var(--pv-status-danger, #dc2626) !important;
 }
 
 /* ==========================================================================
    Stage 4: Search & Discovery Filters Component
    ========================================================================== */
 .propvendor-search-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    padding: 1.5rem;
+    background: var(--pv-color-surface, #ffffff);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    border-radius: var(--pv-radius-lg, 12px);
+    padding: 1.75rem;
     margin-bottom: 2rem;
-    box-shadow: 0 4px 14px rgba(16, 28, 45, 0.05);
+    box-shadow: 0 8px 24px -4px rgba(13, 28, 39, 0.08);
     overflow: visible;
 }
 
@@ -2535,8 +3110,8 @@ select.form-control {
     margin: 0 0 1.25rem 0;
     font-size: 1.25rem;
     font-weight: 700;
-    color: #1e293b;
-    border-bottom: 2px solid #f1f5f9;
+    color: var(--pv-color-navy, #142B3B);
+    border-bottom: 2px solid var(--pv-color-border-subtle, #f1f5f9);
     padding-bottom: 0.75rem;
 }
 
@@ -2566,9 +3141,9 @@ select.form-control {
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    background: #f8fafc;
-    border: 1px solid #edf2f7;
-    border-radius: 8px;
+    background: var(--pv-color-surface-alt, #f8fafc);
+    border: 1px solid var(--pv-color-border, #edf2f7);
+    border-radius: var(--pv-radius-md, 8px);
     padding: 1rem 1.25rem;
     overflow: visible;
 }
@@ -2582,9 +3157,9 @@ select.form-control {
 }
 
 .propvendor-filter-group label {
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: #475569;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--pv-color-navy, #142B3B);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     margin: 0;
@@ -2602,10 +3177,10 @@ select.form-control {
     padding: 8px 12px !important;
     vertical-align: middle !important;
     box-sizing: border-box !important;
-    border: 1px solid #cbd5e1 !important;
-    border-radius: 8px !important;
+    border: 1px solid var(--pv-color-border, #cbd5e1) !important;
+    border-radius: var(--pv-radius-md, 8px) !important;
     font-size: 0.95rem !important;
-    color: #1e293b !important;
+    color: var(--pv-text-primary, #0F172A) !important;
     background-color: #ffffff !important;
     width: 100% !important;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -2614,8 +3189,8 @@ select.form-control {
 .propvendor-search-card select:focus,
 .propvendor-search-card input:focus {
     outline: none !important;
-    border-color: #2563eb !important;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+    border-color: var(--pv-color-teal, #087F8C) !important;
+    box-shadow: 0 0 0 3px rgba(8, 127, 140, 0.15) !important;
 }
 
 .propvendor-price-inputs {
@@ -2641,7 +3216,7 @@ select.form-control {
     flex-wrap: wrap;
     gap: 1rem;
     padding-top: 0.75rem;
-    border-top: 1px solid #e2e8f0;
+    border-top: 1px solid var(--pv-color-border, #e2e8f0);
 }
 
 .propvendor-filter-sort {
@@ -2660,62 +3235,68 @@ select.form-control {
 .propvendor-btn-search {
     height: 44px;
     padding: 0 1.5rem;
-    background: #0d5aa7;
+    background: var(--pv-color-teal, #087F8C);
     color: #ffffff !important;
     border: none;
-    border-radius: 6px;
+    border-radius: var(--pv-radius-md, 8px);
     font-size: 0.95rem;
     font-weight: 600;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: background-color 0.15s ease, transform 0.15s ease;
+    transition: background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
     white-space: nowrap;
+    box-shadow: 0 2px 4px rgba(8, 127, 140, 0.25);
 }
 
 .propvendor-btn-search:hover,
 .propvendor-btn-search:focus {
-    background: #094582;
+    background: var(--pv-color-teal-hover, #066772);
     transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(8, 127, 140, 0.35);
 }
 
 .propvendor-btn-reset {
     height: 44px;
     padding: 0 1.25rem;
-    background: #f1f5f9;
-    color: #475569 !important;
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
+    background: var(--pv-color-surface-alt, #f8fafc);
+    color: var(--pv-text-secondary, #475569) !important;
+    border: 1px solid var(--pv-color-border, #cbd5e1);
+    border-radius: var(--pv-radius-md, 8px);
     font-size: 0.9rem;
     font-weight: 500;
     text-decoration: none !important;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
     white-space: nowrap;
 }
 
 .propvendor-btn-reset:hover,
 .propvendor-btn-reset:focus {
-    background: #e2e8f0;
-    color: #1e293b !important;
+    background: var(--pv-color-border-subtle, #e2e8f0);
+    color: var(--pv-color-navy, #142B3B) !important;
+    border-color: var(--pv-color-border-hover, #94a3b8);
 }
 
 .propvendor-no-results {
-    background: #f8fafc;
-    border: 1px dashed #cbd5e1;
-    border-radius: 8px;
-    padding: 2.5rem 1.5rem;
+    background: var(--pv-color-surface, #ffffff);
+    border: 1px dashed var(--pv-color-border, #cbd5e1);
+    border-radius: var(--pv-radius-lg, 12px);
+    padding: 3rem 1.5rem;
     text-align: center;
-    margin: 1.5rem 0;
+    margin: 2rem 0;
+    box-shadow: var(--pv-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.04));
 }
 
 .propvendor-no-results p {
-    margin: 0;
-    color: #64748b;
+    margin: 0 auto;
+    color: var(--pv-text-secondary, #64748b);
     font-size: 1.05rem;
+    line-height: 1.6;
+    max-width: 580px;
 }
 
 /* Responsive adjustments */
@@ -2755,45 +3336,45 @@ select.form-control {
 
 /**
  * =========================================================================
- * PHASE 4B: VENDOR WALLET & CHECKOUT UI STYLES
+ * PHASE 4B & 9F: VENDOR WALLET & CHECKOUT UI STYLES
  * =========================================================================
  */
 
 .propvendor-wallet-container {
-    max-width: 1100px;
+    max-width: 1140px;
     margin: 2rem auto;
     font-family: inherit;
-    color: #1e293b;
+    color: var(--pv-text-main, #1e293b);
 }
 
 .propvendor-wallet-header {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 1.5rem;
     margin-bottom: 2.5rem;
 }
 
 .propvendor-wallet-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 1.5rem;
+    background: var(--pv-color-surface, #ffffff);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    border-radius: var(--pv-radius-lg, 14px);
+    padding: 1.6rem 1.5rem;
     display: flex;
     align-items: center;
     gap: 1.25rem;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: var(--pv-shadow-sm, 0 2px 6px rgba(20, 43, 59, 0.05));
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .propvendor-wallet-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--pv-shadow-md, 0 6px 16px rgba(20, 43, 59, 0.08));
 }
 
 .propvendor-wallet-card-icon {
-    width: 60px;
-    height: 60px;
-    border-radius: 12px;
+    width: 58px;
+    height: 58px;
+    border-radius: var(--pv-radius-md, 12px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2801,30 +3382,35 @@ select.form-control {
 }
 
 .propvendor-balance-card .propvendor-wallet-card-icon {
-    background: #ecfdf5;
-    color: #059669;
+    background: var(--pv-color-teal-subtle, #e6f4f6);
+    color: var(--pv-color-teal, #087F8C);
 }
 
 .propvendor-balance-card .propvendor-wallet-card-icon .dashicons {
-    font-size: 32px;
-    width: 32px;
-    height: 32px;
+    font-size: 30px;
+    width: 30px;
+    height: 30px;
+}
+
+.propvendor-vip-card.is-vip-active {
+    border-color: rgba(243, 182, 76, 0.45);
+    background: linear-gradient(135deg, #ffffff 0%, #fffdfa 100%);
 }
 
 .propvendor-vip-card.is-vip-active .propvendor-wallet-card-icon {
-    background: #eff6ff;
-    color: #2563eb;
+    background: var(--pv-color-gold-subtle, #fef7ec);
+    color: var(--pv-color-gold-dark, #b45309);
 }
 
 .propvendor-vip-card.is-vip-inactive .propvendor-wallet-card-icon {
     background: #f1f5f9;
-    color: #94a3b8;
+    color: var(--pv-text-muted, #94a3b8);
 }
 
 .propvendor-vip-card .propvendor-wallet-card-icon .dashicons {
-    font-size: 32px;
-    width: 32px;
-    height: 32px;
+    font-size: 30px;
+    width: 30px;
+    height: 30px;
 }
 
 .propvendor-wallet-card-info {
@@ -2833,41 +3419,47 @@ select.form-control {
 }
 
 .propvendor-card-label {
-    font-size: 0.85rem;
+    font-size: 0.78rem;
     text-transform: uppercase;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    color: #64748b;
-    margin-bottom: 0.25rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--pv-text-muted, #64748b);
+    margin-bottom: 0.35rem;
 }
 
 .propvendor-card-value {
-    font-size: 1.85rem;
-    font-weight: 700;
-    line-height: 1.2;
-    color: #0f172a;
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1.15;
+    color: var(--pv-color-navy, #142B3B);
+    letter-spacing: -0.02em;
 }
 
 .propvendor-status-active {
-    color: #16a34a;
+    color: #059669;
+    font-weight: 700;
 }
 
 .propvendor-status-inactive {
-    color: #64748b;
+    color: var(--pv-text-secondary, #64748b);
+    font-weight: 600;
+    font-size: 1.6rem;
 }
 
 .propvendor-card-subtext {
     font-size: 0.85rem;
-    color: #64748b;
-    margin-top: 0.25rem;
+    color: var(--pv-text-secondary, #64748b);
+    margin-top: 0.35rem;
+    line-height: 1.4;
 }
 
 /* Wallet Notices */
 .propvendor-wallet-notice {
     padding: 1rem 1.25rem;
-    border-radius: 8px;
+    border-radius: var(--pv-radius-md, 8px);
     margin-bottom: 2rem;
     font-size: 0.95rem;
+    line-height: 1.5;
 }
 
 .propvendor-wallet-notice p {
@@ -2877,24 +3469,28 @@ select.form-control {
 .propvendor-wallet-notice.notice-success {
     background: #ecfdf5;
     border: 1px solid #a7f3d0;
+    border-left: 4px solid #10b981;
     color: #065f46;
 }
 
 .propvendor-wallet-notice.notice-error {
     background: #fef2f2;
     border: 1px solid #fecaca;
+    border-left: 4px solid #ef4444;
     color: #991b1b;
 }
 
 .propvendor-wallet-notice.notice-info {
     background: #eff6ff;
     border: 1px solid #bfdbfe;
+    border-left: 4px solid var(--pv-color-teal, #087F8C);
     color: #1e40af;
 }
 
 .propvendor-wallet-notice.notice-warning {
     background: #fffbeb;
     border: 1px solid #fde68a;
+    border-left: 4px solid #f59e0b;
     color: #92400e;
 }
 
@@ -2913,18 +3509,23 @@ select.form-control {
     margin-bottom: 0.5rem;
     font-size: 1.75rem;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--pv-color-navy, #142B3B);
+    letter-spacing: -0.01em;
 }
 
 .propvendor-section-header p {
-    color: #64748b;
+    color: var(--pv-text-secondary, #64748b);
     font-size: 1rem;
     margin: 0;
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
+    line-height: 1.5;
 }
 
 .propvendor-pricing-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     gap: 1.5rem;
     align-items: stretch;
     max-width: 1140px;
@@ -2933,78 +3534,90 @@ select.form-control {
 }
 
 .propvendor-pricing-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 16px;
-    padding: 2rem 1.5rem;
+    background: var(--pv-color-surface, #ffffff);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    border-radius: var(--pv-radius-lg, 16px);
+    padding: 2rem 1.4rem 1.75rem;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     position: relative;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    box-shadow: 0 4px 6px -1px rgba(20, 43, 59, 0.04);
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 .propvendor-pricing-card:hover {
     transform: translateY(-4px);
-    box-shadow: 0 12px 20px -3px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 12px 24px -4px rgba(20, 43, 59, 0.1);
+    border-color: rgba(8, 127, 140, 0.3);
 }
 
 .propvendor-pricing-card.featured-plan {
-    border: 2px solid #2563eb;
-    box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.15);
+    border: 2px solid var(--pv-color-gold, #F3B64C);
+    box-shadow: 0 10px 25px -4px rgba(20, 43, 59, 0.12);
+    background: linear-gradient(180deg, #ffffff 0%, #fffdfa 100%);
+}
+
+.propvendor-pricing-card.featured-plan:hover {
+    box-shadow: 0 14px 28px -4px rgba(243, 182, 76, 0.25);
+    border-color: #e5a435;
+}
+
+.propvendor-pricing-card.free-plan {
+    background: #fafbfc;
 }
 
 .propvendor-card-badge {
     position: absolute;
     top: -12px;
-    right: 20px;
-    background: #2563eb;
+    right: 18px;
+    background: var(--pv-color-teal, #087F8C);
     color: #ffffff;
     padding: 4px 12px;
     border-radius: 20px;
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     z-index: 2;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
 }
 
 .propvendor-card-badge.free-badge {
-    background: #64748b;
-}
-
-.propvendor-card-badge.popular-badge {
-    background: #2563eb;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
 }
 
 .propvendor-card-badge.starter-badge {
-    background: #0284c7;
-}
-
-.propvendor-card-badge.best-value-badge {
-    background: #059669;
+    background: #e0f2fe;
+    color: #0369a1;
+    border: 1px solid #bae6fd;
 }
 
 .propvendor-card-badge.pro-savings-badge {
-    background: #7c3aed;
+    background: #f3e8ff;
+    color: #7e22ce;
+    border: 1px solid #e9d5ff;
 }
 
-.propvendor-free-plan-btn {
-    background: #f1f5f9 !important;
-    color: #475569 !important;
-    border: 1px solid #cbd5e1 !important;
-    transition: all 0.2s ease !important;
+.propvendor-card-badge.popular-badge {
+    background: linear-gradient(135deg, #F3B64C 0%, #e5a435 100%);
+    color: #0D1C27;
+    border: 1px solid #e5a435;
+    font-weight: 800;
+    box-shadow: 0 2px 6px rgba(243, 182, 76, 0.35);
 }
 
-.propvendor-free-plan-btn:hover {
-    background: #e2e8f0 !important;
-    color: #0f172a !important;
+.propvendor-card-badge.best-value-badge {
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
 }
 
 .propvendor-plan-header {
     text-align: center;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid var(--pv-color-border-subtle, #f1f5f9);
     padding-bottom: 1.25rem;
     margin-bottom: 1.25rem;
 }
@@ -3012,7 +3625,7 @@ select.form-control {
 .propvendor-plan-title {
     font-size: 1.2rem;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--pv-color-navy, #142B3B);
     margin: 0 0 0.75rem 0;
 }
 
@@ -3020,7 +3633,7 @@ select.form-control {
     display: flex;
     align-items: baseline;
     justify-content: center;
-    color: #0f172a;
+    color: var(--pv-color-navy, #142B3B);
 }
 
 .propvendor-plan-price .currency {
@@ -3033,12 +3646,14 @@ select.form-control {
     font-size: 2.25rem;
     font-weight: 800;
     line-height: 1;
+    letter-spacing: -0.02em;
 }
 
 .propvendor-plan-price .period {
-    font-size: 0.9rem;
-    color: #64748b;
+    font-size: 0.88rem;
+    color: var(--pv-text-muted, #64748b);
     margin-left: 6px;
+    font-weight: 500;
 }
 
 .propvendor-plan-body {
@@ -3047,11 +3662,12 @@ select.form-control {
 }
 
 .propvendor-plan-desc {
-    font-size: 0.9rem;
-    color: #64748b;
+    font-size: 0.88rem;
+    color: var(--pv-text-secondary, #64748b);
     text-align: center;
     margin-bottom: 1.25rem;
     line-height: 1.5;
+    min-height: 42px;
 }
 
 .propvendor-plan-features {
@@ -3065,13 +3681,13 @@ select.form-control {
     align-items: flex-start;
     gap: 0.5rem;
     font-size: 0.88rem;
-    color: #334155;
+    color: var(--pv-text-main, #334155);
     margin-bottom: 0.75rem;
     line-height: 1.4;
 }
 
 .propvendor-plan-features li .dashicons {
-    color: #16a34a;
+    color: var(--pv-color-teal, #087F8C);
     font-size: 18px;
     width: 18px;
     height: 18px;
@@ -3081,40 +3697,69 @@ select.form-control {
 
 .propvendor-plan-footer {
     margin-top: auto;
+    padding-top: 0.5rem;
+}
+
+.propvendor-free-plan-btn {
+    background: #f1f5f9 !important;
+    color: var(--pv-color-navy, #142B3B) !important;
+    border: 1px solid #cbd5e1 !important;
+    transition: all 0.2s ease !important;
+    min-height: 44px;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+}
+
+.propvendor-free-plan-btn:hover {
+    background: #e2e8f0 !important;
+    color: var(--pv-color-navy-dark, #0D1C27) !important;
+    border-color: #94a3b8 !important;
 }
 
 .propvendor-checkout-btn {
     width: 100%;
+    min-height: 44px;
     padding: 0.75rem 1rem !important;
-    font-size: 1rem !important;
-    font-weight: 600 !important;
-    border-radius: 8px !important;
+    font-size: 0.95rem !important;
+    font-weight: 700 !important;
+    border-radius: var(--pv-radius-md, 8px) !important;
     text-align: center !important;
     cursor: pointer;
-    background-color: #2563eb !important;
-    border-color: #2563eb !important;
+    background-color: var(--pv-color-teal, #087F8C) !important;
+    border-color: var(--pv-color-teal, #087F8C) !important;
     color: #ffffff !important;
-    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+    box-shadow: 0 2px 4px rgba(8, 127, 140, 0.25);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    transition: background-color 0.2s ease, border-color 0.2s ease;
+    transition: all 0.2s ease;
 }
 
 .propvendor-checkout-btn:hover {
-    background-color: #1d4ed8 !important;
-    border-color: #1d4ed8 !important;
+    background-color: var(--pv-color-teal-hover, #066772) !important;
+    border-color: var(--pv-color-teal-hover, #066772) !important;
+    box-shadow: 0 4px 8px rgba(8, 127, 140, 0.35);
+    transform: translateY(-1px);
 }
 
 .propvendor-pricing-card.featured-plan .propvendor-checkout-btn {
-    background-color: #1d4ed8 !important;
-    border-color: #1d4ed8 !important;
+    background-color: var(--pv-color-navy, #142B3B) !important;
+    border-color: var(--pv-color-navy, #142B3B) !important;
+    box-shadow: 0 2px 4px rgba(20, 43, 59, 0.25);
+}
+
+.propvendor-pricing-card.featured-plan .propvendor-checkout-btn:hover {
+    background-color: var(--pv-color-navy-dark, #0D1C27) !important;
+    border-color: var(--pv-color-navy-dark, #0D1C27) !important;
+    box-shadow: 0 4px 8px rgba(20, 43, 59, 0.35);
 }
 
 .propvendor-checkout-btn:disabled {
     opacity: 0.65;
     cursor: not-allowed;
+    transform: none !important;
 }
 
 /* Spinner */
@@ -3134,82 +3779,148 @@ select.form-control {
 
 /* Transactions Table */
 .propvendor-transactions-section {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 1.5rem;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+    background: var(--pv-color-surface, #ffffff);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    border-radius: var(--pv-radius-lg, 14px);
+    padding: 1.75rem;
+    box-shadow: var(--pv-shadow-sm, 0 2px 6px rgba(20, 43, 59, 0.04));
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .propvendor-transactions-section .propvendor-section-header {
     text-align: left;
-    margin-bottom: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.propvendor-transactions-section .propvendor-section-header h3 {
+    font-size: 1.3rem;
+    margin-bottom: 0;
 }
 
 .propvendor-transactions-table {
     width: 100%;
+    min-width: 620px;
     border-collapse: collapse;
-    font-size: 0.92rem;
+    font-size: 0.9rem;
 }
 
 .propvendor-transactions-table th {
     background: #f8fafc;
-    color: #475569;
-    font-weight: 600;
-    padding: 0.75rem 1rem;
+    color: var(--pv-color-navy, #142B3B);
+    font-weight: 700;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.85rem 1rem;
     text-align: left;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 2px solid var(--pv-color-border, #e2e8f0);
 }
 
 .propvendor-transactions-table td {
-    padding: 0.85rem 1rem;
-    border-bottom: 1px solid #f1f5f9;
-    color: #334155;
+    padding: 0.95rem 1rem;
+    border-bottom: 1px solid var(--pv-color-border-subtle, #f1f5f9);
+    color: var(--pv-text-main, #334155);
+    vertical-align: middle;
+}
+
+.propvendor-transactions-table tr:hover td {
+    background: #fafbfc;
 }
 
 .propvendor-transactions-table tr:last-child td {
     border-bottom: none;
 }
 
+.propvendor-transactions-table code {
+    background: #f1f5f9;
+    color: var(--pv-color-navy, #142B3B);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    border: 1px solid #e2e8f0;
+}
+
 .propvendor-badge {
     display: inline-block;
-    padding: 3px 8px;
+    padding: 3px 10px;
     border-radius: 12px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    text-transform: capitalize;
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
 }
 
 .propvendor-badge.status-success {
     background: #ecfdf5;
     color: #065f46;
+    border: 1px solid #a7f3d0;
 }
 
 .propvendor-badge.status-pending {
     background: #fffbeb;
     color: #92400e;
+    border: 1px solid #fde68a;
 }
 
 .propvendor-badge.status-failed {
     background: #fef2f2;
     color: #991b1b;
+    border: 1px solid #fecaca;
 }
 
 .propvendor-wallet-login-prompt {
-    background: #f8fafc;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    padding: 2rem;
+    background: var(--pv-color-surface, #ffffff);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    border-radius: var(--pv-radius-lg, 12px);
+    box-shadow: var(--pv-shadow-sm, 0 2px 6px rgba(20, 43, 59, 0.04));
+    padding: 2.5rem 2rem;
     text-align: center;
-    margin: 2rem auto;
+    margin: 2.5rem auto;
     max-width: 600px;
 }
 
+.propvendor-wallet-login-prompt a {
+    color: var(--pv-color-teal, #087F8C);
+    font-weight: 600;
+    text-decoration: underline;
+}
+
+.propvendor-wallet-login-prompt a:hover {
+    color: var(--pv-color-teal-hover, #066772);
+}
+
 .propvendor-no-orders {
-    color: #64748b;
+    color: var(--pv-text-muted, #64748b);
     font-style: italic;
-    padding: 1rem 0;
+    padding: 1.5rem 0;
     margin: 0;
+    text-align: center;
+}
+
+/* Wallet Responsive Breakpoints */
+@media (max-width: 1024px) {
+    .propvendor-pricing-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.25rem;
+    }
+}
+
+@media (max-width: 640px) {
+    .propvendor-wallet-header {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    .propvendor-pricing-grid {
+        grid-template-columns: 1fr;
+        gap: 1.25rem;
+    }
+    .propvendor-pricing-card {
+        padding: 1.75rem 1.25rem 1.5rem;
+    }
+    .propvendor-transactions-section {
+        padding: 1.25rem 1rem;
+    }
 }
 
 /* =========================================================================
@@ -3220,10 +3931,10 @@ select.form-control {
     margin: 0.85rem 0 0.5rem 0;
     padding: 0.85rem 1.15rem;
     background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-left: 4px solid #3b82f6;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    border-left: 4px solid var(--pv-color-teal, #087F8C);
+    border-radius: var(--pv-radius-md, 8px);
+    box-shadow: 0 1px 3px rgba(20, 43, 59, 0.04);
 }
 
 .pv-unlock-lead-inner {
@@ -3262,7 +3973,7 @@ select.form-control {
 .pv-unlock-balance-pill {
     display: inline-block;
     background: #e2e8f0;
-    color: #334155;
+    color: var(--pv-text-main, #334155);
     padding: 3px 8px;
     border-radius: 12px;
     font-size: 0.8rem;
@@ -3280,19 +3991,21 @@ select.form-control {
     display: inline-flex !important;
     align-items: center;
     gap: 5px;
-    background: #2563eb !important;
-    border-color: #1d4ed8 !important;
+    background: var(--pv-color-teal, #087F8C) !important;
+    border-color: var(--pv-color-teal, #087F8C) !important;
     color: #ffffff !important;
     font-weight: 600 !important;
     padding: 6px 14px !important;
-    border-radius: 6px !important;
+    border-radius: var(--pv-radius-md, 6px) !important;
     cursor: pointer;
+    box-shadow: 0 2px 4px rgba(8, 127, 140, 0.2);
     transition: background-color 0.15s ease, transform 0.1s ease;
 }
 
 .pv-btn-unlock-lead-trigger:hover,
 .pv-btn-unlock-lead-trigger:focus {
-    background: #1d4ed8 !important;
+    background: var(--pv-color-teal-hover, #066772) !important;
+    border-color: var(--pv-color-teal-hover, #066772) !important;
     transform: translateY(-1px);
 }
 
@@ -3305,7 +4018,7 @@ select.form-control {
 
 .pv-unlock-hint {
     font-size: 0.8rem;
-    color: #64748b;
+    color: var(--pv-text-secondary, #64748b);
     line-height: 1.3;
 }
 
@@ -3329,9 +4042,13 @@ select.form-control {
 }
 
 .pv-text-warning a {
-    color: #2563eb;
+    color: var(--pv-color-teal, #087F8C);
     text-decoration: underline;
     font-weight: 600;
+}
+
+.pv-text-warning a:hover {
+    color: var(--pv-color-teal-hover, #066772);
 }
 
 /* Success Revealed Banner */
@@ -3377,18 +4094,18 @@ select.form-control {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(15, 23, 42, 0.65);
+    background: rgba(13, 28, 39, 0.65);
     backdrop-filter: blur(2px);
 }
 
 .pv-unlock-modal-dialog {
     position: relative;
     z-index: 10;
-    background: #ffffff;
-    border-radius: 12px;
+    background: var(--pv-color-surface, #ffffff);
+    border-radius: var(--pv-radius-lg, 14px);
     max-width: 460px;
     width: 100%;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 20px 25px -5px rgba(20, 43, 59, 0.15), 0 10px 10px -5px rgba(20, 43, 59, 0.04);
     overflow: hidden;
     animation: pvModalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -3409,14 +4126,14 @@ select.form-control {
     align-items: center;
     justify-content: space-between;
     padding: 1.15rem 1.25rem;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid var(--pv-color-border, #e2e8f0);
     background: #f8fafc;
 }
 
 .pv-unlock-modal-header h4 {
     margin: 0;
     font-size: 1.1rem;
-    color: #0f172a;
+    color: var(--pv-color-navy, #142B3B);
     display: flex;
     align-items: center;
     gap: 6px;
@@ -3424,7 +4141,7 @@ select.form-control {
 }
 
 .pv-unlock-modal-header h4 .dashicons {
-    color: #2563eb;
+    color: var(--pv-color-teal, #087F8C);
     font-size: 18px;
     width: 18px;
     height: 18px;
@@ -3434,14 +4151,14 @@ select.form-control {
     background: none;
     border: none;
     font-size: 1.5rem;
-    color: #64748b;
+    color: var(--pv-text-muted, #64748b);
     cursor: pointer;
     line-height: 1;
     padding: 0 4px;
 }
 
 .pv-unlock-modal-close:hover {
-    color: #0f172a;
+    color: var(--pv-color-navy, #142B3B);
 }
 
 .pv-unlock-modal-body {
@@ -3450,7 +4167,7 @@ select.form-control {
 
 .pv-unlock-modal-body p {
     margin: 0 0 0.85rem 0;
-    color: #334155;
+    color: var(--pv-text-main, #334155);
     font-size: 0.95rem;
     line-height: 1.5;
 }
@@ -3464,13 +4181,13 @@ select.form-control {
     flex-direction: column;
     gap: 0.4rem;
     font-size: 0.92rem;
-    color: #1e293b;
-    border: 1px solid #e2e8f0;
+    color: var(--pv-color-navy, #142B3B);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
 }
 
 .pv-unlock-modal-subtext {
     font-size: 0.82rem !important;
-    color: #64748b !important;
+    color: var(--pv-text-secondary, #64748b) !important;
     line-height: 1.4 !important;
     margin-bottom: 0 !important;
 }
@@ -3491,19 +4208,21 @@ select.form-control {
     justify-content: flex-end;
     gap: 0.65rem;
     padding: 1rem 1.25rem;
-    border-top: 1px solid #e2e8f0;
+    border-top: 1px solid var(--pv-color-border, #e2e8f0);
     background: #f8fafc;
 }
 
 .pv-unlock-modal-footer .button-primary {
-    background: #2563eb !important;
-    border-color: #1d4ed8 !important;
+    background: var(--pv-color-teal, #087F8C) !important;
+    border-color: var(--pv-color-teal, #087F8C) !important;
     color: #ffffff !important;
     font-weight: 600 !important;
+    box-shadow: 0 2px 4px rgba(8, 127, 140, 0.2);
 }
 
 .pv-unlock-modal-footer .button-primary:hover {
-    background: #1d4ed8 !important;
+    background: var(--pv-color-teal-hover, #066772) !important;
+    border-color: var(--pv-color-teal-hover, #066772) !important;
 }
 
 @media (max-width: 640px) {
@@ -3542,7 +4261,7 @@ body.home .ast-archive-description {
     padding: 70px 20px 85px;
     margin: 0;
     overflow: visible;
-    background-color: #0a192f;
+    background-color: var(--pv-color-navy-dark, #0D1C27);
 }
 
 /* Full-width breakout for Astra container */
@@ -3584,7 +4303,7 @@ body.home .ast-archive-description {
 .propvendor-hero-overlay {
     position: absolute;
     inset: 0;
-    background: linear-gradient(135deg, rgba(10, 25, 47, 0.88) 0%, rgba(15, 23, 42, 0.74) 100%);
+    background: linear-gradient(135deg, rgba(13, 28, 39, 0.88) 0%, rgba(20, 43, 59, 0.76) 100%);
     z-index: 1;
 }
 
@@ -3600,15 +4319,15 @@ body.home .ast-archive-description {
 .propvendor-hero-badge {
     display: inline-block;
     background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(243, 182, 76, 0.4);
     padding: 6px 18px;
-    border-radius: 50px;
+    border-radius: var(--pv-radius-full, 9999px);
     font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 1.2px;
     text-transform: uppercase;
     margin-bottom: 24px;
-    color: #ffffff;
+    color: var(--pv-color-gold, #F3B64C);
 }
 
 .propvendor-hero-title {
@@ -3621,7 +4340,7 @@ body.home .ast-archive-description {
 }
 
 .propvendor-hero-title .highlight {
-    color: #ff6b2a;
+    color: var(--pv-color-gold, #F3B64C);
 }
 
 .propvendor-hero-subtitle {
@@ -3642,10 +4361,10 @@ body.home .ast-archive-description {
 .propvendor-pill-search {
     display: flex;
     align-items: center;
-    background: #ffffff;
-    border-radius: 50px;
+    background: var(--pv-color-surface, #ffffff);
+    border-radius: var(--pv-radius-full, 9999px);
     padding: 6px 8px 6px 20px;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 20px 35px -5px rgba(13, 28, 39, 0.35), 0 4px 12px rgba(0, 0, 0, 0.08);
     max-width: 820px;
     margin: 0 auto;
     position: relative;
@@ -3815,9 +4534,9 @@ body.home .ast-archive-description {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #0d9488;
+    color: var(--pv-color-teal, #087F8C);
     padding: 8px 10px 4px;
-    background: #f8fafc;
+    background: var(--pv-color-surface-alt, #f8fafc);
     border-radius: 4px;
     margin: 4px 0 2px;
 }
@@ -3827,7 +4546,7 @@ body.home .ast-archive-description {
     width: 100%;
     padding: 7px 12px;
     font-size: 0.88rem;
-    color: #334155;
+    color: var(--pv-text-secondary, #334155);
     background: transparent;
     border-radius: 6px;
     cursor: pointer;
@@ -3836,13 +4555,13 @@ body.home .ast-archive-description {
 }
 
 .propvendor-state-option:hover {
-    background: #f1f5f9;
-    color: #0d9488;
+    background: var(--pv-color-teal-subtle, #E6F4F6);
+    color: var(--pv-color-teal, #087F8C);
 }
 
 .propvendor-state-option.is-selected {
-    background: rgba(13, 148, 136, 0.1);
-    color: #0d9488;
+    background: rgba(8, 127, 140, 0.1);
+    color: var(--pv-color-teal, #087F8C);
     font-weight: 600;
 }
 
@@ -3856,8 +4575,8 @@ body.home .ast-archive-description {
 
 .propvendor-hero-state-select optgroup {
     font-weight: 700;
-    color: #0d9488;
-    background: #f8fafc;
+    color: var(--pv-color-teal, #087F8C);
+    background: var(--pv-color-surface-alt, #f8fafc);
     font-size: 0.8rem;
 }
 
@@ -3884,9 +4603,9 @@ body.home .ast-archive-description {
     flex-shrink: 0;
 }
 
-/* High-converting teal button (#0d9488 / #0f766e) with hover state */
+/* High-converting teal button with hover state */
 .propvendor-pill-search .search-submit-btn {
-    background: #0d9488;
+    background: var(--pv-color-teal, #087F8C);
     color: #ffffff;
     border: none;
     border-radius: 40px;
@@ -3901,12 +4620,12 @@ body.home .ast-archive-description {
     transition: all 0.2s ease;
     flex-shrink: 0;
     margin-left: 6px;
-    box-shadow: 0 4px 6px -1px rgba(13, 148, 136, 0.3);
+    box-shadow: 0 4px 6px -1px rgba(8, 127, 140, 0.3);
 }
 
 .propvendor-pill-search .search-submit-btn:hover {
-    background: #0f766e;
-    box-shadow: 0 6px 10px -1px rgba(15, 118, 110, 0.4);
+    background: var(--pv-color-teal-hover, #066772);
+    box-shadow: 0 6px 12px -1px rgba(6, 103, 114, 0.4);
     transform: translateY(-1px);
 }
 
@@ -3922,10 +4641,10 @@ body.home .ast-archive-description {
 .propvendor-trust-badges .trust-dot {
     width: 8px;
     height: 8px;
-    background: #10b981;
+    background: var(--pv-status-success, #0A8A4F);
     border-radius: 50%;
     display: inline-block;
-    box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+    box-shadow: 0 0 8px rgba(10, 138, 79, 0.6);
 }
 
 /* Accessibility: reduce motion fallback */
@@ -4014,135 +4733,12 @@ body.home .ast-archive-description {
     justify-content: space-between !important;
 }
 
-/* Ensure desktop header navigation fits comfortably on a single line */
-@media (min-width: 922px) {
-    .site-header-primary-section-left {
-        flex-shrink: 0 !important;
-        min-width: max-content !important;
-    }
-
-    .site-header-primary-section-right {
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        flex-wrap: nowrap !important;
-        flex-shrink: 1;
-        min-width: 0;
-    }
-
-    .main-header-bar-navigation {
-        display: flex;
-        align-items: center;
-        flex-shrink: 1;
-        min-width: 0;
-    }
-
-    .main-navigation .main-header-menu {
-        display: flex !important;
-        align-items: center !important;
-        flex-wrap: nowrap !important;
-        gap: 3px;
-    }
-
-    .main-navigation .main-header-menu > .menu-item > a {
-        white-space: nowrap !important;
-        font-size: 13.5px !important;
-        padding: 0 7.5px !important;
-        font-weight: 500;
-        letter-spacing: -0.01em;
-    }
-
-    /* Distinct CTA button for 'Submit a Listing' */
-    .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta {
-        margin-left: 6px;
-        flex-shrink: 0 !important;
-    }
-
-    .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta > a {
-        background-color: #0d9488 !important;
-        color: #ffffff !important;
-        padding: 6px 14px !important;
-        border-radius: 6px !important;
-        font-weight: 600 !important;
-        font-size: 13.5px !important;
-        line-height: 1.4 !important;
-        transition: all 0.2s ease-in-out !important;
-        display: inline-flex !important;
-        align-items: center !important;
-        flex-shrink: 0 !important;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
-    }
-
-    .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta > a:hover {
-        background-color: #0f766e !important;
-        color: #ffffff !important;
-        box-shadow: 0 3px 6px -1px rgba(13, 148, 136, 0.3) !important;
-        transform: translateY(-1px);
-    }
-
-    /* Custom styling for the Submit a Listing menu button */
-    .main-header-menu .menu-item a.ast-custom-button-link,
-    .main-header-menu .menu-item-btn > a {
-        background-color: #0a192f !important;
-        color: #ffffff !important;
-        border-radius: 6px !important;
-        padding: 8px 18px !important;
-    }
-
-    /* Hover effect */
-    .main-header-menu .menu-item a.ast-custom-button-link:hover,
-    .main-header-menu .menu-item-btn > a:hover {
-        background-color: #ff6b2a !important;
-    }
-
-    /* Standard navigation link hover & active states (non-home pages) */
-    body:not(.home) .site-header-primary-section-right .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a {
-        color: #334155 !important;
-        border-radius: 6px;
-        transition: all 0.2s ease-in-out !important;
-    }
-
-    body:not(.home) .site-header-primary-section-right .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a:hover,
-    body:not(.home) .site-header-primary-section-right .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta).focus > a {
-        color: #0d9488 !important;
-        background-color: rgba(13, 148, 136, 0.08) !important;
-    }
-
-    body:not(.home) .site-header-primary-section-right .main-navigation .main-header-menu > .menu-item.current-menu-item:not(.propvendor-nav-cta) > a,
-    body:not(.home) .site-header-primary-section-right .main-navigation .main-header-menu > .menu-item.current_page_item:not(.propvendor-nav-cta) > a {
-        color: #0d9488 !important;
-        font-weight: 600 !important;
-        background-color: rgba(13, 148, 136, 0.08) !important;
-    }
-}
-
-@media (min-width: 1200px) {
-    .main-navigation .main-header-menu {
-        gap: 5px;
-    }
-
-    .main-navigation .main-header-menu > .menu-item > a {
-        font-size: 14px !important;
-        padding: 0 9px !important;
-    }
-
-    .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta > a {
-        padding: 7px 15px !important;
-        font-size: 14px !important;
-    }
-}
-
-/* Mobile off-canvas / dropdown styling */
-@media (max-width: 921px) {
-    #ast-hf-mobile-menu .menu-item.propvendor-nav-cta > a {
-        color: #0d9488 !important;
-        font-weight: 600 !important;
-    }
-}
-
 /* ======================================================================
-   PHASE 8B.2 — TASK 1: SOLID WHITE NAVBAR & HEADER VISIBILITY REPAIR
+   PHASE 9B — GLOBAL HEADER, DESKTOP NAVIGATION, MOBILE MENU & FOOTER
+   Consistent, Accessible, Responsive Marketplace Navigation (Tokens)
    ====================================================================== */
+
+/* --- 1. Global Header Container (Solid Surface Across All Pages) --- */
 #masthead.site-header,
 .home #masthead.site-header {
     position: relative !important;
@@ -4152,10 +4748,9 @@ body.home .ast-archive-description {
     z-index: 100 !important;
     display: block !important;
     visibility: visible !important;
-    background: #ffffff !important;
-    background-color: #ffffff !important;
-    border-bottom: 1px solid #e2e8f0 !important;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    background-color: var(--pv-color-surface, #ffffff) !important;
+    border-bottom: 1px solid var(--pv-color-border, #e2e8f0) !important;
+    box-shadow: var(--pv-shadow-sm, 0 1px 2px rgba(20, 43, 59, 0.05)) !important;
 }
 
 #masthead .ast-desktop-header,
@@ -4170,83 +4765,441 @@ body.home .ast-archive-description {
 .home #masthead .ast-primary-header-bar,
 .home #masthead .main-header-bar,
 .home #masthead .site-primary-header-wrap {
-    background: #ffffff !important;
-    background-color: #ffffff !important;
+    background-color: var(--pv-color-surface, #ffffff) !important;
     display: flex !important;
     visibility: visible !important;
     overflow: visible !important;
     height: auto !important;
-    min-height: 60px !important;
+    min-height: 64px !important;
     border: none !important;
     box-shadow: none !important;
 }
 
-/* Site branding & logo in high contrast dark slate */
+/* --- 2. Site Branding & Marketplace Logo --- */
 .site-branding .site-title a,
 .site-title a,
 .home .site-branding .site-title a,
 .home .site-title a {
-    color: #0f172a !important;
-    font-size: 1.35rem !important;
+    color: var(--pv-color-navy, #142b3b) !important;
+    font-family: var(--pv-font-sans);
+    font-size: 1.4rem !important;
     font-weight: 800 !important;
+    letter-spacing: -0.02em !important;
     text-decoration: none !important;
-    transition: color 0.2s ease;
+    transition: color var(--pv-transition-fast) !important;
+    display: inline-block !important;
+    padding: 4px 0 !important;
 }
 
 .site-branding .site-title a:hover,
 .site-title a:hover,
 .home .site-branding .site-title a:hover,
 .home .site-title a:hover {
-    color: #0d9488 !important;
+    color: var(--pv-color-teal, #087f8c) !important;
 }
 
-/* All 8 navigation links in crisp dark slate */
-.main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a,
-.home .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a {
-    color: #334155 !important;
-    font-weight: 500 !important;
+.site-branding .site-title a:focus-visible,
+.site-title a:focus-visible {
+    outline: none !important;
+    box-shadow: var(--pv-shadow-focus) !important;
+    border-radius: var(--pv-radius-sm, 6px) !important;
+}
+
+/* --- 3. Desktop Header Navigation (Single Line Layout & Spacing) --- */
+@media (min-width: 922px) {
+    .site-header-primary-section-left {
+        flex-shrink: 0 !important;
+        min-width: max-content !important;
+    }
+
+    .site-header-primary-section-right {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        flex-wrap: nowrap !important;
+        flex-shrink: 1 !important;
+        min-width: 0 !important;
+    }
+
+    .main-header-bar-navigation {
+        display: flex !important;
+        align-items: center !important;
+        flex-shrink: 1 !important;
+        min-width: 0 !important;
+    }
+
+    .main-navigation .main-header-menu {
+        display: flex !important;
+        align-items: center !important;
+        flex-wrap: nowrap !important;
+        gap: 4px;
+        margin: 0 !important;
+        padding: 0 !important;
+        list-style: none !important;
+    }
+
+    /* Standard Navigation Links (All Pages) */
+    .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a,
+    .home .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a {
+        color: var(--pv-text-secondary, #475569) !important;
+        font-family: var(--pv-font-sans);
+        font-size: 13.5px !important;
+        font-weight: 500 !important;
+        white-space: nowrap !important;
+        padding: 6px 9px !important;
+        border-radius: var(--pv-radius-md, 8px) !important;
+        text-decoration: none !important;
+        background: transparent !important;
+        transition: color var(--pv-transition-fast),
+                    background-color var(--pv-transition-fast) !important;
+    }
+
+    /* Hover & Focus States */
+    .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a:hover,
+    .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta).focus > a,
+    .home .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a:hover,
+    .home .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta).focus > a {
+        color: var(--pv-color-teal, #087f8c) !important;
+        background-color: var(--pv-color-teal-subtle, #e6f4f6) !important;
+    }
+
+    .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a:focus-visible {
+        outline: none !important;
+        box-shadow: var(--pv-shadow-focus) !important;
+    }
+
+    /* Active / Current Page State */
+    .main-navigation .main-header-menu > .menu-item.current-menu-item:not(.propvendor-nav-cta) > a,
+    .main-navigation .main-header-menu > .menu-item.current_page_item:not(.propvendor-nav-cta) > a,
+    .home .main-navigation .main-header-menu > .menu-item.current-menu-item:not(.propvendor-nav-cta) > a,
+    .home .main-navigation .main-header-menu > .menu-item.current_page_item:not(.propvendor-nav-cta) > a {
+        color: var(--pv-color-teal, #087f8c) !important;
+        font-weight: 700 !important;
+        background-color: var(--pv-color-teal-subtle, #e6f4f6) !important;
+    }
+
+    /* Distinct 'Submit a Listing' High-Conversion Action Button */
+    .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta {
+        margin-left: 8px !important;
+        flex-shrink: 0 !important;
+    }
+
+    .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta > a,
+    .main-header-menu .menu-item a.ast-custom-button-link,
+    .main-header-menu .menu-item-btn > a {
+        background-color: var(--pv-color-gold, #f3b64c) !important;
+        color: var(--pv-color-navy-dark, #0d1c27) !important;
+        border: 1.5px solid var(--pv-color-gold, #f3b64c) !important;
+        border-radius: var(--pv-radius-md, 8px) !important;
+        padding: 7px 15px !important;
+        font-family: var(--pv-font-sans);
+        font-weight: 700 !important;
+        font-size: 13.5px !important;
+        line-height: 1.4 !important;
+        white-space: nowrap !important;
+        text-decoration: none !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        box-shadow: var(--pv-shadow-sm) !important;
+        transition: background-color var(--pv-transition-base),
+                    border-color var(--pv-transition-base),
+                    box-shadow var(--pv-transition-base),
+                    transform var(--pv-transition-base) !important;
+    }
+
+    .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta > a:hover,
+    .main-header-menu .menu-item a.ast-custom-button-link:hover,
+    .main-header-menu .menu-item-btn > a:hover {
+        background-color: var(--pv-color-gold-hover, #e5a335) !important;
+        border-color: var(--pv-color-gold-hover, #e5a335) !important;
+        color: var(--pv-color-navy-dark, #0d1c27) !important;
+        box-shadow: var(--pv-shadow-md) !important;
+        transform: translateY(-1px) !important;
+    }
+
+    .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta > a:active,
+    .main-header-menu .menu-item a.ast-custom-button-link:active,
+    .main-header-menu .menu-item-btn > a:active {
+        background-color: var(--pv-color-gold-active, #d49526) !important;
+        border-color: var(--pv-color-gold-active, #d49526) !important;
+        transform: translateY(0) !important;
+        box-shadow: var(--pv-shadow-sm) !important;
+    }
+
+    .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta > a:focus-visible {
+        outline: none !important;
+        box-shadow: var(--pv-shadow-focus-gold) !important;
+    }
+}
+
+/* Widescreen Desktop Adjustments (1200px+) */
+@media (min-width: 1200px) {
+    .main-navigation .main-header-menu {
+        gap: 8px;
+    }
+
+    .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a {
+        font-size: 14px !important;
+        padding: 7px 11px !important;
+    }
+
+    .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta > a {
+        padding: 8px 18px !important;
+        font-size: 14px !important;
+    }
+}
+
+/* --- 4. Mobile Navigation & Off-Canvas Drawer (Below 921px) --- */
+@media (max-width: 921px) {
+    #ast-mobile-header {
+        background-color: var(--pv-color-surface, #ffffff) !important;
+        border-bottom: 1px solid var(--pv-color-border, #e2e8f0) !important;
+        box-shadow: var(--pv-shadow-sm) !important;
+        min-height: 56px !important;
+    }
+
+    #ast-mobile-header .site-branding .site-title a,
+    .home #ast-mobile-header .site-branding .site-title a {
+        color: var(--pv-color-navy, #142b3b) !important;
+        font-size: 1.25rem !important;
+        font-weight: 800 !important;
+    }
+
+    /* Mobile Hamburger Menu Toggle Button (Meets 44px Touch Target) */
+    .menu-toggle.main-header-menu-toggle {
+        min-width: 44px !important;
+        min-height: 44px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background-color: var(--pv-color-surface-alt, #f8fafc) !important;
+        border: 1.5px solid var(--pv-color-border, #e2e8f0) !important;
+        border-radius: var(--pv-radius-md, 8px) !important;
+        padding: 8px !important;
+        cursor: pointer !important;
+        transition: all var(--pv-transition-fast) !important;
+    }
+
+    .menu-toggle.main-header-menu-toggle:hover {
+        background-color: var(--pv-color-teal-subtle, #e6f4f6) !important;
+        border-color: var(--pv-color-teal, #087f8c) !important;
+    }
+
+    .menu-toggle.main-header-menu-toggle:focus-visible {
+        outline: none !important;
+        box-shadow: var(--pv-shadow-focus) !important;
+    }
+
+    .menu-toggle .mobile-menu-toggle-icon svg,
+    .home .menu-toggle .mobile-menu-toggle-icon svg {
+        fill: var(--pv-color-navy, #142b3b) !important;
+        color: var(--pv-color-navy, #142b3b) !important;
+        width: 22px !important;
+        height: 22px !important;
+    }
+
+    /* Mobile Drawer Content Dropdown */
+    .ast-mobile-header-content {
+        background-color: var(--pv-color-surface, #ffffff) !important;
+        border-bottom: 2px solid var(--pv-color-border, #e2e8f0) !important;
+        box-shadow: var(--pv-shadow-md) !important;
+        padding: 0.5rem 0 1rem 0 !important;
+        box-sizing: border-box !important;
+        max-width: 100vw !important;
+        width: 100% !important;
+        overflow-x: hidden !important; /* Defect 2 fix: eliminate horizontal scrollbar */
+        overflow-y: auto !important;   /* Preserve vertical scrolling for short screens */
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .ast-mobile-header-content .main-navigation,
+    .ast-mobile-header-content .main-header-bar-navigation,
+    .ast-mobile-header-content .main-header-menu,
+    #ast-hf-mobile-menu {
+        margin: 0 !important;
+        padding: 0 !important;
+        list-style: none !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        overflow-x: hidden !important;
+    }
+
+    .ast-mobile-header-content .main-navigation .main-header-menu > .menu-item,
+    #ast-hf-mobile-menu .menu-item {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    /* Mobile Drawer Navigation Links */
+    .ast-mobile-header-content .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a,
+    #ast-hf-mobile-menu .menu-item:not(.propvendor-nav-cta) > a {
+        display: block !important;
+        color: var(--pv-text-primary, #0f172a) !important;
+        font-family: var(--pv-font-sans);
+        font-size: 0.95rem !important;
+        font-weight: 500 !important;
+        padding: 0.85rem 1.25rem !important;
+        border-bottom: 1px solid var(--pv-color-border-subtle, #eef2f6) !important;
+        text-decoration: none !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        transition: background-color var(--pv-transition-fast),
+                    color var(--pv-transition-fast) !important;
+    }
+
+    .ast-mobile-header-content .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a:hover,
+    #ast-hf-mobile-menu .menu-item:not(.propvendor-nav-cta) > a:hover {
+        color: var(--pv-color-teal, #087f8c) !important;
+        background-color: var(--pv-color-teal-subtle, #e6f4f6) !important;
+    }
+
+    .ast-mobile-header-content .main-navigation .main-header-menu > .menu-item.current-menu-item:not(.propvendor-nav-cta) > a,
+    .ast-mobile-header-content .main-navigation .main-header-menu > .menu-item.current_page_item:not(.propvendor-nav-cta) > a,
+    #ast-hf-mobile-menu .menu-item.current-menu-item:not(.propvendor-nav-cta) > a,
+    #ast-hf-mobile-menu .menu-item.current_page_item:not(.propvendor-nav-cta) > a {
+        color: var(--pv-color-teal, #087f8c) !important;
+        font-weight: 700 !important;
+        background-color: var(--pv-color-teal-subtle, #e6f4f6) !important;
+        border-left: 4px solid var(--pv-color-teal, #087f8c) !important;
+    }
+
+    /* Defect 1 Fix — Intentional, Readable Gold Pill Action Button */
+    .ast-mobile-header-content .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta,
+    #ast-hf-mobile-menu .menu-item.propvendor-nav-cta {
+        display: block !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        padding: 0.65rem 1.25rem !important;
+        margin: 0 !important;
+        border-bottom: 1px solid var(--pv-color-border-subtle, #eef2f6) !important;
+    }
+
+    .ast-mobile-header-content .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta > a,
+    #ast-hf-mobile-menu .menu-item.propvendor-nav-cta > a,
+    .ast-mobile-header-content .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta > a:link,
+    #ast-hf-mobile-menu .menu-item.propvendor-nav-cta > a:link,
+    .ast-mobile-header-content .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta > a:visited,
+    #ast-hf-mobile-menu .menu-item.propvendor-nav-cta > a:visited {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        background-color: var(--pv-color-gold, #f3b64c) !important;
+        color: var(--pv-color-navy-dark, #0d1c27) !important;
+        border: 1.5px solid var(--pv-color-gold, #f3b64c) !important;
+        border-radius: var(--pv-radius-md, 8px) !important;
+        padding: 0.75rem 1.25rem !important;
+        font-family: var(--pv-font-sans) !important;
+        font-weight: 700 !important;
+        font-size: 0.95rem !important;
+        line-height: 1.4 !important;
+        text-align: center !important;
+        text-decoration: none !important;
+        box-shadow: var(--pv-shadow-sm) !important;
+        transition: background-color var(--pv-transition-base),
+                    border-color var(--pv-transition-base),
+                    color var(--pv-transition-base),
+                    box-shadow var(--pv-transition-base) !important;
+    }
+
+    .ast-mobile-header-content .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta > a:hover,
+    #ast-hf-mobile-menu .menu-item.propvendor-nav-cta > a:hover {
+        background-color: var(--pv-color-gold-hover, #e5a335) !important;
+        border-color: var(--pv-color-gold-hover, #e5a335) !important;
+        color: var(--pv-color-navy-dark, #0d1c27) !important;
+        box-shadow: var(--pv-shadow-md) !important;
+    }
+
+    .ast-mobile-header-content .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta > a:focus,
+    #ast-hf-mobile-menu .menu-item.propvendor-nav-cta > a:focus,
+    .ast-mobile-header-content .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta > a:focus-visible,
+    #ast-hf-mobile-menu .menu-item.propvendor-nav-cta > a:focus-visible {
+        outline: none !important;
+        box-shadow: var(--pv-shadow-focus-gold) !important;
+        color: var(--pv-color-navy-dark, #0d1c27) !important;
+    }
+
+    .ast-mobile-header-content .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta > a:active,
+    #ast-hf-mobile-menu .menu-item.propvendor-nav-cta > a:active {
+        background-color: var(--pv-color-gold-active, #d49526) !important;
+        border-color: var(--pv-color-gold-active, #d49526) !important;
+        color: var(--pv-color-navy-dark, #0d1c27) !important;
+        transform: translateY(0) !important;
+    }
+}
+
+/* --- 5. Global Marketplace Footer Architecture --- */
+footer.site-footer,
+#colophon.site-footer {
+    background-color: var(--pv-color-navy-dark, #0d1c27) !important;
+    border-top: 3px solid var(--pv-color-teal, #087f8c) !important;
+    color: var(--pv-text-muted, #94a3b8) !important;
+    padding: 2.5rem 1.5rem !important;
+    margin-top: auto !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+footer.site-footer .site-below-footer-wrap,
+footer.site-footer .ast-builder-grid-row-container-inner,
+footer.site-footer .site-below-footer-inner-wrap {
     background: transparent !important;
-    transition: all 0.2s ease !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    max-width: 1200px !important;
 }
 
-.main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a:hover,
-.main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta).focus > a,
-.home .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a:hover,
-.home .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta).focus > a {
-    color: #0d9488 !important;
-    background-color: rgba(13, 148, 136, 0.08) !important;
-    border-radius: 6px;
+footer.site-footer .ast-footer-copyright,
+footer.site-footer .ast-footer-copyright p {
+    color: #94a3b8 !important;
+    font-family: var(--pv-font-sans);
+    font-size: 0.925rem !important;
+    line-height: 1.6 !important;
+    margin: 0 !important;
+    text-align: center !important;
 }
 
-.main-navigation .main-header-menu > .menu-item.current-menu-item:not(.propvendor-nav-cta) > a,
-.main-navigation .main-header-menu > .menu-item.current_page_item:not(.propvendor-nav-cta) > a,
-.home .main-navigation .main-header-menu > .menu-item.current-menu-item:not(.propvendor-nav-cta) > a,
-.home .main-navigation .main-header-menu > .menu-item.current_page_item:not(.propvendor-nav-cta) > a {
-    color: #0d9488 !important;
+footer.site-footer a,
+footer.site-footer .ast-footer-copyright a {
+    color: var(--pv-color-gold, #f3b64c) !important;
+    text-decoration: none !important;
     font-weight: 600 !important;
-    background-color: rgba(13, 148, 136, 0.08) !important;
-    border-radius: 6px;
+    transition: color var(--pv-transition-fast) !important;
 }
 
-/* Mobile toggle icon in dark slate */
-.menu-toggle .mobile-menu-toggle-icon svg,
-.home .menu-toggle .mobile-menu-toggle-icon svg {
-    fill: #1e293b !important;
-    color: #1e293b !important;
+footer.site-footer a:hover,
+footer.site-footer .ast-footer-copyright a:hover {
+    color: #ffffff !important;
+    text-decoration: underline !important;
 }
 
-#ast-mobile-header .site-branding .site-title a,
-.home #ast-mobile-header .site-branding .site-title a {
-    color: #0f172a !important;
+footer.site-footer a:focus-visible,
+footer.site-footer .ast-footer-copyright a:focus-visible {
+    outline: 2px solid var(--pv-color-gold, #f3b64c) !important;
+    outline-offset: 2px !important;
+    border-radius: var(--pv-radius-sm, 6px) !important;
 }
 
-/* Ensure mobile off-canvas drawer maintains dark readable links on light drawer background */
-.ast-mobile-header-content .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a {
-    color: #334155 !important;
-}
-
-.ast-mobile-header-content .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a:hover {
-    color: #0d9488 !important;
+/* Reduced Motion for Navigation and Footer */
+@media (prefers-reduced-motion: reduce) {
+    .site-branding .site-title a,
+    .main-navigation .main-header-menu > .menu-item > a,
+    .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta > a,
+    .menu-toggle.main-header-menu-toggle,
+    .ast-mobile-header-content .main-navigation .main-header-menu > .menu-item > a,
+    footer.site-footer a {
+        transition: none !important;
+        transform: none !important;
+    }
 }
 
 /* ======================================================================
@@ -4254,10 +5207,10 @@ body.home .ast-archive-description {
    ====================================================================== */
 .propvendor-browse-hero {
     position: relative;
-    background: #0a192f url('https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1920&q=80') center center / cover no-repeat;
+    background: var(--pv-color-navy-dark, #0D1C27) url('https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1920&q=80') center center / cover no-repeat;
     padding: 50px 24px 75px;
     margin-bottom: -35px;
-    border-radius: 12px;
+    border-radius: var(--pv-radius-lg, 12px);
     overflow: hidden;
     color: #ffffff;
     text-align: center;
@@ -4281,7 +5234,7 @@ body.home .ast-archive-description {
 .propvendor-browse-hero-overlay {
     position: absolute;
     inset: 0;
-    background: linear-gradient(135deg, rgba(10, 25, 47, 0.95) 0%, rgba(15, 23, 42, 0.90) 100%);
+    background: linear-gradient(135deg, rgba(13, 28, 39, 0.94) 0%, rgba(20, 43, 59, 0.88) 100%);
     z-index: 1;
 }
 
@@ -4308,7 +5261,7 @@ body.home .ast-archive-description {
 }
 
 .propvendor-browse-breadcrumb a:hover {
-    color: #14b8a6;
+    color: var(--pv-color-gold, #F3B64C);
 }
 
 .propvendor-browse-breadcrumb .breadcrumb-sep {
@@ -4321,12 +5274,21 @@ body.home .ast-archive-description {
     gap: 8px;
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 50px;
+    border-radius: var(--pv-radius-full, 9999px);
     padding: 5px 16px;
     font-size: 0.82rem;
     font-weight: 600;
     color: #ffffff;
     margin-bottom: 16px;
+}
+
+.propvendor-browse-status-pill .trust-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--pv-status-success, #0A8A4F);
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 6px rgba(10, 138, 79, 0.6);
 }
 
 .propvendor-browse-hero-title {
@@ -4422,6 +5384,15 @@ body.home .ast-archive-description {
 .propvendor-category-section .propvendor-section-badge {
     display: inline-block !important;
     margin: 0 auto 12px !important;
+    color: var(--pv-color-teal, #087F8C);
+    background: var(--pv-color-teal-subtle, #E6F4F6);
+    border: 1px solid rgba(8, 127, 140, 0.2);
+    border-radius: var(--pv-radius-full, 9999px);
+    padding: 0.35rem 0.85rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
 }
 
 .propvendor-category-header h2,
@@ -4429,6 +5400,10 @@ body.home .ast-archive-description {
 .propvendor-category-section .propvendor-section-title {
     text-align: center !important;
     margin: 0 auto 10px !important;
+    color: var(--pv-color-navy, #142B3B);
+    font-size: 2.25rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
 }
 
 .propvendor-category-header p,
@@ -4441,11 +5416,14 @@ body.home .ast-archive-description {
     margin-right: auto !important;
     max-width: 640px !important;
     display: block !important;
+    color: var(--pv-text-secondary, #475569);
+    font-size: 1.05rem;
+    line-height: 1.55;
 }
 
 .propvendor-category-section {
     padding: 4.5rem 0 3.5rem;
-    background: #ffffff;
+    background: var(--pv-color-surface, #ffffff);
     overflow: visible !important;
     height: auto !important;
     max-height: none !important;
@@ -4473,25 +5451,25 @@ body.home .ast-archive-description {
 .propvendor-category-card {
     display: flex;
     flex-direction: column;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 14px;
+    background: var(--pv-color-surface, #ffffff);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    border-radius: var(--pv-radius-lg, 12px);
     overflow: hidden;
     text-decoration: none !important;
     min-height: 260px;
-    margin-top: 24px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+    margin-top: 1rem;
+    box-shadow: var(--pv-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.06));
     transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 .propvendor-category-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 16px 30px -6px rgba(15, 23, 42, 0.12);
-    border-color: #0d9488;
+    transform: translateY(-4px);
+    box-shadow: var(--pv-shadow-md, 0 10px 24px -4px rgba(13, 28, 39, 0.12));
+    border-color: var(--pv-color-teal, #087F8C);
 }
 
 .propvendor-category-card:focus-visible {
-    outline: 2px solid #0d9488;
+    outline: 2px solid var(--pv-color-teal, #087F8C);
     outline-offset: 3px;
 }
 
@@ -4512,7 +5490,7 @@ body.home .ast-archive-description {
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, rgba(15, 23, 42, 0.2) 0%, rgba(15, 23, 42, 0.6) 100%);
+    background: linear-gradient(180deg, rgba(13, 28, 39, 0.2) 0%, rgba(13, 28, 39, 0.6) 100%);
     transition: opacity 0.3s ease;
 }
 
@@ -4523,13 +5501,13 @@ body.home .ast-archive-description {
 .category-tag {
     position: relative;
     z-index: 2;
-    background: rgba(15, 23, 42, 0.75);
+    background: rgba(13, 28, 39, 0.78);
     backdrop-filter: blur(4px);
     color: #ffffff;
     font-size: 0.75rem;
     font-weight: 600;
     padding: 0.3rem 0.65rem;
-    border-radius: 6px;
+    border-radius: var(--pv-radius-sm, 6px);
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
@@ -4543,19 +5521,19 @@ body.home .ast-archive-description {
 .category-card-title {
     font-size: 1.15rem;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--pv-color-navy, #142B3B);
     margin: 0 0 0.5rem 0;
     line-height: 1.3;
     transition: color 0.2s ease;
 }
 
 .propvendor-category-card:hover .category-card-title {
-    color: #0d9488;
+    color: var(--pv-color-teal, #087F8C);
 }
 
 .category-card-desc {
     font-size: 0.875rem;
-    color: #64748b;
+    color: var(--pv-text-secondary, #475569);
     line-height: 1.5;
     margin: 0 0 1rem 0;
     flex-grow: 1;
@@ -4567,21 +5545,21 @@ body.home .ast-archive-description {
     gap: 0.4rem;
     font-size: 0.9rem;
     font-weight: 600;
-    color: #0d9488;
+    color: var(--pv-color-teal, #087F8C);
     transition: gap 0.2s ease, color 0.2s ease;
 }
 
 .propvendor-category-card:hover .category-card-link {
     gap: 0.65rem;
-    color: #0f766e;
+    color: var(--pv-color-teal-hover, #066772);
 }
 
 /* 2. Featured Listings Section */
 .propvendor-featured-section {
     padding: 4.5rem 0;
-    background: #f8fafc;
-    border-top: 1px solid #eef2f7;
-    border-bottom: 1px solid #eef2f7;
+    background: var(--pv-color-bg, #f8fafc);
+    border-top: 1px solid var(--pv-color-border, #eef2f7);
+    border-bottom: 1px solid var(--pv-color-border, #eef2f7);
 }
 
 .propvendor-featured-container {
@@ -4615,6 +5593,15 @@ body.home .ast-archive-description {
 .propvendor-featured-header .propvendor-section-badge {
     display: inline-block !important;
     margin: 0 auto 10px !important;
+    color: #B45309;
+    background: var(--pv-color-gold-subtle, #FEF7EC);
+    border: 1px solid rgba(243, 182, 76, 0.35);
+    border-radius: var(--pv-radius-full, 9999px);
+    padding: 0.35rem 0.85rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
 }
 
 .propvendor-featured-header h2,
@@ -4622,6 +5609,10 @@ body.home .ast-archive-description {
 .propvendor-featured-header .propvendor-section-title {
     text-align: center !important;
     margin: 0 auto 8px !important;
+    color: var(--pv-color-navy, #142B3B);
+    font-size: 2.25rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
 }
 
 .propvendor-featured-header p,
@@ -4631,6 +5622,9 @@ body.home .ast-archive-description {
     margin-left: auto !important;
     margin-right: auto !important;
     max-width: 640px !important;
+    color: var(--pv-text-secondary, #475569);
+    font-size: 1.05rem;
+    line-height: 1.55;
 }
 
 .propvendor-featured-header .propvendor-view-all-btn,
@@ -4647,22 +5641,22 @@ body.home .ast-archive-description {
 .propvendor-featured-view-all .view-all-link {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.5rem;
     font-weight: 600;
-    font-size: 0.92rem;
-    color: #0d9488;
+    font-size: 0.88rem;
+    color: var(--pv-color-teal, #087F8C);
     text-decoration: none;
     padding: 0.5rem 1rem;
-    border-radius: 8px;
-    border: 1px solid rgba(13, 148, 136, 0.25);
+    border-radius: var(--pv-radius-md, 8px);
+    border: 1px solid rgba(8, 127, 140, 0.3);
     background: #ffffff;
     transition: all 0.2s ease;
 }
 
 .propvendor-featured-view-all .view-all-link:hover {
-    background: #0d9488;
+    background: var(--pv-color-teal, #087F8C);
     color: #ffffff;
-    border-color: #0d9488;
+    border-color: var(--pv-color-teal, #087F8C);
 }
 
 .propvendor-carousel-controls {
@@ -4674,28 +5668,28 @@ body.home .ast-archive-description {
     width: 42px;
     height: 42px;
     border-radius: 50%;
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--pv-color-border, #cbd5e1);
     background: #ffffff;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #1e293b;
+    color: var(--pv-color-navy, #142B3B);
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .propvendor-carousel-controls .carousel-btn:hover:not(:disabled) {
-    background: #0d9488;
+    background: var(--pv-color-teal, #087F8C);
     color: #ffffff;
-    border-color: #0d9488;
+    border-color: var(--pv-color-teal, #087F8C);
 }
 
 .propvendor-carousel-controls .carousel-btn:disabled {
     opacity: 0.35;
     cursor: not-allowed;
-    background: #f1f5f9;
-    color: #94a3b8;
-    border-color: #e2e8f0;
+    background: var(--pv-color-surface-alt, #f1f5f9);
+    color: var(--pv-text-muted, #94a3b8);
+    border-color: var(--pv-color-border-subtle, #e2e8f0);
 }
 
 /* Featured Listings Cards & Carousel Track */
@@ -4716,9 +5710,9 @@ body.home .ast-archive-description {
 }
 
 .propvendor-carousel-track.is-carousel:focus-visible {
-    outline: 2px solid #0d9488;
+    outline: 2px solid var(--pv-color-teal, #087F8C);
     outline-offset: 4px;
-    border-radius: 8px;
+    border-radius: var(--pv-radius-md, 8px);
 }
 
 .propvendor-carousel-track.is-carousel > .propvendor-card {
@@ -4735,21 +5729,21 @@ body.home .ast-archive-description {
 }
 
 .propvendor-featured-section .propvendor-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
+    background: var(--pv-color-surface, #ffffff);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    border-radius: var(--pv-radius-lg, 12px);
     overflow: hidden;
     padding: 0;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+    box-shadow: var(--pv-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.04));
     transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 .propvendor-featured-section .propvendor-card:hover {
     transform: translateY(-4px);
-    box-shadow: 0 14px 28px -4px rgba(15, 23, 42, 0.1);
-    border-color: #cbd5e1;
+    box-shadow: var(--pv-shadow-md, 0 10px 24px -4px rgba(13, 28, 39, 0.12));
+    border-color: var(--pv-color-border-hover, #cbd5e1);
 }
 
 .propvendor-featured-section .propvendor-card .propvendor-card-image-link {
@@ -4786,12 +5780,18 @@ body.home .ast-archive-description {
 .propvendor-featured-section .propvendor-card .propvendor-badge {
     margin: 1rem 1rem 0.35rem 1rem;
     align-self: flex-start;
+    color: var(--pv-color-teal, #087F8C);
+    background: var(--pv-color-teal-subtle, #E6F4F6);
+    border-radius: var(--pv-radius-full, 9999px);
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.3rem 0.65rem;
 }
 
 .propvendor-featured-section .propvendor-card .propvendor-card-category {
     margin: 0.2rem 1rem;
     font-size: 0.8rem;
-    color: #64748b;
+    color: var(--pv-text-muted, #64748b);
     font-weight: 500;
 }
 
@@ -4803,94 +5803,99 @@ body.home .ast-archive-description {
 }
 
 .propvendor-featured-section .propvendor-card h3 a {
-    color: #0f172a;
+    color: var(--pv-color-navy, #142B3B);
     text-decoration: none;
     transition: color 0.2s ease;
 }
 
 .propvendor-featured-section .propvendor-card h3 a:hover {
-    color: #0d9488;
+    color: var(--pv-color-teal, #087F8C);
 }
 
 .propvendor-featured-section .propvendor-card .propvendor-meta {
     margin: 0 1rem 0.5rem;
     font-size: 0.88rem;
-    color: #64748b;
+    color: var(--pv-text-secondary, #64748b);
 }
 
 .propvendor-featured-section .propvendor-card .propvendor-price {
     margin: auto 1rem 0.85rem;
     font-size: 1.25rem;
     font-weight: 800;
-    color: #0a8a4f;
+    color: var(--pv-status-success, #0A8A4F);
 }
 
 .propvendor-featured-section .propvendor-card .propvendor-card-view {
     margin: 0 1rem 1.25rem;
     display: block;
     text-align: center;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 0.55rem 1rem;
+    background: var(--pv-color-surface-alt, #f8fafc);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    border-radius: var(--pv-radius-md, 8px);
+    padding: 0.6rem 1rem;
     font-weight: 600;
     font-size: 0.9rem;
-    color: #1e293b;
+    color: var(--pv-color-navy, #142B3B);
     text-decoration: none;
     transition: all 0.2s ease;
 }
 
 .propvendor-featured-section .propvendor-card .propvendor-card-view:hover {
-    background: #0d9488;
+    background: var(--pv-color-teal, #087F8C);
     color: #ffffff;
-    border-color: #0d9488;
+    border-color: var(--pv-color-teal, #087F8C);
 }
 
 /* Empty State */
 .propvendor-featured-empty {
     text-align: center;
     padding: 3.5rem 1.5rem;
-    background: #ffffff;
-    border: 1px dashed #cbd5e1;
-    border-radius: 14px;
+    background: var(--pv-color-surface, #ffffff);
+    border: 1px dashed var(--pv-color-border, #cbd5e1);
+    border-radius: var(--pv-radius-lg, 12px);
     max-width: 600px;
     margin: 0 auto;
 }
 
 .propvendor-featured-empty .empty-icon {
     font-size: 2.5rem;
-    color: #94a3b8;
+    color: var(--pv-text-muted, #94a3b8);
     margin-bottom: 1rem;
 }
 
 .propvendor-featured-empty h3 {
     font-size: 1.35rem;
     font-weight: 700;
-    color: #1e293b;
+    color: var(--pv-color-navy, #142B3B);
     margin-bottom: 0.5rem;
 }
 
 .propvendor-featured-empty p {
     font-size: 0.95rem;
-    color: #64748b;
+    color: var(--pv-text-secondary, #64748b);
     margin-bottom: 1.5rem;
     line-height: 1.5;
 }
 
 .propvendor-btn-browse {
-    display: inline-block;
-    background: #0d9488;
-    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--pv-color-teal, #087F8C);
+    color: #ffffff !important;
     font-weight: 600;
     padding: 0.7rem 1.5rem;
-    border-radius: 8px;
+    border-radius: var(--pv-radius-md, 8px);
     text-decoration: none;
-    transition: background-color 0.2s ease;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(8, 127, 140, 0.25);
 }
 
 .propvendor-btn-browse:hover {
-    background: #0f766e;
-    color: #ffffff;
+    background: var(--pv-color-teal-hover, #066772);
+    color: #ffffff !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(8, 127, 140, 0.35);
 }
 
 /* Responsive adjustments */
@@ -4931,5 +5936,906 @@ body.home .ast-archive-description {
         transition: none !important;
         scroll-behavior: auto !important;
         transform: none !important;
+    }
+}
+
+/* =========================================================================
+   PHASE 9G — STATIC CONTENT, TRUST PAGES & GLOBAL FOOTER
+   Professional styling for About, Contact, FAQs, Safety Guidelines,
+   Account Portal, Listing Guides, and Multi-Column Global Footer.
+   ========================================================================= */
+
+/* --- 1. Base Static Page Layout --- */
+.propvendor-static-page {
+    max-width: 1200px;
+    margin: 2.5rem auto 4.5rem auto;
+    padding: 0 1.5rem;
+    box-sizing: border-box;
+    font-family: var(--pv-font-sans);
+    color: var(--pv-text-primary);
+}
+
+.propvendor-static-header {
+    text-align: center;
+    margin-bottom: 2.75rem;
+}
+
+.propvendor-static-header .pv-badge {
+    margin-bottom: 0.75rem;
+}
+
+.propvendor-static-title {
+    font-size: clamp(1.85rem, 3.5vw, 2.6rem);
+    font-weight: var(--pv-font-weight-bold, 700);
+    color: var(--pv-color-navy, #142B3B);
+    margin: 0.5rem 0 0.75rem 0;
+    line-height: var(--pv-line-height-tight, 1.2);
+    letter-spacing: -0.02em;
+}
+
+.propvendor-static-lead {
+    font-size: var(--pv-font-size-lg, 1.125rem);
+    color: var(--pv-text-secondary, #475569);
+    max-width: 760px;
+    margin: 0 auto;
+    line-height: var(--pv-line-height-relaxed, 1.625);
+}
+
+/* --- 2. About PropVendor Page --- */
+.propvendor-static-grid.propvendor-pillars-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 3rem;
+}
+
+.propvendor-pillar-card {
+    text-align: center;
+    padding: 2.25rem 1.75rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.propvendor-pillar-icon {
+    font-size: 2.5rem;
+    margin-bottom: 1.25rem;
+    line-height: 1;
+}
+
+.propvendor-pillar-card h3 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--pv-color-navy, #142B3B);
+    margin: 0 0 0.85rem 0;
+}
+
+.propvendor-pillar-card p {
+    font-size: 0.95rem;
+    color: var(--pv-text-secondary, #475569);
+    line-height: 1.6;
+    margin: 0;
+}
+
+.propvendor-about-stats-banner {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+    background: var(--pv-color-navy, #142B3B);
+    border-radius: var(--pv-radius-lg, 12px);
+    padding: 2.25rem 1.75rem;
+    margin-bottom: 3rem;
+    text-align: center;
+}
+
+.propvendor-about-stats-banner .propvendor-stat-num {
+    font-size: 2.25rem;
+    font-weight: 800;
+    color: var(--pv-color-gold, #F3B64C);
+    display: block;
+    line-height: 1.1;
+    margin-bottom: 0.35rem;
+}
+
+.propvendor-about-stats-banner .propvendor-stat-lbl {
+    font-size: 0.85rem;
+    color: #CBD5E1;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    display: block;
+}
+
+.propvendor-staged-box {
+    background: var(--pv-color-gold-subtle, #FEF7EC);
+    border-left: 4px solid var(--pv-color-gold, #F3B64C);
+    border-radius: 0 var(--pv-radius-md, 8px) var(--pv-radius-md, 8px) 0;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 3rem;
+}
+
+.propvendor-staged-box h4 {
+    margin: 0 0 0.4rem 0;
+    font-size: 1.05rem;
+    color: #8A5800;
+    font-weight: 700;
+}
+
+.propvendor-staged-box p {
+    margin: 0;
+    font-size: 0.925rem;
+    color: #78350F;
+    line-height: 1.55;
+}
+
+.propvendor-static-cta-banner {
+    background: linear-gradient(135deg, var(--pv-color-navy-dark, #0D1C27) 0%, var(--pv-color-navy, #142B3B) 100%);
+    border: 1px solid var(--pv-color-navy-light, #1D3D52);
+    border-radius: var(--pv-radius-xl, 16px);
+    padding: 3rem 2rem;
+    text-align: center;
+    color: #FFFFFF;
+}
+
+.propvendor-static-cta-banner h2 {
+    font-size: 1.85rem;
+    color: #FFFFFF;
+    margin: 0 0 0.75rem 0;
+    font-weight: 700;
+}
+
+.propvendor-static-cta-banner p {
+    font-size: 1.05rem;
+    color: #CBD5E1;
+    max-width: 650px;
+    margin: 0 auto 1.75rem auto;
+    line-height: 1.55;
+}
+
+.propvendor-cta-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+/* --- 3. Contact Us Page --- */
+.propvendor-contact-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.35fr;
+    gap: 2.25rem;
+    align-items: start;
+}
+
+.propvendor-contact-card {
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+    padding: 2rem;
+}
+
+.propvendor-contact-method {
+    display: flex;
+    gap: 1.15rem;
+    align-items: flex-start;
+}
+
+.propvendor-contact-icon {
+    font-size: 1.6rem;
+    background: var(--pv-color-teal-subtle, #E6F4F6);
+    color: var(--pv-color-teal, #087F8C);
+    width: 48px;
+    height: 48px;
+    border-radius: var(--pv-radius-md, 8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.propvendor-contact-details h3 {
+    margin: 0 0 0.35rem 0;
+    font-size: 1.05rem;
+    color: var(--pv-color-navy, #142B3B);
+    font-weight: 700;
+}
+
+.propvendor-contact-details p {
+    margin: 0 0 0.3rem 0;
+    font-size: 0.95rem;
+    color: var(--pv-text-primary, #0F172A);
+}
+
+.propvendor-contact-link {
+    color: var(--pv-color-teal, #087F8C);
+    font-weight: 600;
+    text-decoration: none;
+    transition: color var(--pv-transition-fast);
+}
+
+.propvendor-contact-link:hover {
+    color: var(--pv-color-teal-hover, #066772);
+    text-decoration: underline;
+}
+
+.propvendor-contact-subtext {
+    font-size: 0.85rem;
+    color: var(--pv-text-secondary, #475569);
+    line-height: 1.45;
+    display: block;
+}
+
+.propvendor-contact-method.propvendor-staged-notice {
+    border-top: 1px solid var(--pv-color-border, #E2E8F0);
+    padding-top: 1.5rem;
+}
+
+.propvendor-method-header {
+    margin-bottom: 0.4rem;
+}
+
+.propvendor-form-card {
+    padding: 2.25rem;
+}
+
+.propvendor-form-card h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.35rem;
+    color: var(--pv-color-navy, #142B3B);
+    font-weight: 700;
+}
+
+.propvendor-form-intro {
+    margin: 0 0 1.5rem 0;
+    color: var(--pv-text-secondary, #475569);
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.propvendor-form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    margin-bottom: 1.15rem;
+}
+
+.propvendor-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-bottom: 1.15rem;
+}
+
+.propvendor-form-group label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--pv-color-navy, #142B3B);
+}
+
+.propvendor-form-group label .required {
+    color: var(--pv-status-danger, #DC2626);
+}
+
+.propvendor-form-group label .optional {
+    color: var(--pv-text-muted, #94A3B8);
+    font-weight: 400;
+}
+
+.propvendor-form-group .pv-input,
+.propvendor-form-group .pv-select,
+.propvendor-form-group .pv-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.7rem 0.9rem;
+    border: 1.5px solid var(--pv-color-border, #E2E8F0);
+    border-radius: var(--pv-radius-md, 8px);
+    font-family: var(--pv-font-sans);
+    font-size: 0.95rem;
+    color: var(--pv-text-primary, #0F172A);
+    background: var(--pv-color-surface, #FFFFFF);
+    transition: border-color var(--pv-transition-fast), box-shadow var(--pv-transition-fast);
+}
+
+.propvendor-form-group .pv-input:focus,
+.propvendor-form-group .pv-select:focus,
+.propvendor-form-group .pv-textarea:focus {
+    outline: none;
+    border-color: var(--pv-color-teal, #087F8C);
+    box-shadow: var(--pv-shadow-focus);
+}
+
+.propvendor-form-safety-notice {
+    font-size: 0.825rem;
+    color: var(--pv-text-secondary, #475569);
+    margin-bottom: 1.5rem;
+    line-height: 1.45;
+}
+
+.propvendor-btn-submit {
+    width: 100%;
+    justify-content: center;
+    padding: 0.85rem 1.5rem;
+    font-size: 1rem;
+}
+
+.propvendor-alert {
+    padding: 0.9rem 1.25rem;
+    border-radius: var(--pv-radius-md, 8px);
+    margin-bottom: 1.5rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.pv-alert-success {
+    background: var(--pv-status-success-bg, #E8F8F0);
+    color: var(--pv-status-success-text, #065F46);
+    border: 1px solid var(--pv-status-success-border, #A7F3D0);
+}
+
+.pv-alert-danger {
+    background: var(--pv-status-danger-bg, #FEE2E2);
+    color: var(--pv-status-danger-text, #991B1B);
+    border: 1px solid var(--pv-status-danger-border, #FECACA);
+}
+
+/* --- 4. Help & FAQs Page --- */
+.propvendor-faq-group {
+    margin-bottom: 2.75rem;
+}
+
+.propvendor-faq-group-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--pv-color-navy, #142B3B);
+    margin: 0 0 1.25rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--pv-color-border, #E2E8F0);
+}
+
+.propvendor-faq-card {
+    margin-bottom: 1.15rem;
+    padding: 1.5rem 1.75rem;
+    border: 1px solid var(--pv-color-border, #E2E8F0);
+    border-radius: var(--pv-radius-md, 8px);
+    background: var(--pv-color-surface, #FFFFFF);
+    transition: border-color var(--pv-transition-fast), box-shadow var(--pv-transition-fast);
+}
+
+.propvendor-faq-card:hover {
+    border-color: var(--pv-color-teal, #087F8C);
+    box-shadow: var(--pv-shadow-sm);
+}
+
+.propvendor-faq-card h3 {
+    font-size: 1.1rem;
+    color: var(--pv-color-navy, #142B3B);
+    margin: 0 0 0.5rem 0;
+    font-weight: 600;
+}
+
+.propvendor-faq-card p {
+    font-size: 0.95rem;
+    color: var(--pv-text-secondary, #475569);
+    margin: 0;
+    line-height: 1.6;
+}
+
+/* --- 5. Safety Guidelines Page --- */
+.propvendor-safety-golden-rule {
+    display: flex;
+    gap: 1.25rem;
+    align-items: flex-start;
+    background: #FFFBEB;
+    border: 2px solid #FDE68A;
+    border-left: 6px solid #D97706;
+    border-radius: var(--pv-radius-lg, 12px);
+    padding: 1.6rem 1.75rem;
+    margin-bottom: 2.75rem;
+}
+
+.propvendor-golden-icon {
+    font-size: 2.25rem;
+    color: #D97706;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.propvendor-golden-content h2 {
+    margin: 0 0 0.4rem 0;
+    font-size: 1.25rem;
+    color: #92400E;
+    font-weight: 700;
+}
+
+.propvendor-golden-content p {
+    margin: 0;
+    font-size: 0.975rem;
+    color: #78350F;
+    line-height: 1.55;
+}
+
+.propvendor-safety-section {
+    margin-bottom: 2.75rem;
+}
+
+.propvendor-safety-section h2 {
+    font-size: 1.35rem;
+    color: var(--pv-color-navy, #142B3B);
+    margin: 0 0 1.25rem 0;
+    font-weight: 700;
+}
+
+.propvendor-safety-steps-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
+}
+
+.propvendor-step-card {
+    position: relative;
+    padding: 1.85rem 1.6rem 1.6rem 1.6rem;
+}
+
+.propvendor-step-number {
+    position: absolute;
+    top: 1rem;
+    right: 1.25rem;
+    font-size: 1.85rem;
+    font-weight: 800;
+    color: #CBD5E1;
+    line-height: 1;
+}
+
+.propvendor-step-card h3 {
+    font-size: 1.1rem;
+    color: var(--pv-color-navy, #142B3B);
+    margin: 0 0 0.5rem 0;
+    padding-right: 2.5rem;
+    font-weight: 700;
+}
+
+.propvendor-step-card p {
+    font-size: 0.925rem;
+    color: var(--pv-text-secondary, #475569);
+    margin: 0;
+    line-height: 1.6;
+}
+
+.propvendor-red-flags-card {
+    border-left: 4px solid var(--pv-status-danger, #DC2626);
+    padding: 1.75rem 2rem;
+}
+
+.propvendor-flags-list {
+    margin: 0;
+    padding-left: 1.25rem;
+}
+
+.propvendor-flags-list li {
+    margin-bottom: 0.85rem;
+    font-size: 0.95rem;
+    color: var(--pv-text-secondary, #475569);
+    line-height: 1.6;
+}
+
+.propvendor-flags-list li:last-child {
+    margin-bottom: 0;
+}
+
+/* --- 6. Account Portal Page --- */
+.propvendor-account-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.35rem;
+    margin-bottom: 2.75rem;
+}
+
+.propvendor-account-card {
+    text-decoration: none !important;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 1.75rem;
+    transition: transform var(--pv-transition-fast), border-color var(--pv-transition-fast), box-shadow var(--pv-transition-fast);
+}
+
+.propvendor-account-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--pv-color-teal, #087F8C);
+    box-shadow: var(--pv-shadow-md);
+}
+
+.propvendor-account-icon {
+    font-size: 2rem;
+    margin-bottom: 0.85rem;
+    line-height: 1;
+}
+
+.propvendor-account-card h3 {
+    font-size: 1.15rem;
+    color: var(--pv-color-navy, #142B3B);
+    margin: 0 0 0.4rem 0;
+    font-weight: 700;
+}
+
+.propvendor-account-card p {
+    font-size: 0.9rem;
+    color: var(--pv-text-secondary, #475569);
+    margin: 0 0 1.25rem 0;
+    line-height: 1.5;
+}
+
+.propvendor-account-card .propvendor-card-link {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--pv-color-teal, #087F8C);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.propvendor-account-footer-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem 1.75rem;
+    background: var(--pv-color-surface-alt, #F8FAFC);
+    border: 1px solid var(--pv-color-border, #E2E8F0);
+    border-radius: var(--pv-radius-md, 8px);
+}
+
+.propvendor-logged-as {
+    margin: 0;
+    font-size: 0.925rem;
+    color: var(--pv-text-secondary, #475569);
+}
+
+.propvendor-auth-wrapper {
+    max-width: 480px;
+    margin: 0 auto;
+}
+
+.propvendor-auth-card {
+    padding: 2.25rem;
+}
+
+#propvendor-loginform p {
+    margin-bottom: 1.15rem;
+}
+
+#propvendor-loginform label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--pv-color-navy, #142B3B);
+    display: block;
+    margin-bottom: 0.35rem;
+}
+
+#propvendor-loginform input[type="text"],
+#propvendor-loginform input[type="password"] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.7rem 0.9rem;
+    border: 1.5px solid var(--pv-color-border, #E2E8F0);
+    border-radius: var(--pv-radius-md, 8px);
+    font-size: 0.95rem;
+    color: var(--pv-text-primary, #0F172A);
+    transition: border-color var(--pv-transition-fast), box-shadow var(--pv-transition-fast);
+}
+
+#propvendor-loginform input[type="text"]:focus,
+#propvendor-loginform input[type="password"]:focus {
+    outline: none;
+    border-color: var(--pv-color-teal, #087F8C);
+    box-shadow: var(--pv-shadow-focus);
+}
+
+#propvendor-loginform input[type="submit"] {
+    width: 100%;
+    background: var(--pv-color-teal, #087F8C);
+    color: #FFFFFF;
+    font-weight: 600;
+    padding: 0.85rem 1.5rem;
+    border: none;
+    border-radius: var(--pv-radius-md, 8px);
+    cursor: pointer;
+    font-size: 1rem;
+    margin-top: 0.5rem;
+    transition: background-color var(--pv-transition-fast);
+}
+
+#propvendor-loginform input[type="submit"]:hover {
+    background: var(--pv-color-teal-hover, #066772);
+}
+
+.propvendor-auth-links {
+    text-align: center;
+    margin-top: 1.5rem;
+}
+
+.propvendor-forgot-link {
+    font-size: 0.875rem;
+    color: var(--pv-text-secondary, #475569);
+    text-decoration: none;
+}
+
+.propvendor-forgot-link:hover {
+    color: var(--pv-color-teal, #087F8C);
+    text-decoration: underline;
+}
+
+.propvendor-auth-divider {
+    margin: 1.25rem 0;
+    border: none;
+    border-top: 1px solid var(--pv-color-border, #E2E8F0);
+}
+
+.propvendor-register-prompt {
+    margin: 0;
+    font-size: 0.925rem;
+    color: var(--pv-text-secondary, #475569);
+}
+
+.propvendor-register-link {
+    color: var(--pv-color-teal, #087F8C);
+    text-decoration: none;
+}
+
+.propvendor-register-link:hover {
+    text-decoration: underline;
+}
+
+/* --- 7. Detail Guides (Pages 9 & 10) --- */
+.propvendor-guide-content-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 2.25rem;
+    align-items: start;
+}
+
+.propvendor-guide-info-card {
+    padding: 2.25rem;
+}
+
+.propvendor-guide-info-card h2 {
+    font-size: 1.35rem;
+    color: var(--pv-color-navy, #142B3B);
+    margin: 0 0 1.25rem 0;
+    font-weight: 700;
+}
+
+.propvendor-feature-list {
+    margin: 0;
+    padding-left: 1.25rem;
+}
+
+.propvendor-feature-list li {
+    margin-bottom: 0.95rem;
+    font-size: 0.95rem;
+    color: var(--pv-text-secondary, #475569);
+    line-height: 1.6;
+}
+
+.propvendor-guide-action-card {
+    padding: 2.25rem;
+    background: var(--pv-color-surface-alt, #F8FAFC);
+}
+
+.propvendor-guide-action-card h3 {
+    font-size: 1.15rem;
+    color: var(--pv-color-navy, #142B3B);
+    margin: 0 0 0.5rem 0;
+    font-weight: 700;
+}
+
+.propvendor-guide-action-card p {
+    font-size: 0.925rem;
+    color: var(--pv-text-secondary, #475569);
+    margin: 0 0 1.25rem 0;
+    line-height: 1.5;
+}
+
+.propvendor-guide-btn {
+    width: 100%;
+    justify-content: center;
+    margin-bottom: 1.25rem;
+    text-align: center;
+}
+
+.propvendor-guide-divider {
+    margin: 1.5rem 0;
+    border: none;
+    border-top: 1px solid var(--pv-color-border, #E2E8F0);
+}
+
+/* --- 8. Global Multi-Column Marketplace Footer --- */
+.propvendor-global-footer {
+    background-color: var(--pv-color-navy, #142B3B) !important;
+    border-top: 3px solid var(--pv-color-teal, #087F8C) !important;
+    color: #94A3B8;
+    padding: 3.5rem 1.5rem 2rem 1.5rem;
+    font-family: var(--pv-font-sans);
+    box-sizing: border-box;
+    width: 100%;
+    margin-top: auto;
+}
+
+.propvendor-footer-container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.propvendor-footer-grid {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr 1fr 1fr;
+    gap: 2.5rem;
+    margin-bottom: 2.5rem;
+}
+
+.propvendor-footer-col .propvendor-footer-logo {
+    margin-bottom: 0.85rem;
+}
+
+.propvendor-footer-col .pv-logo-text {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #FFFFFF;
+    letter-spacing: -0.02em;
+    display: inline-block;
+}
+
+.propvendor-footer-col .pv-logo-accent {
+    color: var(--pv-color-gold, #F3B64C);
+}
+
+.propvendor-footer-desc {
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: #94A3B8;
+    margin: 0 0 1.25rem 0;
+}
+
+.propvendor-footer-contact p {
+    margin: 0 0 0.35rem 0;
+    font-size: 0.875rem;
+    color: #CBD5E1;
+}
+
+.propvendor-footer-contact a {
+    color: var(--pv-color-gold, #F3B64C);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.propvendor-footer-contact a:hover {
+    color: #FFFFFF;
+    text-decoration: underline;
+}
+
+.propvendor-footer-contact .propvendor-footer-hours {
+    color: #64748B;
+    font-size: 0.825rem;
+}
+
+.propvendor-footer-heading {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #FFFFFF;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0 0 1.25rem 0;
+    position: relative;
+    padding-bottom: 0.6rem;
+}
+
+.propvendor-footer-heading::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 32px;
+    height: 2px;
+    background: var(--pv-color-teal, #087F8C);
+}
+
+.propvendor-footer-links {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.propvendor-footer-links li {
+    margin-bottom: 0.65rem;
+}
+
+.propvendor-footer-links a {
+    color: #94A3B8 !important;
+    text-decoration: none !important;
+    font-size: 0.925rem;
+    transition: color var(--pv-transition-fast), padding-left var(--pv-transition-fast);
+    display: inline-block;
+}
+
+.propvendor-footer-links a:hover {
+    color: #FFFFFF !important;
+    padding-left: 4px;
+}
+
+.propvendor-footer-links a:focus-visible {
+    outline: 2px solid var(--pv-color-gold, #F3B64C);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.propvendor-footer-disclaimer {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 1.5rem;
+    font-size: 0.825rem;
+    line-height: 1.6;
+    color: #64748B;
+}
+
+.propvendor-footer-disclaimer strong {
+    color: #94A3B8;
+}
+
+/* --- 9. Responsive Adjustments --- */
+@media (max-width: 1024px) {
+    .propvendor-footer-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+    }
+    .propvendor-contact-grid {
+        grid-template-columns: 1fr;
+    }
+    .propvendor-guide-content-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .propvendor-static-grid.propvendor-pillars-grid {
+        grid-template-columns: 1fr;
+    }
+    .propvendor-about-stats-banner {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.25rem;
+    }
+    .propvendor-safety-steps-grid {
+        grid-template-columns: 1fr;
+    }
+    .propvendor-account-grid {
+        grid-template-columns: 1fr;
+    }
+    .propvendor-account-footer-actions {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+    .propvendor-form-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 480px) {
+    .propvendor-footer-grid {
+        grid-template-columns: 1fr;
+    }
+    .propvendor-about-stats-banner {
+        grid-template-columns: 1fr;
+    }
+    .propvendor-static-page {
+        padding: 0 1rem;
+        margin-top: 1.75rem;
+    }
+    .propvendor-form-card {
+        padding: 1.5rem 1.25rem;
+    }
+    .propvendor-cta-buttons {
+        flex-direction: column;
+    }
+    .propvendor-cta-buttons a {
+        width: 100%;
+        text-align: center;
     }
 }
