@@ -13,6 +13,7 @@
         initSearchFilters();
         initWalletCheckout();
         initInboxLeadUnlock();
+        initSafetyNoticeDismiss();
     });
 
     /**
@@ -731,6 +732,41 @@
             div.appendChild(document.createTextNode(str));
             return div.innerHTML;
         }
+    }
+
+    /**
+     * 8. Dismissible Anti-Advance-Fee Safety Notice
+     */
+    function initSafetyNoticeDismiss() {
+        var storageKey = 'pv_safety_notice_dismissed';
+
+        try {
+            if (localStorage.getItem(storageKey) === '1') {
+                var notices = document.querySelectorAll('.propvendor-safety-notice-card');
+                notices.forEach(function(card) {
+                    card.style.display = 'none';
+                    card.classList.add('pv-dismissed');
+                });
+            }
+        } catch (err) {}
+
+        document.addEventListener('click', function(e) {
+            var closeBtn = e.target.closest('#pv-safety-notice-close, .pv-safety-notice-close');
+            if (!closeBtn) {
+                return;
+            }
+
+            e.preventDefault();
+            var card = closeBtn.closest('.propvendor-safety-notice-card');
+            if (card) {
+                card.style.display = 'none';
+                card.classList.add('pv-dismissed');
+            }
+
+            try {
+                localStorage.setItem(storageKey, '1');
+            } catch (err) {}
+        });
     }
 
 })();

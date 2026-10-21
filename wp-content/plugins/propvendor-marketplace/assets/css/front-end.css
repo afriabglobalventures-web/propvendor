@@ -2386,7 +2386,7 @@ select.form-control {
 
 .pv-msg-bubble {
     padding: 0.85rem 1.1rem;
-    border-radius: 0.75rem;
+    border-radius: 12px;
     font-size: 0.95rem;
     line-height: 1.5;
     word-break: break-word;
@@ -2395,70 +2395,95 @@ select.form-control {
 
 .pv-msg-customer,
 .pv-msg-from-customer .pv-msg-bubble {
-    background: #ffffff;
-    color: #1e293b;
-    border: 1px solid #e2e8f0;
+    background: #F1F5F9;
+    color: #1E293B;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
     border-bottom-left-radius: 2px;
 }
 
 .pv-msg-vendor,
 .pv-msg-from-vendor .pv-msg-bubble {
-    background: #0d5aa7;
-    color: #ffffff;
+    background: var(--pv-color-teal, #087F8C);
+    color: #FFFFFF;
+    border: none;
+    border-radius: 12px;
     border-bottom-right-radius: 2px;
 }
 
 .pv-msg-from-admin .pv-msg-bubble {
-    background: #fef3c7;
-    color: #78350f;
-    border: 1px solid #fde68a;
+    background: #FEF3C7;
+    color: #78350F;
+    border: 1px solid #FDE68A;
+    border-radius: 12px;
     text-align: center;
 }
 
 .pv-msg-meta {
     font-size: 0.72rem;
-    color: #64748b;
+    color: #64748B;
     margin-top: 0.35rem;
 }
 
 .pv-msg-from-vendor .pv-msg-meta {
     text-align: right;
-    color: #64748b;
+    color: #64748B;
 }
 
 /* Reply Box Form */
 .pv-reply-box {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
     padding: 1.1rem 1.4rem;
-    border-top: 1px solid #e2e8f0;
-    background: #ffffff;
+    border-top: 1px solid #E2E8F0;
+    background: #FFFFFF;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.04);
 }
 
 .pv-reply-form textarea {
     display: block;
     width: 100%;
     min-height: 80px;
-    border: 1px solid #cbd5e1;
-    border-radius: 0.5rem;
-    padding: 0.75rem;
+    border: 1px solid #CBD5E1;
+    border-radius: 8px;
+    padding: 0.75rem 0.85rem;
     font-size: 0.95rem;
     box-sizing: border-box;
     resize: vertical;
     margin-bottom: 0.75rem;
-    color: #102a43;
+    color: #102A43;
     font-family: inherit;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .pv-reply-form textarea:focus {
     outline: none;
-    border-color: #0d5aa7;
-    box-shadow: 0 0 0 3px rgba(13, 90, 167, 0.15);
+    border-color: var(--pv-color-teal, #087F8C);
+    box-shadow: 0 0 0 3px rgba(8, 127, 140, 0.15);
 }
 
 .pv-reply-submit {
-    padding: 0.65rem 1.4rem;
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0.65rem 1.5rem;
     font-size: 0.95rem;
+    font-weight: 600;
+    background: var(--pv-color-teal, #087F8C);
+    color: #FFFFFF;
+    border: none;
+    border-radius: 6px;
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.pv-reply-submit:hover,
+.pv-reply-submit:focus {
+    background: var(--pv-color-teal-dark, #066570);
+    color: #FFFFFF;
 }
 
 /* Responsive Layout (under 768px) */
@@ -2576,17 +2601,70 @@ select.form-control {
 
 .propvendor-safety-notice-card,
 .propvendor-anti-fraud-card {
-    margin: 1.25rem 0 1.75rem !important;
-    padding: 1rem 1.25rem !important;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 1rem 0 1.5rem !important;
+    padding: 0.85rem 1.15rem !important;
     background: var(--pv-status-warning-bg, #FEF3C7) !important;
     border: 1px solid var(--pv-status-warning-border, #FDE68A) !important;
     border-left: 4px solid var(--pv-status-warning, #D97706) !important;
-    border-radius: var(--pv-radius-md, 8px) !important;
-    color: var(--pv-status-warning-text, #92400E) !important;
+    border-radius: 8px !important;
+    color: #78350F !important;
     font-size: 0.92rem !important;
     line-height: 1.55 !important;
     font-weight: 500 !important;
     box-shadow: var(--pv-shadow-sm, 0 1px 2px rgba(20, 43, 59, 0.05)) !important;
+}
+
+.propvendor-safety-notice-card .pv-safety-notice-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    flex: 1;
+}
+
+.propvendor-safety-notice-card .pv-safety-notice-icon {
+    font-size: 1.15rem;
+    line-height: 1.3;
+    flex-shrink: 0;
+}
+
+.propvendor-safety-notice-card .pv-safety-notice-text {
+    flex: 1;
+    color: #78350F;
+}
+
+.propvendor-safety-notice-card .pv-safety-notice-close {
+    background: transparent;
+    border: none;
+    font-size: 1.4rem;
+    line-height: 1;
+    color: #78350F;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    min-height: 32px;
+    flex-shrink: 0;
+    opacity: 0.75;
+    transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.propvendor-safety-notice-card .pv-safety-notice-close:hover,
+.propvendor-safety-notice-card .pv-safety-notice-close:focus {
+    opacity: 1;
+    background: rgba(120, 53, 15, 0.12);
+    outline: none;
+}
+
+.propvendor-safety-notice-card.pv-dismissed,
+html.pv-safety-dismissed .propvendor-safety-notice-card {
+    display: none !important;
 }
 
 .propvendor-vehicle-legal-notice-card {
@@ -3928,13 +4006,13 @@ select.form-control {
  * ========================================================================= */
 
 .pv-unlock-lead-container {
-    margin: 0.85rem 0 0.5rem 0;
-    padding: 0.85rem 1.15rem;
-    background: #f8fafc;
-    border: 1px solid var(--pv-color-border, #e2e8f0);
+    margin: 0.65rem 0 0.85rem 0;
+    padding: 0.65rem 1rem;
+    background: #F8FAFC;
+    border: 1px solid var(--pv-color-border, #E2E8F0);
     border-left: 4px solid var(--pv-color-teal, #087F8C);
-    border-radius: var(--pv-radius-md, 8px);
-    box-shadow: 0 1px 3px rgba(20, 43, 59, 0.04);
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(20, 43, 59, 0.04);
 }
 
 .pv-unlock-lead-inner {
@@ -4331,12 +4409,19 @@ body.home .ast-archive-description {
 }
 
 .propvendor-hero-title {
-    font-size: 3.25rem;
+    font-size: clamp(1.4rem, 5vw, 2.25rem);
     font-weight: 800;
-    line-height: 1.2;
+    line-height: 1.25;
     margin: 0 0 16px;
     color: #ffffff;
     letter-spacing: -0.02em;
+    white-space: nowrap;
+}
+
+@media (max-width: 360px) {
+    .propvendor-hero-title {
+        white-space: normal;
+    }
 }
 
 .propvendor-hero-title .highlight {
@@ -4661,7 +4746,8 @@ body.home .ast-archive-description {
         padding: 105px 16px 75px;
     }
     .propvendor-hero-title {
-        font-size: 2rem;
+        font-size: clamp(1.4rem, 5vw, 2.25rem);
+        white-space: nowrap;
     }
     .propvendor-hero-subtitle {
         font-size: 1rem;
@@ -6853,4 +6939,155 @@ footer.site-footer .ast-footer-copyright a:focus-visible {
         width: 100%;
         text-align: center;
     }
+}
+
+
+/* =========================================================================
+   PHASE 10B.2: LEGAL & POLICY PAGES (PRIVACY POLICY & TERMS OF SERVICE)
+   ========================================================================= */
+
+.propvendor-static-page-wrapper.propvendor-legal-page {
+    max-width: 980px;
+    margin: 2.5rem auto 4.5rem auto;
+    padding: 0 1.5rem;
+    box-sizing: border-box;
+    font-family: var(--pv-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+    color: var(--pv-text-primary, #0F172A);
+    line-height: var(--pv-line-height-relaxed, 1.7);
+}
+
+.propvendor-legal-page .propvendor-legal-notice-box {
+    background: #F8FAFC;
+    border: 1px solid var(--pv-color-border, #E2E8F0);
+    border-left: 4px solid var(--pv-color-teal, #087F8C);
+    border-radius: var(--pv-radius-md, 8px);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 2.5rem;
+}
+
+.propvendor-legal-page .propvendor-legal-notice-box p {
+    margin: 0;
+    font-size: 0.925rem;
+    color: var(--pv-text-secondary, #475569);
+    line-height: 1.6;
+}
+
+.propvendor-legal-page h1,
+.propvendor-legal-page .propvendor-static-title {
+    display: none !important;
+}
+
+.propvendor-legal-page .propvendor-legal-meta {
+    font-size: 0.925rem;
+    color: var(--pv-text-muted, #64748B);
+    margin-bottom: 2rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--pv-color-border, #E2E8F0);
+}
+
+.propvendor-legal-page .pv-meta-line {
+    margin: 0 0 0.25rem 0;
+}
+
+.propvendor-legal-page h2 {
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: var(--pv-color-navy, #142B3B);
+    margin: 2.5rem 0 1rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--pv-color-border, #E2E8F0);
+    letter-spacing: -0.015em;
+}
+
+.propvendor-legal-page h3 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--pv-color-navy, #142B3B);
+    margin: 1.75rem 0 0.75rem 0;
+}
+
+.propvendor-legal-page p {
+    font-size: 1rem;
+    color: var(--pv-text-secondary, #334155);
+    margin: 0 0 1.25rem 0;
+    line-height: 1.7;
+}
+
+.propvendor-legal-page ul,
+.propvendor-legal-page ol {
+    margin: 0 0 1.5rem 1.5rem;
+    padding: 0;
+    color: var(--pv-text-secondary, #334155);
+}
+
+.propvendor-legal-page li {
+    margin-bottom: 0.65rem;
+    line-height: 1.65;
+}
+
+.propvendor-legal-page strong {
+    color: var(--pv-color-navy, #142B3B);
+}
+
+.propvendor-legal-page .propvendor-legal-card {
+    background: var(--pv-color-surface, #FFFFFF);
+    border: 1px solid var(--pv-color-border, #E2E8F0);
+    border-radius: var(--pv-radius-md, 8px);
+    padding: 1.5rem 1.75rem;
+    margin-bottom: 1.75rem;
+    box-shadow: var(--pv-shadow-sm, 0 1px 3px rgba(0,0,0,0.05));
+}
+
+.propvendor-legal-page table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0 2rem 0;
+    font-size: 0.925rem;
+}
+
+.propvendor-legal-page th,
+.propvendor-legal-page td {
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--pv-color-border, #E2E8F0);
+    text-align: left;
+}
+
+.propvendor-legal-page th {
+    background: var(--pv-color-surface-alt, #F8FAFC);
+    color: var(--pv-color-navy, #142B3B);
+    font-weight: 700;
+}
+
+.propvendor-legal-page a {
+    color: var(--pv-color-teal, #087F8C);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.propvendor-legal-page a:hover {
+    color: var(--pv-color-navy, #142B3B);
+}
+
+@media (max-width: 480px) {
+    .propvendor-static-page-wrapper.propvendor-legal-page {
+        padding: 0 1rem;
+        margin-top: 1.75rem;
+    }
+}
+
+/* Zero horizontal overflow safeguards for customer and vendor inboxes */
+.pv-inbox-container,
+.pv-inbox-main,
+.pv-inbox-sidebar,
+.pv-msg-stream,
+.pv-msg-row,
+.pv-msg-bubble {
+    max-width: 100%;
+    box-sizing: border-box;
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
+.pv-inbox-container {
+    overflow-x: hidden;
 }

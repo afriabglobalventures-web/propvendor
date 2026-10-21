@@ -1748,8 +1748,15 @@ function propvendor_marketplace_listings_query($count = 6) {
  * @return string HTML
  */
 function propvendor_marketplace_render_anti_fraud_notice() {
-    $notice_text = '⚠️ Never pay inspection fees, commitment fees, or transport money before seeing this vehicle or property in person. PropVendor will never ask you to transfer money to an agent beforehand.';
-    return '<div class="propvendor-safety-notice-card" style="margin: 1.25rem 0; padding: 1rem 1.25rem; background: #fff8e6; border: 1px solid #ffd591; border-left: 4px solid #fa8c16; border-radius: 6px; color: #873800; font-size: 0.92rem; line-height: 1.5; font-weight: 500;">' . esc_html($notice_text) . '</div>';
+    $notice_text = 'Never pay inspection fees, commitment fees, or transport money before seeing this vehicle or property in person. PropVendor will never ask you to transfer money to an agent beforehand.';
+    $output  = '<div class="propvendor-safety-notice-card" id="pv-safety-notice-card" role="region" aria-label="' . esc_attr__('Trust and Safety Warning', 'propvendor-marketplace') . '">';
+    $output .= '<div class="pv-safety-notice-body">';
+    $output .= '<span class="pv-safety-notice-icon" aria-hidden="true">&#9888;&#65039;</span> ';
+    $output .= '<div class="pv-safety-notice-text">' . esc_html($notice_text) . '</div>';
+    $output .= '</div>';
+    $output .= '<button type="button" class="pv-safety-notice-close" id="pv-safety-notice-close" aria-label="' . esc_attr__('Dismiss safety notice', 'propvendor-marketplace') . '">&times;</button>';
+    $output .= '</div>';
+    return $output;
 }
 
 /**
@@ -11563,8 +11570,8 @@ function propvendor_marketplace_hero_search_shortcode($atts = array()) {
         <div class="propvendor-hero-overlay"></div>
         <div class="propvendor-hero-content">
             <span class="propvendor-hero-badge">NIGERIA'S TRUSTED VERIFIED MARKETPLACE</span>
-            <h1 class="propvendor-hero-title">Find the perfect place to <span class="highlight">call home</span></h1>
-            <p class="propvendor-hero-subtitle">Discover thousands of verified properties, land, and vehicles across all 37 Nigerian states.</p>
+            <h1 class="propvendor-hero-title">Find Verified Properties, Land &amp; Vehicles <span class="highlight">in Nigeria</span></h1>
+            <p class="propvendor-hero-subtitle">Buy, rent, or inspect thousands of verified homes, plots, and cars directly from trusted sellers across all 37 states.</p>
 
             <!-- Floating Pill Search Form submitting GET to /browse-listings/ -->
             <div class="propvendor-pill-search-container">

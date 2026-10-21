@@ -1,50 +1,45 @@
-# PropVendor Technologies — Privacy Policy (Draft)
-**Effective Date:** `[REVIEW REQUIRED: Insert Launch Date, e.g., November 1, 2026]`  
-**Last Updated:** October 20, 2026  
-**Governing Standard:** Nigeria Data Protection Act (NDPA) 2023  
-**Target Page:** `http://localhost/Propvendor/privacy-policy/` (Page ID 3)  
-**Status:** Internal Staging Draft — Not Published
+# Privacy Policy
 
-> **IMPORTANT NOTICE:**  
-> This Privacy Policy has been prepared to reflect the technical data architecture and business logic of the PropVendor marketplace. Before final publication on production, this document should be formally reviewed and ratified by a qualified Nigerian legal practitioner or certified Data Protection Officer (DPO).
+**Effective Date:** November 1, 2026
+**Last Updated:** October 20, 2026
+**Governing Standard:** Nigeria Data Protection Act (NDPA) 2023
 
 ---
 
 ## 1. Introduction and Data Controller Information
 
-PropVendor Technologies (`"PropVendor"`, `"we"`, `"our"`, or `"us"`) operates the online property, land, and vehicle marketplace accessible at `https://propvendor.ng` (and local development environments). 
+PropVendor Technologies Ltd. ("PropVendor", "we", "our", or "us") operates the online property, land, and vehicle marketplace platform accessible at `https://propvendor.ng` (and associated local and staging domains).
 
-For the purposes of the **Nigeria Data Protection Act 2023 (NDPA)**, PropVendor Technologies is the **Data Controller** responsible for your personal data.
+For the purposes of the **Nigeria Data Protection Act 2023 (NDPA)**, PropVendor Technologies Ltd. is the **Data Controller** responsible for your personal data.
 
-- **Data Controller Name:** PropVendor Technologies `[REVIEW REQUIRED: Insert registered CAC business or corporate entity name]`
-- **Registration Number:** `[REVIEW REQUIRED: Insert CAC RC / BN Number]`
-- **Principal Address:** `[REVIEW REQUIRED: Insert registered commercial office address in Nigeria]`
-- **Privacy Contact Email:** `privacy@propvendor.ng` / `support@propvendor.ng` `[REVIEW REQUIRED: Confirm operational mailbox]`
-- **Data Protection Officer (DPO):** `[REVIEW REQUIRED: Designate internal DPO or external DPCO contact details]`
+- **Data Controller:** PropVendor Technologies Ltd.
+- **Principal Address:** Lagos, Nigeria
+- **Privacy Office Email:** `privacy@propvendor.ng`
+- **Customer Support Email:** `support@propvendor.ng`
 
 ---
 
 ## 2. Categories of Personal Data We Collect
 
-Depending on how you interact with PropVendor (as a visitor, buyer/tenant inquirer, or vendor/agent), we collect and process the following categories of data:
+Depending on how you interact with PropVendor (as a visitor, prospective buyer/tenant, or vendor/agent), we collect and process the following categories of personal data:
 
-### A. Information You Provide to Us Directly
+### A. Information You Provide Directly
 1. **Prospective Buyers and Renters (Inquirers):**
    - **Full Name:** To identify you in communications with listing vendors.
-   - **Email Address & Phone Number:** To allow vendors to contact you regarding properties or vehicles you have enquired about.
+   - **Email Address & Phone Number:** To enable vendors to respond directly to your property or vehicle inquiries.
    - **Enquiry Message:** Specific questions, property preferences, inspection scheduling requests, or offer terms.
 2. **Vendors and Real Estate / Vehicle Agents:**
-   - **Account Details:** First name, last name, business or agency name, mobile phone number, and primary email address.
-   - **Business Profile:** Business category, CAC registration details (where applicable), and professional biography.
-   - **Verification Documents:** Proof of ownership, title documents (e.g., Certificate of Occupancy, Governor's Consent, Deed of Assignment), and government-issued identification submitted for vendor vetting and badge verification.
-   - **Listing Data:** Property addresses, location states, vehicle details, asking prices, photos, and listing descriptions.
+   - **Account Details:** Full name, business or agency name, mobile telephone number, and primary email address.
+   - **Business Profile:** Business category, CAC business registration details, and professional credentials.
+   - **Verification Documents:** Proof of ownership, title documents (such as Certificate of Occupancy, Governor's Consent, Deed of Assignment, Gazette, or Survey Plan), and government-issued identification submitted for vendor vetting and badge verification.
+   - **Listing Data:** Property addresses, location states, vehicle specifications, asking prices, photos, and listing descriptions.
 3. **Transaction & Financial Records:**
    - Transaction references, credit package selections (Free Basic, Starter Pack, Pro Pack, VIP Agent Monthly), payment timestamps, and credit balance ledger entries.
-   - *Note: Payment card details (PAN, PIN, CVV) are processed directly by our payment partner, Paystack. PropVendor does not store, process, or transmit payment card numbers.*
+   - *Note: Payment card details (card number, PIN, CVV) are processed directly by our payment partner, Paystack. PropVendor does not store, process, or transmit credit or debit card numbers.*
 
 ### B. Information Collected Automatically
 - **Technical & Log Data:** Internet Protocol (IP) address, browser type, device information, timestamp of access, and referring URL.
-- **Security & Anti-Spam Data:** Honeypot field validation tokens and enquiry submission frequency counters used for rate-limiting (e.g., limiting consecutive inquiries to protect against automated scraping).
+- **Security & Anti-Spam Data:** Honeypot field validation tokens and enquiry submission frequency counters used for rate-limiting (limiting consecutive inquiries to prevent automated scraping).
 - **Cookies & Session Identifiers:** Functional cookies strictly necessary to maintain authenticated sessions, CSRF security tokens, and user preferences.
 
 ---
@@ -70,10 +65,10 @@ In accordance with Section 25 of the NDPA 2023, we only process your personal da
 
 ## 4. Privacy Safeguards & Technical Controls
 
-PropVendor implements technical and organizational measures to safeguard personal data against unauthorized access, loss, alteration, or disclosure:
+PropVendor implements rigorous technical and organizational measures to safeguard personal data against unauthorized access, loss, alteration, or disclosure:
 
 - **Contact Masking:** Customer phone numbers and email addresses submitted through property enquiry forms are **masked and shielded** from public display. Vendors can only access complete buyer contact details through an authenticated, credit-unlocked inbox session or active VIP Agent entitlement.
-- **Private Document Isolation:** Identity and title verification documents submitted by vendors are stored in a dedicated, isolated server directory (`/propvendor-private/`) protected by server configuration rules (`.htaccess` / `web.config`) preventing direct URL access or public indexing.
+- **Private Document Isolation:** Identity and title verification documents submitted by vendors are stored in a dedicated, isolated server directory (`/propvendor-private/`) protected by server configuration rules (`.htaccess` / `web.config`) preventing direct URL access or public search engine indexing.
 - **Cryptographic Protections:** Enforced HTTPS transmission (TLS 1.3), hashed authentication cookies, and per-form CSRF nonces.
 - **Automated Stale Order Purging:** Unfulfilled or abandoned payment transactions are scheduled for automated cleanup via cron routines to prevent lingering incomplete financial artifacts.
 
@@ -97,7 +92,7 @@ We do not sell, rent, or trade your personal data. Personal data is shared only 
 We retain personal data only for as long as necessary to fulfill the purposes for which it was collected:
 
 - **Active Accounts:** Retained for the duration of your active account registration.
-- **Inquiry & Thread Records:** Retained in the vendor/buyer message thread for the duration of the communication and up to `[REVIEW REQUIRED: Recommended 24 months]` thereafter for dispute resolution and audit integrity.
+- **Inquiry & Thread Records:** Retained in the vendor/buyer message thread for the duration of the communication and up to 24 months thereafter for dispute resolution and audit integrity.
 - **Financial & Order Records:** Retained for a minimum of 7 years in compliance with Nigerian financial recordkeeping and tax statutes.
 - **Inactive / Deleted Accounts:** Upon verified account deletion request, personal identifying data will be removed or irreversibly anonymized, except where statutory retention is legally mandated.
 
@@ -115,7 +110,7 @@ Under Section 34 of the Nigeria Data Protection Act 2023, you have the following
 6. **Right to Data Portability:** You may request transmission of your personal data to another controller in a structured, commonly used format.
 7. **Right to Lodge a Complaint:** You have the right to lodge a complaint with the **Nigeria Data Protection Commission (NDPC)** (`https://ndpc.gov.ng`) if you believe our processing violates the NDPA.
 
-To exercise any of these rights, please contact our privacy desk at `privacy@propvendor.ng` `[REVIEW REQUIRED: Confirm contact address]`.
+To exercise any of these rights, please contact our privacy desk at `privacy@propvendor.ng`.
 
 ---
 
@@ -135,9 +130,7 @@ We may update this Privacy Policy from time to time to reflect operational, tech
 
 If you have questions, concerns, or requests regarding this Privacy Policy or our data protection practices, please contact us:
 
-- **Entity:** PropVendor Technologies  
-- **Email:** `privacy@propvendor.ng`  
-- **Support:** `support@propvendor.ng`  
-- **Phone:** `[REVIEW REQUIRED: Insert customer support phone number]`  
-- **Office:** `[REVIEW REQUIRED: Insert Nigerian office address]`
-
+- **Entity:** PropVendor Technologies Ltd.
+- **Email:** `privacy@propvendor.ng`
+- **Support:** `support@propvendor.ng`
+- **Location:** Lagos, Nigeria
