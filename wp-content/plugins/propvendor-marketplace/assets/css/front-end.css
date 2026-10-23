@@ -2719,6 +2719,22 @@ html.pv-safety-dismissed .propvendor-safety-notice-card {
     overflow: visible;
 }
 
+/* Land Details: Baseline alignment for all 4 inputs (Land Type, Plot Size, Plot Size Unit, Title Document) */
+#propvendor-fields-land .propvendor-form-grid-3 {
+    align-items: flex-end;
+}
+
+#propvendor-fields-land .propvendor-form-grid-3 label {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+
+#propvendor-fields-land .propvendor-form-grid-3 label select,
+#propvendor-fields-land .propvendor-form-grid-3 label input {
+    margin-top: auto;
+}
+
 .propvendor-form-grid-3 select,
 .propvendor-form-grid-3 input,
 .propvendor-category-fields select,
@@ -7090,4 +7106,469 @@ footer.site-footer .ast-footer-copyright a:focus-visible {
 
 .pv-inbox-container {
     overflow-x: hidden;
+}
+
+
+/* ==========================================================================
+   PropVendor Phase 12A — Authentication Portal & Role Flow
+   ========================================================================== */
+.propvendor-auth-portal-wrapper {
+    max-width: 580px;
+    margin: 2.5rem auto 3.5rem auto;
+    background: #FFFFFF;
+    border: 1px solid var(--pv-color-border, #E2E8F0);
+    border-radius: var(--pv-radius-lg, 12px);
+    box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.08);
+    overflow: hidden;
+}
+
+.pv-auth-tabs {
+    display: flex;
+    background: var(--pv-color-surface-alt, #F8FAFC);
+    border-bottom: 1px solid var(--pv-color-border, #E2E8F0);
+}
+
+.pv-auth-tab-btn {
+    flex: 1;
+    padding: 1.15rem 1rem;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--pv-text-secondary, #64748B);
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    text-align: center;
+}
+
+.pv-auth-tab-btn:hover {
+    color: var(--pv-color-navy, #142B3B);
+    background: rgba(241, 245, 249, 0.6);
+}
+
+.pv-auth-tab-btn.active {
+    background: #FFFFFF;
+    color: var(--pv-color-teal, #087F8C);
+    border-bottom-color: var(--pv-color-teal, #087F8C);
+    font-weight: 700;
+}
+
+.pv-auth-tab-panel {
+    display: none;
+    padding: 2.25rem 2.25rem 2.5rem 2.25rem;
+}
+
+.pv-auth-tab-panel.active {
+    display: block;
+}
+
+.pv-auth-form .pv-form-group {
+    margin-bottom: 1.25rem;
+}
+
+.pv-auth-form .pv-form-group:last-of-type {
+    margin-bottom: 1.5rem;
+}
+
+.pv-auth-form label,
+.pv-group-label {
+    display: block;
+    margin-bottom: 0.4rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--pv-color-navy, #142B3B);
+}
+
+.pv-required {
+    color: #DC2626;
+    font-weight: bold;
+}
+
+.pv-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.4rem;
+}
+
+.pv-forgot-password-link {
+    font-size: 0.825rem;
+    color: var(--pv-color-teal, #087F8C);
+    text-decoration: none;
+    transition: color 0.15s ease;
+}
+
+.pv-forgot-password-link:hover {
+    color: var(--pv-color-navy, #142B3B);
+    text-decoration: underline;
+}
+
+.pv-pwd-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.pv-pwd-wrap .pv-input {
+    width: 100%;
+    padding-right: 3rem;
+}
+
+.pv-toggle-pwd-btn {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    pointer-events: auto !important;
+    z-index: 20;
+    font-size: 1.2rem;
+    padding: 0.35rem 0.5rem;
+    color: #64748B;
+    line-height: 1;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s ease;
+}
+
+.pv-toggle-pwd-btn:hover {
+    color: var(--pv-color-navy, #142B3B);
+}
+
+/* Suppress browser-native password reveal / auto-fill icons to prevent collision with custom toggle button */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+    display: none !important;
+}
+input[type="password"]::-webkit-contacts-auto-fill-button,
+input[type="password"]::-webkit-credentials-auto-fill-button {
+    visibility: hidden;
+    pointer-events: none;
+    position: absolute;
+    right: 0;
+}
+
+.pv-form-checkbox-row {
+    margin-top: 0.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.pv-checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: #475569;
+    cursor: pointer;
+    user-select: none;
+}
+
+.pv-auth-submit-btn {
+    width: 100%;
+    padding: 0.85rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 700;
+    text-align: center;
+    border-radius: var(--pv-radius-md, 8px);
+    cursor: pointer;
+}
+
+.pv-role-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 0.35rem;
+}
+
+.pv-role-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1.15rem;
+    background: var(--pv-color-surface-alt, #F8FAFC);
+    border: 2px solid var(--pv-color-border, #E2E8F0);
+    border-radius: var(--pv-radius-md, 8px);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.pv-role-card:hover {
+    border-color: #CBD5E1;
+    background: #F1F5F9;
+}
+
+.pv-role-card.is-selected,
+.pv-role-card.selected,
+.pv-role-card.active {
+    border-color: var(--pv-color-teal, #087F8C) !important;
+    background: #F0FDF4 !important;
+    box-shadow: 0 0 0 1px var(--pv-color-teal, #087F8C) !important;
+}
+
+.pv-role-radio {
+    margin-top: 0.25rem;
+    accent-color: var(--pv-color-teal, #087F8C);
+    cursor: pointer;
+}
+
+.pv-role-card-content {
+    flex: 1;
+}
+
+.pv-role-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--pv-color-navy, #142B3B);
+    margin-bottom: 0.25rem;
+}
+
+.pv-role-desc {
+    font-size: 0.8rem;
+    color: var(--pv-text-secondary, #64748B);
+    line-height: 1.4;
+}
+
+.pv-role-explanation {
+    margin: 1.25rem 0;
+    padding: 0.9rem 1.15rem;
+    border-radius: var(--pv-radius-md, 8px);
+    background: #F8FAFC;
+    border-left: 4px solid var(--pv-color-teal, #087F8C);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--pv-color-navy, #142B3B);
+}
+
+.pv-role-exp-content strong {
+    color: var(--pv-color-teal, #087F8C);
+}
+
+.pv-form-divider {
+    position: relative;
+    text-align: center;
+    margin: 1.75rem 0 1.25rem 0;
+}
+
+.pv-form-divider::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--pv-color-border, #E2E8F0);
+}
+
+.pv-form-divider span {
+    position: relative;
+    background: #FFFFFF;
+    padding: 0 0.85rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--pv-text-secondary, #64748B);
+}
+
+.pv-auth-legal-note {
+    font-size: 0.825rem;
+    color: var(--pv-text-secondary, #64748B);
+    line-height: 1.5;
+    margin-top: 1.25rem;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.pv-auth-legal-note a {
+    color: var(--pv-color-teal, #087F8C);
+    text-decoration: underline;
+}
+
+.pv-form-hint {
+    display: block;
+    font-size: 0.775rem;
+    color: var(--pv-text-secondary, #64748B);
+    margin-top: 0.35rem;
+}
+
+@media (max-width: 640px) {
+    .propvendor-auth-portal-wrapper {
+        margin: 1.5rem 1rem 2.5rem 1rem;
+    }
+
+    .pv-auth-tab-panel {
+        padding: 1.5rem 1.25rem 1.75rem 1.25rem;
+    }
+
+    .pv-role-cards {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+}
+
+
+/* Phase 12.1 Branded Password Recovery Styles */
+.pv-form-intro {
+    font-size: 0.9rem;
+    color: var(--pv-text-secondary, #64748B);
+    line-height: 1.5;
+    margin-bottom: 1.25rem;
+}
+
+.pv-link-back {
+    font-size: 0.875rem;
+    color: var(--pv-color-teal, #087F8C);
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.15s ease;
+}
+
+.pv-link-back:hover {
+    color: var(--pv-color-navy, #142B3B);
+    text-decoration: underline;
+}
+
+.pv-auth-error-panel {
+    text-align: center;
+}
+
+/* ==========================================================================
+   PropVendor Phase 13 — Professional Design Audit & Frontend Polish
+   ========================================================================== */
+
+/* 1. Suppress redundant Astra entry-headers and double H1 titles */
+.home.page .entry-header,
+body.home.page .entry-header,
+body.page-id-7 .entry-header,
+body.page-id-8 .entry-header,
+body.page-id-184 .entry-header,
+body.page-id-188 .entry-header,
+body.page-id-190 .entry-header,
+body.page-id-192 .entry-header,
+body.page-id-194 .entry-header,
+.ast-article-single:has(.propvendor-hero) .entry-header,
+.ast-article-single:has(.propvendor-browse) .entry-header,
+.ast-article-single:has(.propvendor-auth-portal-wrapper) .entry-header,
+.ast-article-single:has(.propvendor-auth-gate-card) .entry-header,
+.ast-article-single:has(.propvendor-dashboard) .entry-header {
+    display: none !important;
+}
+
+/* 2. Suppress redundant Astra below-footer copyright colophon */
+.site-footer#colophon,
+.site-below-footer-wrap[data-section="section-below-footer-builder"] {
+    display: none !important;
+}
+
+/* 3. Branded Auth Gate Callout Cards for Dashboards */
+.propvendor-auth-gate-card {
+    max-width: 580px;
+    margin: 2.5rem auto 3.5rem auto;
+    padding: 2.5rem 2rem;
+    background: #FFFFFF;
+    border: 1px solid var(--pv-color-border, #E2E8F0);
+    border-radius: var(--pv-radius-lg, 12px);
+    box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.08);
+    text-align: center;
+}
+
+.propvendor-auth-gate-card h2,
+.propvendor-auth-gate-card h3 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--pv-color-navy, #142B3B);
+    margin-top: 0;
+    margin-bottom: 0.75rem;
+}
+
+.propvendor-auth-gate-card p {
+    font-size: 0.95rem;
+    color: var(--pv-text-secondary, #64748B);
+    line-height: 1.5;
+    margin-bottom: 1.75rem;
+}
+
+.pv-auth-gate-actions {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.pv-auth-gate-actions a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--pv-radius-md, 8px);
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.pv-auth-gate-actions a.pv-btn-primary {
+    background: var(--pv-color-teal, #087F8C);
+    color: #FFFFFF;
+}
+
+.pv-auth-gate-actions a.pv-btn-primary:hover {
+    background: #066670;
+    color: #FFFFFF;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(8, 127, 140, 0.25);
+}
+
+.pv-auth-gate-actions a.pv-btn-secondary {
+    background: var(--pv-color-surface-alt, #F8FAFC);
+    color: var(--pv-color-navy, #142B3B);
+    border: 1px solid var(--pv-color-border, #CBD5E1);
+}
+
+.pv-auth-gate-actions a.pv-btn-secondary:hover {
+    background: #E2E8F0;
+    color: var(--pv-color-navy, #142B3B);
+    border-color: #94A3B8;
+}
+
+/* 4. Astra Mobile Navigation CTAs Touch Target Polish */
+@media (max-width: 921px) {
+    .ast-mobile-popup-content .pv-nav-login a,
+    .ast-mobile-header-wrap .pv-nav-login a {
+        display: inline-block !important;
+        margin: 0.4rem 0 !important;
+        padding: 0.65rem 1.25rem !important;
+        border: 2px solid var(--pv-color-teal, #087F8C) !important;
+        border-radius: var(--pv-radius-md, 8px) !important;
+        color: var(--pv-color-teal, #087F8C) !important;
+        font-weight: 700 !important;
+        text-align: center !important;
+    }
+
+    .ast-mobile-popup-content .pv-nav-register a,
+    .ast-mobile-header-wrap .pv-nav-register a {
+        display: inline-block !important;
+        margin: 0.4rem 0 !important;
+        padding: 0.65rem 1.25rem !important;
+        background: var(--pv-color-teal, #087F8C) !important;
+        border: 2px solid var(--pv-color-teal, #087F8C) !important;
+        border-radius: var(--pv-radius-md, 8px) !important;
+        color: #FFFFFF !important;
+        font-weight: 700 !important;
+        text-align: center !important;
+    }
+}
+
+/* 5. Responsive Hero Headline Wrapping */
+@media (max-width: 480px) {
+    .propvendor-hero-title {
+        white-space: normal !important;
+        text-wrap: balance;
+    }
 }

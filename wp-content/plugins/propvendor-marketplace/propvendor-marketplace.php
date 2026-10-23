@@ -850,6 +850,10 @@ function propvendor_marketplace_get_all_category_meta_keys() {
 
 
 function propvendor_marketplace_register_role() {
+    if (!get_role('customer')) {
+        add_role('customer', 'Customer', array('read' => true));
+    }
+
     $vendor_caps = array(
         'read' => true,
         'propvendor_submit_marketplace_listings' => true,
@@ -1992,7 +1996,9 @@ function propvendor_marketplace_render_listing_details($content) {
             if ('' === $alt) {
                 $alt = get_the_title($post);
             }
-            $output .= '<figure>' . wp_get_attachment_image($image_id, 'large', false, array('class' => 'propvendor-detail-image', 'alt' => $alt, 'loading' => 'lazy')) . '</figure>';
+            $img_html = wp_get_attachment_image($image_id, 'large', false, array('class' => 'propvendor-detail-image', 'alt' => $alt, 'loading' => 'lazy'));
+            $img_html = preg_replace('/\s*(width|height)=["\']1["\']/i', '', $img_html);
+            $output .= '<figure>' . $img_html . '</figure>';
         }
     } else {
         $output .= '<p class="propvendor-detail-no-image">No listing images have been provided.</p>';
@@ -3420,7 +3426,15 @@ function propvendor_marketplace_redirect_with_notice($path, $notice, $message) {
 
 function propvendor_marketplace_submit_listing_form_shortcode() {
     if (!is_user_logged_in()) {
-        return '<div class="propvendor-form-box"><h3>Submit a listing</h3><p>Please <a href="' . esc_url(wp_login_url(home_url('/submit-a-listing/'))) . '">log in</a> to submit a listing as a vendor.</p></div>';
+        $login_url = wp_login_url(home_url('/submit-a-listing/'));
+        $reg_url   = home_url('/login-and-my-account/?tab=register');
+        return '<div class="propvendor-form-box propvendor-auth-gate-card"><h3>Submit a listing</h3>'
+            . '<p>' . sprintf(__('Please <a href="%s">log in</a> to submit a listing as a vendor.', 'propvendor-marketplace'), esc_url($login_url)) . '</p>'
+            . '<div class="pv-auth-gate-actions">'
+            . '<a href="' . esc_url($login_url) . '" class="pv-btn-primary">' . esc_html__('Sign In to Submit Listing', 'propvendor-marketplace') . '</a>'
+            . '<a href="' . esc_url($reg_url) . '" class="pv-btn-secondary">' . esc_html__('Create Vendor Account', 'propvendor-marketplace') . '</a>'
+            . '</div>'
+            . '</div>';
     }
 
     if (!current_user_can('manage_options') && !current_user_can('propvendor_submit_marketplace_listings')) {
@@ -3772,7 +3786,15 @@ add_shortcode('propvendor_vendor_registration_form', 'propvendor_marketplace_ven
 
 function propvendor_marketplace_vendor_dashboard_shortcode() {
     if (!is_user_logged_in()) {
-        return '<div class="propvendor-dashboard"><h2>Vendor dashboard</h2><p class="propvendor-empty">Please <a href="' . esc_url(wp_login_url(home_url('/vendor-dashboard/'))) . '">log in</a> with your vendor account to view your listings.</p></div>';
+        $login_url = wp_login_url(home_url('/vendor-dashboard/'));
+        $reg_url   = home_url('/login-and-my-account/?tab=register');
+        return '<div class="propvendor-dashboard propvendor-auth-gate-card"><h2>Vendor dashboard</h2>'
+            . '<p class="propvendor-empty">' . sprintf(__('Please <a href="%s">log in</a> with your vendor account to view your listings.', 'propvendor-marketplace'), esc_url($login_url)) . '</p>'
+            . '<div class="pv-auth-gate-actions">'
+            . '<a href="' . esc_url($login_url) . '" class="pv-btn-primary">' . esc_html__('Sign In to Dashboard', 'propvendor-marketplace') . '</a>'
+            . '<a href="' . esc_url($reg_url) . '" class="pv-btn-secondary">' . esc_html__('Register as Vendor', 'propvendor-marketplace') . '</a>'
+            . '</div>'
+            . '</div>';
     }
 
     $user_id = get_current_user_id();
@@ -3970,7 +3992,7 @@ function propvendor_marketplace_handle_contact_submission() {
         return array('status' => 'error', 'message' => esc_html__('Please provide a valid email address.', 'propvendor-marketplace'));
     }
 
-    $admin_email = get_option('admin_email', 'afriabglobalventures@gmail.com');
+    $admin_email = get_option('admin_email', propvendor_marketplace_get_support_email());
     $subject = sprintf('[PropVendor Enquiry] %s: %s', $topic, $name);
     $body = sprintf(
         "New Contact Form Submission on PropVendor:\n\nName: %s\nEmail: %s\nPhone: %s\nTopic: %s\n\nMessage:\n%s\n\nSubmitted on: %s\nIP: %s",
@@ -3993,13 +4015,22 @@ function propvendor_marketplace_handle_contact_submission() {
 /**
  * 1. Contact Form Shortcode [propvendor_contact_form]
  */
+/**
+ * PropVendor Official Support Email Helper (Phase 13).
+ *
+ * @return string Filterable official support email address.
+ */
+function propvendor_marketplace_get_support_email() {
+    return apply_filters('propvendor_marketplace_support_email', 'support@propvendor.ng');
+}
+
 function propvendor_marketplace_contact_form_shortcode() {
     $submission_result = null;
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['propvendor_contact_submit'])) {
         $submission_result = propvendor_marketplace_handle_contact_submission();
     }
 
-    $verified_email = 'afriabglobalventures@gmail.com';
+    $verified_email = propvendor_marketplace_get_support_email();
 
     $output = '<div class="propvendor-static-page propvendor-contact-page">';
     $output .= '<header class="propvendor-static-header">';
@@ -4154,7 +4185,7 @@ function propvendor_marketplace_about_shortcode() {
     // Staged Verification Note
     $output .= '<div class="propvendor-staged-box">';
     $output .= '<h4>' . esc_html__('Operational Verification Notice', 'propvendor-marketplace') . '</h4>';
-    $output .= '<p>' . esc_html__('PropVendor\'s regional customer walkthrough centers and dedicated telephone helplines are currently undergoing staged operational verification prior to nationwide deployment. Inquiries and official support are handled directly via afriabglobalventures@gmail.com.', 'propvendor-marketplace') . '</p>';
+    $output .= '<p>' . esc_html__('PropVendor\'s regional customer walkthrough centers and dedicated telephone helplines are currently undergoing staged operational verification prior to nationwide deployment. Inquiries and official support are handled directly via support@propvendor.ng.', 'propvendor-marketplace') . '</p>';
     $output .= '</div>';
 
     // CTA Banner
@@ -4241,7 +4272,7 @@ function propvendor_marketplace_help_faqs_shortcode() {
 
     $output .= '<div class="pv-card propvendor-faq-card">';
     $output .= '<h3>' . esc_html__('What should I do if a vendor requests an advance inspection fee?', 'propvendor-marketplace') . '</h3>';
-    $output .= '<p>' . esc_html__('Never pay any inspection fee, deposit, or commitment charge before seeing a property or vehicle in person. Report suspicious vendors immediately via our Contact Us form under "Fraud or Safety Report" or email afriabglobalventures@gmail.com.', 'propvendor-marketplace') . '</p>';
+    $output .= '<p>' . esc_html__('Never pay any inspection fee, deposit, or commitment charge before seeing a property or vehicle in person. Report suspicious vendors immediately via our Contact Us form under "Fraud or Safety Report" or email support@propvendor.ng.', 'propvendor-marketplace') . '</p>';
     $output .= '</div>';
 
     $output .= '</div>'; // faq-group 3
@@ -4370,6 +4401,7 @@ add_shortcode('propvendor_safety_guidelines', 'propvendor_marketplace_safety_gui
 
 /**
  * 5. Login & My Account Portal Shortcode [propvendor_login_account]
+ * Enhanced for Phase 12: Role-based dashboard views & branded front-end authentication.
  */
 function propvendor_marketplace_login_account_shortcode() {
     $output = '<div class="propvendor-static-page propvendor-account-page">';
@@ -4377,105 +4409,824 @@ function propvendor_marketplace_login_account_shortcode() {
     if (is_user_logged_in()) {
         $current_user = wp_get_current_user();
         $user_id = $current_user->ID;
+        $roles = (array) $current_user->roles;
+        $is_admin = in_array('administrator', $roles, true);
+        $is_vendor = in_array('vendor', $roles, true);
         $is_vip = function_exists('propvendor_marketplace_is_user_vip') ? propvendor_marketplace_is_user_vip($user_id) : false;
         $balance = function_exists('propvendor_marketplace_get_user_credit_balance') ? propvendor_marketplace_get_user_credit_balance($user_id) : 0;
 
+        $role_label = $is_admin ? esc_html__('Administrator', 'propvendor-marketplace') : ($is_vendor ? ($is_vip ? esc_html__('VIP Vendor', 'propvendor-marketplace') : esc_html__('Verified Vendor', 'propvendor-marketplace')) : esc_html__('Verified Customer', 'propvendor-marketplace'));
+
         $output .= '<header class="propvendor-static-header">';
-        $output .= '<span class="pv-badge ' . ($is_vip ? 'pv-badge-accent' : 'pv-badge-primary') . '">' . ($is_vip ? esc_html__('VIP Agent Member', 'propvendor-marketplace') : esc_html__('Registered Account', 'propvendor-marketplace')) . '</span>';
+        $output .= '<span class="pv-badge ' . ($is_vip ? 'pv-badge-accent' : ($is_vendor ? 'pv-badge-primary' : 'pv-badge-info')) . '">' . $role_label . '</span>';
         $output .= '<h1 class="propvendor-static-title">' . sprintf(esc_html__('Welcome back, %s!', 'propvendor-marketplace'), esc_html($current_user->display_name)) . '</h1>';
-        $output .= '<p class="propvendor-static-lead">' . esc_html__('Manage your marketplace listings, monitor buyer leads, review customer inquiries, and access your vendor wallet.', 'propvendor-marketplace') . '</p>';
+
+        if ($is_vendor || $is_admin) {
+            $output .= '<p class="propvendor-static-lead">' . esc_html__('Manage your marketplace listings, monitor buyer leads, review customer inquiries, and access your vendor wallet.', 'propvendor-marketplace') . '</p>';
+        } else {
+            $output .= '<p class="propvendor-static-lead">' . esc_html__('Manage your inquiries, review vendor responses in your inbox, and discover verified properties, land, and vehicles.', 'propvendor-marketplace') . '</p>';
+        }
         $output .= '</header>';
 
         // Account Quick Actions Grid
         $output .= '<div class="propvendor-account-grid">';
 
-        $output .= '<a href="' . esc_url(home_url('/vendor-dashboard/')) . '" class="pv-card propvendor-account-card">';
-        $output .= '<div class="propvendor-account-icon">&#128202;</div>';
-        $output .= '<h3>' . esc_html__('Vendor Dashboard', 'propvendor-marketplace') . '</h3>';
-        $output .= '<p>' . esc_html__('View active listings, listing quotas, enquiry totals, and manage inventory.', 'propvendor-marketplace') . '</p>';
-        $output .= '<span class="propvendor-card-link">' . esc_html__('Open Dashboard', 'propvendor-marketplace') . ' &rarr;</span>';
-        $output .= '</a>';
+        if ($is_vendor || $is_admin) {
+            $output .= '<a href="' . esc_url(home_url('/vendor-dashboard/')) . '" class="pv-card propvendor-account-card">';
+            $output .= '<div class="propvendor-account-icon">&#128202;</div>';
+            $output .= '<h3>' . esc_html__('Vendor Dashboard', 'propvendor-marketplace') . '</h3>';
+            $output .= '<p>' . esc_html__('View active listings, listing quotas, enquiry totals, and manage inventory.', 'propvendor-marketplace') . '</p>';
+            $output .= '<span class="propvendor-card-link">' . esc_html__('Open Dashboard', 'propvendor-marketplace') . ' &rarr;</span>';
+            $output .= '</a>';
 
-        $output .= '<a href="' . esc_url(home_url('/vendor-wallet/')) . '" class="pv-card propvendor-account-card">';
-        $output .= '<div class="propvendor-account-icon">&#128179;</div>';
-        $output .= '<h3>' . esc_html__('Vendor Wallet & Credits', 'propvendor-marketplace') . '</h3>';
-        $output .= '<p>' . sprintf(esc_html__('Balance: %d Lead Credits. Buy credit packs or upgrade to VIP Monthly.', 'propvendor-marketplace'), $balance) . '</p>';
-        $output .= '<span class="propvendor-card-link">' . esc_html__('Manage Wallet', 'propvendor-marketplace') . ' &rarr;</span>';
-        $output .= '</a>';
+            $output .= '<a href="' . esc_url(home_url('/vendor-wallet/')) . '" class="pv-card propvendor-account-card">';
+            $output .= '<div class="propvendor-account-icon">&#128179;</div>';
+            $output .= '<h3>' . esc_html__('Vendor Wallet & Credits', 'propvendor-marketplace') . '</h3>';
+            $output .= '<p>' . sprintf(esc_html__('Balance: %d Lead Credits. Buy credit packs or upgrade to VIP Monthly.', 'propvendor-marketplace'), $balance) . '</p>';
+            $output .= '<span class="propvendor-card-link">' . esc_html__('Manage Wallet', 'propvendor-marketplace') . ' &rarr;</span>';
+            $output .= '</a>';
 
-        $output .= '<a href="' . esc_url(home_url('/customer-inbox/')) . '" class="pv-card propvendor-account-card">';
-        $output .= '<div class="propvendor-account-icon">&#9993;</div>';
-        $output .= '<h3>' . esc_html__('Customer Inbox', 'propvendor-marketplace') . '</h3>';
-        $output .= '<p>' . esc_html__('Review incoming buyer leads, communications, and unlocked contact details.', 'propvendor-marketplace') . '</p>';
-        $output .= '<span class="propvendor-card-link">' . esc_html__('View Messages', 'propvendor-marketplace') . ' &rarr;</span>';
-        $output .= '</a>';
+            $output .= '<a href="' . esc_url(home_url('/vendor-dashboard/?view=inbox')) . '" class="pv-card propvendor-account-card">';
+            $output .= '<div class="propvendor-account-icon">&#9993;</div>';
+            $output .= '<h3>' . esc_html__('Customer Leads Inbox', 'propvendor-marketplace') . '</h3>';
+            $output .= '<p>' . esc_html__('Review incoming buyer leads, communications, and unlocked contact details.', 'propvendor-marketplace') . '</p>';
+            $output .= '<span class="propvendor-card-link">' . esc_html__('View Messages', 'propvendor-marketplace') . ' &rarr;</span>';
+            $output .= '</a>';
 
-        $output .= '<a href="' . esc_url(home_url('/vendor-profile/')) . '" class="pv-card propvendor-account-card">';
-        $output .= '<div class="propvendor-account-icon">&#128100;</div>';
-        $output .= '<h3>' . esc_html__('Vendor Profile', 'propvendor-marketplace') . '</h3>';
-        $output .= '<p>' . esc_html__('Update your agency name, verified phone number, state location, and bio.', 'propvendor-marketplace') . '</p>';
-        $output .= '<span class="propvendor-card-link">' . esc_html__('Edit Profile', 'propvendor-marketplace') . ' &rarr;</span>';
-        $output .= '</a>';
+            $output .= '<a href="' . esc_url(home_url('/submit-a-listing/')) . '" class="pv-card propvendor-account-card">';
+            $output .= '<div class="propvendor-account-icon">&#10133;</div>';
+            $output .= '<h3>' . esc_html__('Submit a Listing', 'propvendor-marketplace') . '</h3>';
+            $output .= '<p>' . esc_html__('Create and publish a new property, land plot, or automotive listing.', 'propvendor-marketplace') . '</p>';
+            $output .= '<span class="propvendor-card-link">' . esc_html__('Create Listing', 'propvendor-marketplace') . ' &rarr;</span>';
+            $output .= '</a>';
 
-        $output .= '<a href="' . esc_url(home_url('/submit-a-listing/')) . '" class="pv-card propvendor-account-card">';
-        $output .= '<div class="propvendor-account-icon">&#10133;</div>';
-        $output .= '<h3>' . esc_html__('Submit a Listing', 'propvendor-marketplace') . '</h3>';
-        $output .= '<p>' . esc_html__('Create and publish a new property, land plot, or automotive listing.', 'propvendor-marketplace') . '</p>';
-        $output .= '<span class="propvendor-card-link">' . esc_html__('Create Listing', 'propvendor-marketplace') . ' &rarr;</span>';
-        $output .= '</a>';
+            $output .= '<a href="' . esc_url(home_url('/vendor-profile/')) . '" class="pv-card propvendor-account-card">';
+            $output .= '<div class="propvendor-account-icon">&#128100;</div>';
+            $output .= '<h3>' . esc_html__('Vendor Profile', 'propvendor-marketplace') . '</h3>';
+            $output .= '<p>' . esc_html__('Update your agency name, verified phone number, state location, and bio.', 'propvendor-marketplace') . '</p>';
+            $output .= '<span class="propvendor-card-link">' . esc_html__('Edit Profile', 'propvendor-marketplace') . ' &rarr;</span>';
+            $output .= '</a>';
+        } else {
+            // Customer Dashboard Tiles (No vendor wallet or listing controls)
+            $output .= '<a href="' . esc_url(home_url('/customer-inbox/')) . '" class="pv-card propvendor-account-card">';
+            $output .= '<div class="propvendor-account-icon">&#9993;</div>';
+            $output .= '<h3>' . esc_html__('My Enquiries & Messages', 'propvendor-marketplace') . '</h3>';
+            $output .= '<p>' . esc_html__('Track all your property and vehicle inquiries and chat directly with verified vendors.', 'propvendor-marketplace') . '</p>';
+            $output .= '<span class="propvendor-card-link">' . esc_html__('Open Inbox', 'propvendor-marketplace') . ' &rarr;</span>';
+            $output .= '</a>';
 
-        $output .= '<a href="' . esc_url(home_url('/browse-listings/')) . '" class="pv-card propvendor-account-card">';
-        $output .= '<div class="propvendor-account-icon">&#128269;</div>';
-        $output .= '<h3>' . esc_html__('Browse Marketplace', 'propvendor-marketplace') . '</h3>';
-        $output .= '<p>' . esc_html__('Search and discover property and vehicle listings across all Nigerian States.', 'propvendor-marketplace') . '</p>';
-        $output .= '<span class="propvendor-card-link">' . esc_html__('Explore Listings', 'propvendor-marketplace') . ' &rarr;</span>';
-        $output .= '</a>';
+            $output .= '<a href="' . esc_url(home_url('/browse-listings/')) . '" class="pv-card propvendor-account-card">';
+            $output .= '<div class="propvendor-account-icon">&#128269;</div>';
+            $output .= '<h3>' . esc_html__('Browse Marketplace', 'propvendor-marketplace') . '</h3>';
+            $output .= '<p>' . esc_html__('Discover verified properties, surveyed land, and vehicles across all 37 Nigerian states.', 'propvendor-marketplace') . '</p>';
+            $output .= '<span class="propvendor-card-link">' . esc_html__('Explore Listings', 'propvendor-marketplace') . ' &rarr;</span>';
+            $output .= '</a>';
+
+            $output .= '<a href="' . esc_url(home_url('/listing-and-transaction-safety-guidelines/')) . '" class="pv-card propvendor-account-card">';
+            $output .= '<div class="propvendor-account-icon">&#128737;</div>';
+            $output .= '<h3>' . esc_html__('Buyer Safety Guidelines', 'propvendor-marketplace') . '</h3>';
+            $output .= '<p>' . esc_html__('Essential tips to inspect vehicles, verify land titles, and avoid advance payment fraud.', 'propvendor-marketplace') . '</p>';
+            $output .= '<span class="propvendor-card-link">' . esc_html__('Read Guidelines', 'propvendor-marketplace') . ' &rarr;</span>';
+            $output .= '</a>';
+
+            $output .= '<a href="' . esc_url(home_url('/help-and-faqs/')) . '" class="pv-card propvendor-account-card">';
+            $output .= '<div class="propvendor-account-icon">&#10067;</div>';
+            $output .= '<h3>' . esc_html__('Help & Support', 'propvendor-marketplace') . '</h3>';
+            $output .= '<p>' . esc_html__('Frequently asked questions and support channels for buyers and prospective tenants.', 'propvendor-marketplace') . '</p>';
+            $output .= '<span class="propvendor-card-link">' . esc_html__('Get Help', 'propvendor-marketplace') . ' &rarr;</span>';
+            $output .= '</a>';
+        }
+
+        if ($is_admin) {
+            $output .= '<a href="' . esc_url(admin_url()) . '" class="pv-card propvendor-account-card pv-card-admin">';
+            $output .= '<div class="propvendor-account-icon">&#9881;</div>';
+            $output .= '<h3>' . esc_html__('WordPress Administration', 'propvendor-marketplace') . '</h3>';
+            $output .= '<p>' . esc_html__('Access full administrative controls, moderation, and plugin configuration.', 'propvendor-marketplace') . '</p>';
+            $output .= '<span class="propvendor-card-link">' . esc_html__('Open WP Admin', 'propvendor-marketplace') . ' &rarr;</span>';
+            $output .= '</a>';
+        }
 
         $output .= '</div>'; // propvendor-account-grid
 
         // Account Footer with Logout
         $output .= '<div class="propvendor-account-footer-actions">';
-        $output .= '<p class="propvendor-logged-as">' . sprintf(esc_html__('Signed in as %s (%s).', 'propvendor-marketplace'), esc_html($current_user->user_email), esc_html($current_user->user_login)) . '</p>';
+        $output .= '<p class="propvendor-logged-as">' . sprintf(esc_html__('Signed in as %s (%s). Role: %s', 'propvendor-marketplace'), esc_html($current_user->user_email), esc_html($current_user->user_login), esc_html($role_label)) . '</p>';
         $output .= '<a href="' . esc_url(wp_logout_url(home_url('/login-and-my-account/'))) . '" class="pv-btn-secondary propvendor-btn-logout">' . esc_html__('Log Out of Account', 'propvendor-marketplace') . ' &rarr;</a>';
         $output .= '</div>';
 
     } else {
-        $output .= '<header class="propvendor-static-header">';
-        $output .= '<span class="pv-badge pv-badge-primary">' . esc_html__('Account Access', 'propvendor-marketplace') . '</span>';
-        $output .= '<h1 class="propvendor-static-title">' . esc_html__('Login to Your PropVendor Account', 'propvendor-marketplace') . '</h1>';
-        $output .= '<p class="propvendor-static-lead">' . esc_html__('Sign in to access your vendor dashboard, manage your listings, unlock buyer leads, and view transactions.', 'propvendor-marketplace') . '</p>';
-        $output .= '</header>';
+        $action   = isset($_GET['action']) ? sanitize_key($_GET['action']) : '';
+        $rp_key   = isset($_GET['key']) ? sanitize_text_field(wp_unslash($_GET['key'])) : '';
+        $rp_login = isset($_GET['login']) ? sanitize_user(wp_unslash($_GET['login'])) : '';
+        $notice   = propvendor_marketplace_get_notice_message();
 
-        $output .= '<div class="propvendor-auth-wrapper">';
-        $output .= '<div class="pv-card propvendor-auth-card">';
+        if (('rp' === $action || 'resetpass' === $action) && (!empty($rp_key) || !empty($rp_login))) {
+            $user = check_password_reset_key($rp_key, $rp_login);
 
-        // Render WordPress login form
-        $login_args = array(
-            'echo' => false,
-            'redirect' => home_url('/vendor-dashboard/'),
-            'form_id' => 'propvendor-loginform',
-            'label_username' => __('Username or Email Address', 'propvendor-marketplace'),
-            'label_password' => __('Password', 'propvendor-marketplace'),
-            'label_remember' => __('Remember Me', 'propvendor-marketplace'),
-            'label_log_in' => __('Sign In to PropVendor', 'propvendor-marketplace'),
-            'remember' => true,
-        );
-        $output .= wp_login_form($login_args);
+            $output .= '<header class="propvendor-static-header">';
+            $output .= '<span class="pv-badge pv-badge-primary">' . esc_html__('Security Verification', 'propvendor-marketplace') . '</span>';
+            $output .= '<h1 class="propvendor-static-title">' . esc_html__('Reset Your Password', 'propvendor-marketplace') . '</h1>';
+            $output .= '<p class="propvendor-static-lead">' . esc_html__('Create a strong, new password for your verified PropVendor account.', 'propvendor-marketplace') . '</p>';
+            $output .= '</header>';
 
-        $output .= '<div class="propvendor-auth-links">';
-        $output .= '<p><a href="' . esc_url(wp_lostpassword_url()) . '" class="propvendor-forgot-link">' . esc_html__('Forgot your password?', 'propvendor-marketplace') . '</a></p>';
-        $output .= '<hr class="propvendor-auth-divider" />';
-        $output .= '<p class="propvendor-register-prompt">' . esc_html__('Don\'t have an account yet?', 'propvendor-marketplace') . ' <a href="' . esc_url(home_url('/vendor-registration/')) . '" class="propvendor-register-link"><strong>' . esc_html__('Register as a Vendor &rarr;', 'propvendor-marketplace') . '</strong></a></p>';
-        $output .= '</div>';
+            $output .= '<div class="propvendor-auth-portal-wrapper">';
+            $output .= $notice;
 
-        $output .= '</div>'; // pv-card
-        $output .= '</div>'; // propvendor-auth-wrapper
+            if (is_wp_error($user)) {
+                $output .= '<div class="pv-auth-tab-panel active pv-auth-error-panel">';
+                $output .= '<div class="pv-notice pv-notice-error" style="margin-bottom: 1.5rem;">';
+                $output .= '<p><strong>' . esc_html__('Invalid or Expired Link:', 'propvendor-marketplace') . '</strong> ' . esc_html__('This password reset link is invalid or has expired. Password reset links are valid for 24 hours. Please request a new link below.', 'propvendor-marketplace') . '</p>';
+                $output .= '</div>';
+                $output .= '<div style="text-align: center;">';
+                $output .= '<a href="' . esc_url(home_url('/login-and-my-account/?tab=forgot')) . '" class="propvendor-btn primary pv-auth-submit-btn">' . esc_html__('Request New Reset Link', 'propvendor-marketplace') . ' &rarr;</a>';
+                $output .= '<p style="margin-top: 1.25rem;"><a href="' . esc_url(home_url('/login-and-my-account/?tab=login')) . '" class="pv-link-back">&larr; ' . esc_html__('Back to Sign In', 'propvendor-marketplace') . '</a></p>';
+                $output .= '</div>';
+                $output .= '</div>';
+            } else {
+                $output .= '<div class="pv-auth-tab-panel active">';
+                $output .= '<form class="pv-auth-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+                $output .= '<input type="hidden" name="action" value="propvendor_user_reset_password" />';
+                $output .= wp_nonce_field('propvendor_reset_password_action', 'propvendor_reset_password_nonce', true, false);
+                $output .= '<input type="hidden" name="key" value="' . esc_attr($rp_key) . '" />';
+                $output .= '<input type="hidden" name="login" value="' . esc_attr($rp_login) . '" />';
+
+                $output .= '<p class="pv-form-intro">' . sprintf(esc_html__('Create a new password for account %s (minimum 8 characters).', 'propvendor-marketplace'), '<strong>' . esc_html($user->user_login) . '</strong>') . '</p>';
+
+                $output .= '<div class="pv-form-group">';
+                $output .= '<label for="pv-rp-pass1">' . esc_html__('New Password', 'propvendor-marketplace') . ' <span class="pv-required">*</span></label>';
+                $output .= '<div class="pv-pwd-wrap">';
+                $output .= '<input type="password" name="pass1" id="pv-rp-pass1" class="pv-input" required minlength="8" autocomplete="new-password" placeholder="' . esc_attr__('At least 8 characters', 'propvendor-marketplace') . '" />';
+                $output .= '<button type="button" class="pv-toggle-pwd-btn" data-toggle-target="pv-rp-pass1" aria-label="' . esc_attr__('Show password', 'propvendor-marketplace') . '">&#128065;</button>';
+                $output .= '</div>';
+                $output .= '</div>';
+
+                $output .= '<div class="pv-form-group">';
+                $output .= '<label for="pv-rp-pass2">' . esc_html__('Confirm New Password', 'propvendor-marketplace') . ' <span class="pv-required">*</span></label>';
+                $output .= '<div class="pv-pwd-wrap">';
+                $output .= '<input type="password" name="pass2" id="pv-rp-pass2" class="pv-input" required minlength="8" autocomplete="new-password" placeholder="' . esc_attr__('Repeat your new password', 'propvendor-marketplace') . '" />';
+                $output .= '<button type="button" class="pv-toggle-pwd-btn" data-toggle-target="pv-rp-pass2" aria-label="' . esc_attr__('Show password', 'propvendor-marketplace') . '">&#128065;</button>';
+                $output .= '</div>';
+                $output .= '</div>';
+
+                $output .= '<button type="submit" class="propvendor-btn primary pv-auth-submit-btn">' . esc_html__('Update Password & Sign In', 'propvendor-marketplace') . '</button>';
+                $output .= '</form>';
+                $output .= '</div>';
+            }
+
+            $output .= '</div>'; // .propvendor-auth-portal-wrapper
+        } else {
+            // Logged-out state: Responsive accessible tabs for Login, Register, and Forgot Password
+            $active_tab = (isset($_GET['tab']) && in_array(sanitize_key($_GET['tab']), array('register', 'forgot'), true)) ? sanitize_key($_GET['tab']) : ((isset($_GET['action']) && 'lostpassword' === sanitize_key($_GET['action'])) ? 'forgot' : 'login');
+            $redirect_to = isset($_GET['redirect_to']) ? esc_url_raw($_GET['redirect_to']) : '';
+
+            $output .= '<header class="propvendor-static-header">';
+            $output .= '<span class="pv-badge pv-badge-primary">' . esc_html__('Portal Access', 'propvendor-marketplace') . '</span>';
+            $output .= '<h1 class="propvendor-static-title">' . esc_html__('Welcome to PropVendor', 'propvendor-marketplace') . '</h1>';
+            $output .= '<p class="propvendor-static-lead">' . esc_html__('Sign in to your account or create a new one to connect with verified property and vehicle sellers across Nigeria.', 'propvendor-marketplace') . '</p>';
+            $output .= '</header>';
+
+            $output .= '<div class="propvendor-auth-portal-wrapper">';
+            $output .= $notice;
+
+            // Accessible Tabs Navigation
+            $output .= '<div class="pv-auth-tabs" role="tablist" aria-label="' . esc_attr__('Authentication Options', 'propvendor-marketplace') . '">';
+            $output .= '<button type="button" class="pv-auth-tab-btn ' . ('login' === $active_tab ? 'active' : '') . '" id="pv-tab-btn-login" role="tab" aria-selected="' . ('login' === $active_tab ? 'true' : 'false') . '" aria-controls="pv-auth-panel-login" data-tab="login">' . esc_html__('Sign In', 'propvendor-marketplace') . '</button>';
+            $output .= '<button type="button" class="pv-auth-tab-btn ' . ('register' === $active_tab ? 'active' : '') . '" id="pv-tab-btn-register" role="tab" aria-selected="' . ('register' === $active_tab ? 'true' : 'false') . '" aria-controls="pv-auth-panel-register" data-tab="register">' . esc_html__('Create Account', 'propvendor-marketplace') . '</button>';
+            $output .= '</div>';
+
+            // PANEL 1: LOGIN
+            $output .= '<div class="pv-auth-tab-panel ' . ('login' === $active_tab ? 'active' : '') . '" id="pv-auth-panel-login" role="tabpanel" aria-labelledby="pv-tab-btn-login">';
+            $output .= '<form class="pv-auth-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+            $output .= '<input type="hidden" name="action" value="propvendor_user_login" />';
+            $output .= wp_nonce_field('propvendor_login_action', 'propvendor_login_nonce', true, false);
+            if (!empty($redirect_to)) {
+                $output .= '<input type="hidden" name="redirect_to" value="' . esc_attr($redirect_to) . '" />';
+            }
+
+            $output .= '<div class="pv-form-group">';
+            $output .= '<label for="pv-login-log">' . esc_html__('Username or Email Address', 'propvendor-marketplace') . ' <span class="pv-required">*</span></label>';
+            $output .= '<input type="text" name="log" id="pv-login-log" class="pv-input" required autocomplete="username" placeholder="' . esc_attr__('Enter your username or email', 'propvendor-marketplace') . '" />';
+            $output .= '</div>';
+
+            $output .= '<div class="pv-form-group">';
+            $output .= '<div class="pv-label-row"><label for="pv-login-pwd">' . esc_html__('Password', 'propvendor-marketplace') . ' <span class="pv-required">*</span></label><a href="' . esc_url(wp_lostpassword_url()) . '" class="pv-forgot-password-link">' . esc_html__('Forgot Password?', 'propvendor-marketplace') . '</a></div>';
+            $output .= '<div class="pv-pwd-wrap">';
+            $output .= '<input type="password" name="pwd" id="pv-login-pwd" class="pv-input" required autocomplete="current-password" placeholder="' . esc_attr__('Enter your password', 'propvendor-marketplace') . '" />';
+            $output .= '<button type="button" class="pv-toggle-pwd-btn" data-toggle-target="pv-login-pwd" aria-label="' . esc_attr__('Show password', 'propvendor-marketplace') . '">&#128065;</button>';
+            $output .= '</div>';
+            $output .= '</div>';
+
+            $output .= '<div class="pv-form-group pv-form-checkbox-row">';
+            $output .= '<label class="pv-checkbox-label"><input type="checkbox" name="rememberme" value="forever" /> ' . esc_html__('Remember me on this device', 'propvendor-marketplace') . '</label>';
+            $output .= '</div>';
+
+            $output .= '<button type="submit" class="propvendor-btn primary pv-auth-submit-btn">' . esc_html__('Sign In to PropVendor', 'propvendor-marketplace') . '</button>';
+            $output .= '</form>';
+            $output .= '</div>'; // #pv-auth-panel-login
+
+            // PANEL 2: REGISTER
+            $output .= '<div class="pv-auth-tab-panel ' . ('register' === $active_tab ? 'active' : '') . '" id="pv-auth-panel-register" role="tabpanel" aria-labelledby="pv-tab-btn-register">';
+            $output .= '<form class="pv-auth-form" id="pv-registration-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+            $output .= '<input type="hidden" name="action" value="propvendor_user_register" />';
+            $output .= wp_nonce_field('propvendor_register_action', 'propvendor_register_nonce', true, false);
+
+            // Account Type Selector
+            $output .= '<div class="pv-form-group">';
+            $output .= '<label class="pv-group-label">' . esc_html__('Select Account Type', 'propvendor-marketplace') . ' <span class="pv-required">*</span></label>';
+            $output .= '<div class="pv-role-cards" role="radiogroup" aria-label="' . esc_attr__('Account Role', 'propvendor-marketplace') . '">';
+
+            $output .= '<label class="pv-role-card is-selected selected active" id="pv-card-customer">';
+            $output .= '<input type="radio" name="account_type" value="customer" checked class="pv-role-radio" />';
+            $output .= '<div class="pv-role-card-content">';
+            $output .= '<div class="pv-role-title">&#128100; ' . esc_html__('Customer / Buyer', 'propvendor-marketplace') . '</div>';
+            $output .= '<div class="pv-role-desc">' . esc_html__('Browse listings, enquire with vendors, and manage your private messages.', 'propvendor-marketplace') . '</div>';
+            $output .= '</div>';
+            $output .= '</label>';
+
+            $output .= '<label class="pv-role-card" id="pv-card-vendor">';
+            $output .= '<input type="radio" name="account_type" value="vendor" class="pv-role-radio" />';
+            $output .= '<div class="pv-role-card-content">';
+            $output .= '<div class="pv-role-title">&#127970; ' . esc_html__('Vendor / Agent', 'propvendor-marketplace') . '</div>';
+            $output .= '<div class="pv-role-desc">' . esc_html__('List properties and vehicles, receive verified buyer leads, and manage wallet credits.', 'propvendor-marketplace') . '</div>';
+            $output .= '</div>';
+            $output .= '</label>';
+
+            $output .= '</div>'; // pv-role-cards
+            $output .= '</div>'; // pv-form-group
+
+            // Account Differentiation Notice Box
+            $output .= '<div class="pv-role-explanation" id="pv-role-explanation-box">';
+            $output .= '<div class="pv-role-exp-content is-customer active" id="pv-exp-customer">';
+            $output .= '<strong>' . esc_html__('Customer Account Benefits:', 'propvendor-marketplace') . '</strong> ';
+            $output .= esc_html__('Enquire directly on verified real estate and vehicles. Your contact info is kept private from unverified third parties.', 'propvendor-marketplace');
+            $output .= '</div>';
+            $output .= '<div class="pv-role-exp-content is-vendor" id="pv-exp-vendor" style="display: none;">';
+            $output .= '<strong>' . esc_html__('Vendor Account Benefits:', 'propvendor-marketplace') . '</strong> ';
+            $output .= esc_html__('Publish listings with up to 3 free quota slots, unlock buyer contact details via wallet credits, and apply for direct-owner or verified agent badges.', 'propvendor-marketplace');
+            $output .= '</div>';
+            $output .= '</div>';
+
+            // Personal Details
+            $output .= '<div class="pv-form-grid">';
+            $output .= '<div class="pv-form-group">';
+            $output .= '<label for="pv-reg-fname">' . esc_html__('First Name', 'propvendor-marketplace') . ' <span class="pv-required">*</span></label>';
+            $output .= '<input type="text" name="first_name" id="pv-reg-fname" class="pv-input" required autocomplete="given-name" />';
+            $output .= '</div>';
+            $output .= '<div class="pv-form-group">';
+            $output .= '<label for="pv-reg-lname">' . esc_html__('Last Name', 'propvendor-marketplace') . ' <span class="pv-required">*</span></label>';
+            $output .= '<input type="text" name="last_name" id="pv-reg-lname" class="pv-input" required autocomplete="family-name" />';
+            $output .= '</div>';
+            $output .= '</div>';
+
+            $output .= '<div class="pv-form-group">';
+            $output .= '<label for="pv-reg-email">' . esc_html__('Email Address', 'propvendor-marketplace') . ' <span class="pv-required">*</span></label>';
+            $output .= '<input type="email" name="email" id="pv-reg-email" class="pv-input" required autocomplete="email" placeholder="' . esc_attr__('e.g. name@example.com', 'propvendor-marketplace') . '" />';
+            $output .= '</div>';
+
+            $output .= '<div class="pv-form-group">';
+            $output .= '<label for="pv-reg-pwd">' . esc_html__('Password', 'propvendor-marketplace') . ' <span class="pv-required">*</span></label>';
+            $output .= '<div class="pv-pwd-wrap">';
+            $output .= '<input type="password" name="pwd" id="pv-reg-pwd" class="pv-input" required minlength="8" autocomplete="new-password" placeholder="' . esc_attr__('At least 8 characters', 'propvendor-marketplace') . '" />';
+            $output .= '<button type="button" class="pv-toggle-pwd-btn" data-toggle-target="pv-reg-pwd" aria-label="' . esc_attr__('Show password', 'propvendor-marketplace') . '">&#128065;</button>';
+            $output .= '</div>';
+            $output .= '<span class="pv-form-hint">' . esc_html__('Must be at least 8 characters with letters, numbers, and symbols.', 'propvendor-marketplace') . '</span>';
+            $output .= '</div>';
+
+            // Vendor-Specific Details (Conditional)
+            $output .= '<div class="pv-vendor-fields" id="pv-vendor-reg-fields" style="display: none;">';
+            $output .= '<div class="pv-form-divider"><span>' . esc_html__('Vendor Business Details', 'propvendor-marketplace') . '</span></div>';
+
+            $output .= '<div class="pv-form-grid">';
+            $output .= '<div class="pv-form-group">';
+            $output .= '<label for="pv-reg-bname">' . esc_html__('Agency / Business Name', 'propvendor-marketplace') . ' <span class="pv-required">*</span></label>';
+            $output .= '<input type="text" name="business_name" id="pv-reg-bname" class="pv-input" placeholder="' . esc_attr__('e.g. Premier Properties Ltd', 'propvendor-marketplace') . '" />';
+            $output .= '</div>';
+            $output .= '<div class="pv-form-group">';
+            $output .= '<label for="pv-reg-phone">' . esc_html__('Business Phone Number', 'propvendor-marketplace') . ' <span class="pv-required">*</span></label>';
+            $output .= '<input type="tel" name="phone_number" id="pv-reg-phone" class="pv-input" placeholder="' . esc_attr__('e.g. +234 801 234 5678', 'propvendor-marketplace') . '" />';
+            $output .= '</div>';
+            $output .= '</div>';
+
+            $output .= '<div class="pv-form-group">';
+            $output .= '<label for="pv-reg-btype">' . esc_html__('Primary Listing Category', 'propvendor-marketplace') . '</label>';
+            $output .= '<select name="business_type" id="pv-reg-btype" class="pv-input">';
+            $output .= '<option value="Property Sales">' . esc_html__('Property Sales (Houses, Duplexes, Apartments)', 'propvendor-marketplace') . '</option>';
+            $output .= '<option value="Rentals">' . esc_html__('Rentals & Shortlets', 'propvendor-marketplace') . '</option>';
+            $output .= '<option value="Land">' . esc_html__('Land & Surveyed Plots', 'propvendor-marketplace') . '</option>';
+            $output .= '<option value="Vehicles">' . esc_html__('Cars & Automotive Vehicles', 'propvendor-marketplace') . '</option>';
+            $output .= '</select>';
+            $output .= '</div>';
+
+            $output .= '<div class="pv-form-group">';
+            $output .= '<label for="pv-reg-vdetails">' . esc_html__('Verification Notes / Credentials (Optional)', 'propvendor-marketplace') . '</label>';
+            $output .= '<textarea name="verification_details" id="pv-reg-vdetails" rows="3" class="pv-input" placeholder="' . esc_attr__('CAC RC/BN number, estate agent accreditation, or showroom address', 'propvendor-marketplace') . '"></textarea>';
+            $output .= '</div>';
+
+            $output .= '</div>'; // #pv-vendor-reg-fields
+
+            // Legal Compliance Note
+            $output .= '<div class="pv-auth-legal-note">';
+            $output .= sprintf(
+                esc_html__('By clicking "Create Account", you agree to PropVendor\'s %1$sTerms and Conditions%2$s and acknowledge our %3$sPrivacy Policy%4$s governed by the NDPA 2023.', 'propvendor-marketplace'),
+                '<a href="' . esc_url(home_url('/terms-and-conditions/')) . '" target="_blank" rel="noopener">',
+                '</a>',
+                '<a href="' . esc_url(home_url('/privacy-policy/')) . '" target="_blank" rel="noopener">',
+                '</a>'
+            );
+            $output .= '</div>';
+
+            $output .= '<button type="submit" class="propvendor-btn primary pv-auth-submit-btn" id="pv-btn-submit-reg">' . esc_html__('Create Account', 'propvendor-marketplace') . '</button>';
+            $output .= '</form>';
+            $output .= '</div>'; // #pv-auth-panel-register
+
+            // PANEL 3: FORGOT PASSWORD
+            $output .= '<div class="pv-auth-tab-panel ' . ('forgot' === $active_tab ? 'active' : '') . '" id="pv-auth-panel-forgot" role="tabpanel" aria-labelledby="pv-tab-btn-login">';
+            $output .= '<form class="pv-auth-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+            $output .= '<input type="hidden" name="action" value="propvendor_user_lostpassword" />';
+            $output .= wp_nonce_field('propvendor_lostpassword_action', 'propvendor_lostpassword_nonce', true, false);
+
+            $output .= '<p class="pv-form-intro">' . esc_html__('Enter your registered username or email address below, and we will email you a secure link to reset your password.', 'propvendor-marketplace') . '</p>';
+
+            $output .= '<div class="pv-form-group">';
+            $output .= '<label for="pv-lost-user">' . esc_html__('Username or Email Address', 'propvendor-marketplace') . ' <span class="pv-required">*</span></label>';
+            $output .= '<input type="text" name="user_login" id="pv-lost-user" class="pv-input" required autocomplete="username" placeholder="' . esc_attr__('Enter your username or email', 'propvendor-marketplace') . '" />';
+            $output .= '</div>';
+
+            $output .= '<button type="submit" class="propvendor-btn primary pv-auth-submit-btn">' . esc_html__('Send Password Reset Link', 'propvendor-marketplace') . '</button>';
+
+            $output .= '<div class="pv-auth-switch-row" style="margin-top: 1.25rem; text-align: center;">';
+            $output .= '<a href="' . esc_url(home_url('/login-and-my-account/?tab=login')) . '" class="pv-link-back">&larr; ' . esc_html__('Back to Sign In', 'propvendor-marketplace') . '</a>';
+            $output .= '</div>';
+            $output .= '</form>';
+            $output .= '</div>'; // #pv-auth-panel-forgot
+
+            $output .= '</div>'; // .propvendor-auth-portal-wrapper
+        }
     }
 
-    $output .= '</div>'; // propvendor-static-page
+    $output .= '</div>'; // .propvendor-static-page
     return $output;
 }
 add_shortcode('propvendor_login_account', 'propvendor_marketplace_login_account_shortcode');
+
+/**
+ * Handle Front-End User Login (Phase 12A).
+ */
+function propvendor_marketplace_handle_user_login() {
+    if (!isset($_POST['propvendor_login_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['propvendor_login_nonce'])), 'propvendor_login_action')) {
+        propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=login', 'error', __('Security check failed. Please refresh and try again.', 'propvendor-marketplace'));
+    }
+
+    // Rate Limiting: 5 attempts per 15 minutes per IP
+    $ip = sanitize_text_field($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1');
+    $rate_key = 'pv_login_rate_' . md5($ip);
+    $attempts = (int) get_transient($rate_key);
+    if ($attempts >= 5) {
+        propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=login', 'error', __('Too many failed login attempts. Please wait 15 minutes before trying again.', 'propvendor-marketplace'));
+    }
+
+    $log = sanitize_text_field(wp_unslash($_POST['log'] ?? ''));
+    $pwd = $_POST['pwd'] ?? '';
+    $remember = !empty($_POST['rememberme']);
+
+    if (empty($log) || empty($pwd)) {
+        propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=login', 'error', __('Please enter both username/email and password.', 'propvendor-marketplace'));
+    }
+
+    $creds = array(
+        'user_login'    => $log,
+        'user_password' => $pwd,
+        'remember'      => $remember,
+    );
+
+    $user = wp_signon($creds, is_ssl());
+
+    if (is_wp_error($user)) {
+        set_transient($rate_key, $attempts + 1, 15 * MINUTE_IN_SECONDS);
+        propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=login', 'error', __('Invalid username, email, or password. Please verify your credentials and try again.', 'propvendor-marketplace'));
+    }
+
+    // Login successful: reset rate limiter
+    delete_transient($rate_key);
+
+    // Role-based destination
+    $roles = (array) $user->roles;
+    if (in_array('administrator', $roles, true)) {
+        $default_dest = admin_url();
+    } elseif (in_array('vendor', $roles, true)) {
+        $default_dest = home_url('/vendor-dashboard/');
+    } else {
+        $default_dest = home_url('/customer-inbox/');
+    }
+
+    // Safe redirect evaluation
+    $requested_redirect = isset($_POST['redirect_to']) ? wp_unslash($_POST['redirect_to']) : '';
+    if (!empty($requested_redirect)) {
+        $safe_redirect = wp_validate_redirect($requested_redirect, false);
+        if ($safe_redirect) {
+            $login_path = wp_parse_url(home_url('/login-and-my-account/'), PHP_URL_PATH);
+            $req_path = wp_parse_url($safe_redirect, PHP_URL_PATH);
+            if ($req_path !== $login_path && $req_path !== '/wp-login.php') {
+                if (in_array('customer', $roles, true) && (strpos($safe_redirect, '/vendor-dashboard/') !== false || strpos($safe_redirect, '/submit-a-listing/') !== false || strpos($safe_redirect, '/vendor-wallet/') !== false)) {
+                    wp_safe_redirect($default_dest);
+                    exit;
+                }
+                wp_safe_redirect($safe_redirect);
+                exit;
+            }
+        }
+    }
+
+    wp_safe_redirect($default_dest);
+    exit;
+}
+add_action('admin_post_nopriv_propvendor_user_login', 'propvendor_marketplace_handle_user_login');
+add_action('admin_post_propvendor_user_login', 'propvendor_marketplace_handle_user_login');
+
+/**
+ * Handle Front-End User Registration (Phase 12A).
+ */
+function propvendor_marketplace_handle_user_register() {
+    if (!isset($_POST['propvendor_register_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['propvendor_register_nonce'])), 'propvendor_register_action')) {
+        propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=register', 'error', __('Security check failed. Please refresh and try again.', 'propvendor-marketplace'));
+    }
+
+    // Rate Limiting: 3 registrations per hour per IP
+    $ip = sanitize_text_field($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1');
+    $rate_key = 'pv_reg_rate_' . md5($ip);
+    $attempts = (int) get_transient($rate_key);
+    if ($attempts >= 3) {
+        propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=register', 'error', __('Registration limit reached. Please try again later.', 'propvendor-marketplace'));
+    }
+
+    // Strict account type validation: ONLY 'customer' or 'vendor'
+    $account_type = sanitize_key($_POST['account_type'] ?? 'customer');
+    if (!in_array($account_type, array('customer', 'vendor'), true)) {
+        propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=register', 'error', __('Invalid account type selected. Only Customer or Vendor registration is permitted.', 'propvendor-marketplace'));
+    }
+
+    $first_name = sanitize_text_field(wp_unslash($_POST['first_name'] ?? ''));
+    $last_name  = sanitize_text_field(wp_unslash($_POST['last_name'] ?? ''));
+    $email      = sanitize_email(wp_unslash($_POST['email'] ?? ''));
+    $password   = $_POST['pwd'] ?? '';
+
+    if (empty($first_name) || empty($last_name) || empty($email) || empty($password)) {
+        propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=register', 'error', __('Please fill in all required registration fields.', 'propvendor-marketplace'));
+    }
+
+    if (!is_email($email)) {
+        propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=register', 'error', __('The email address provided is invalid.', 'propvendor-marketplace'));
+    }
+
+    if (email_exists($email)) {
+        propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=register', 'error', __('An account with that email address already exists. Please sign in instead.', 'propvendor-marketplace'));
+    }
+
+    if (strlen($password) < 8) {
+        propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=register', 'error', __('Password must be at least 8 characters long.', 'propvendor-marketplace'));
+    }
+
+    // Vendor-specific field validation
+    $business_name        = '';
+    $phone_number         = '';
+    $business_type        = '';
+    $verification_details = '';
+
+    if ('vendor' === $account_type) {
+        $business_name        = sanitize_text_field(wp_unslash($_POST['business_name'] ?? ''));
+        $phone_number         = sanitize_text_field(wp_unslash($_POST['phone_number'] ?? ''));
+        $business_type        = sanitize_text_field(wp_unslash($_POST['business_type'] ?? 'Property Sales'));
+        $verification_details = sanitize_textarea_field(wp_unslash($_POST['verification_details'] ?? ''));
+
+        if (empty($business_name) || empty($phone_number)) {
+            propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=register', 'error', __('Vendors must provide an Agency/Business Name and a valid Phone Number.', 'propvendor-marketplace'));
+        }
+    }
+
+    // Generate clean username from email
+    $username_base = sanitize_user(str_replace(array(' ', '@', '.'), '_', $email), true);
+    $username_base = preg_replace('/[^a-z0-9_\-]+/i', '', $username_base);
+    if (empty($username_base)) {
+        $username_base = ($account_type === 'vendor' ? 'vendor' : 'user');
+    }
+
+    $username = $username_base;
+    $suffix = 1;
+    while (username_exists($username)) {
+        $username = $username_base . '_' . $suffix;
+        $suffix++;
+    }
+
+    // Role assignment: strictly $account_type
+    $user_id = wp_insert_user(array(
+        'user_login'   => $username,
+        'user_email'   => $email,
+        'first_name'   => $first_name,
+        'last_name'    => $last_name,
+        'display_name' => trim($first_name . ' ' . $last_name),
+        'user_pass'    => $password,
+        'role'         => $account_type,
+    ));
+
+    if (is_wp_error($user_id)) {
+        propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=register', 'error', $user_id->get_error_message());
+    }
+
+    if ('vendor' === $account_type) {
+        update_user_meta($user_id, 'propvendor_business_name', $business_name);
+        update_user_meta($user_id, 'propvendor_phone_number', $phone_number);
+        update_user_meta($user_id, 'propvendor_business_type', $business_type);
+        update_user_meta($user_id, 'propvendor_verification_details', $verification_details);
+
+        $vendor_user = new WP_User($user_id);
+        $vendor_user->add_cap('propvendor_submit_marketplace_listings');
+    }
+
+    // Increment registration attempt count
+    set_transient($rate_key, $attempts + 1, HOUR_IN_SECONDS);
+
+    // Auto-login the newly registered user
+    wp_set_current_user($user_id);
+    wp_set_auth_cookie($user_id, true);
+
+    if ('vendor' === $account_type) {
+        propvendor_marketplace_redirect_with_notice('/vendor-dashboard/', 'success', __('Your vendor account has been created successfully. Welcome to PropVendor!', 'propvendor-marketplace'));
+    } else {
+        propvendor_marketplace_redirect_with_notice('/customer-inbox/', 'success', __('Your customer account has been created successfully. Welcome to PropVendor!', 'propvendor-marketplace'));
+    }
+}
+add_action('admin_post_nopriv_propvendor_user_register', 'propvendor_marketplace_handle_user_register');
+add_action('admin_post_propvendor_user_register', 'propvendor_marketplace_handle_user_register');
+
+/**
+ * Handle Front-End Password Reset Request (Phase 12.1).
+ */
+function propvendor_marketplace_handle_user_lostpassword() {
+    if (!isset($_POST['propvendor_lostpassword_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['propvendor_lostpassword_nonce'])), 'propvendor_lostpassword_action')) {
+        propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=forgot', 'error', __('Security check failed. Please refresh and try again.', 'propvendor-marketplace'));
+    }
+
+    // Rate Limiting: 5 requests per 15 minutes per IP
+    $ip = sanitize_text_field($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1');
+    $rate_key = 'pv_lostpwd_rate_' . md5($ip);
+    $attempts = (int) get_transient($rate_key);
+    if ($attempts >= 5) {
+        propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=forgot', 'error', __('Too many password reset requests from this IP. Please wait 15 minutes before trying again.', 'propvendor-marketplace'));
+    }
+
+    $user_input = trim(sanitize_text_field(wp_unslash($_POST['user_login'] ?? '')));
+    if (empty($user_input)) {
+        propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=forgot', 'error', __('Please enter your username or email address.', 'propvendor-marketplace'));
+    }
+
+    set_transient($rate_key, $attempts + 1, 15 * MINUTE_IN_SECONDS);
+
+    // Call WordPress core retrieve_password
+    if (!function_exists('retrieve_password')) {
+        require_once ABSPATH . 'wp-login.php';
+    }
+
+    $res = retrieve_password($user_input);
+
+    // Generic confirmation notice to eliminate username enumeration
+    $generic_msg = __('If an account matching that username or email exists in our records, a password reset link has been dispatched to your email address. Please check your inbox and spam folder.', 'propvendor-marketplace');
+
+    propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=forgot', 'success', $generic_msg);
+}
+add_action('admin_post_nopriv_propvendor_user_lostpassword', 'propvendor_marketplace_handle_user_lostpassword');
+add_action('admin_post_propvendor_user_lostpassword', 'propvendor_marketplace_handle_user_lostpassword');
+
+/**
+ * Handle Front-End Password Reset Submission (Phase 12.1).
+ */
+function propvendor_marketplace_handle_user_reset_password() {
+    if (!isset($_POST['propvendor_reset_password_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['propvendor_reset_password_nonce'])), 'propvendor_reset_password_action')) {
+        propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=forgot', 'error', __('Security check failed. Please request a new password reset link.', 'propvendor-marketplace'));
+    }
+
+    $rp_key = sanitize_text_field(wp_unslash($_POST['key'] ?? ''));
+    $rp_login = sanitize_user(wp_unslash($_POST['login'] ?? ''));
+    $pass1 = (string) ($_POST['pass1'] ?? '');
+    $pass2 = (string) ($_POST['pass2'] ?? '');
+
+    if (empty($rp_key) || empty($rp_login)) {
+        propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=forgot', 'error', __('Invalid password reset request.', 'propvendor-marketplace'));
+    }
+
+    $user = check_password_reset_key($rp_key, $rp_login);
+    if (is_wp_error($user)) {
+        propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=forgot', 'error', __('This password reset link is invalid or has expired. Please request a new link.', 'propvendor-marketplace'));
+    }
+
+    if ($pass1 !== $pass2) {
+        $re_url = add_query_arg(array('action' => 'rp', 'key' => $rp_key, 'login' => $rp_login), home_url('/login-and-my-account/'));
+        propvendor_marketplace_redirect_with_notice($re_url, 'error', __('Passwords do not match. Please try again.', 'propvendor-marketplace'));
+    }
+
+    if (mb_strlen($pass1) < 8) {
+        $re_url = add_query_arg(array('action' => 'rp', 'key' => $rp_key, 'login' => $rp_login), home_url('/login-and-my-account/'));
+        propvendor_marketplace_redirect_with_notice($re_url, 'error', __('Password must be at least 8 characters long.', 'propvendor-marketplace'));
+    }
+
+    // Call WordPress core reset_password
+    reset_password($user, $pass1);
+
+    // Redirect to login tab with success notice
+    propvendor_marketplace_redirect_with_notice('/login-and-my-account/?tab=login', 'success', __('Your password has been reset successfully. Please sign in with your new password.', 'propvendor-marketplace'));
+}
+add_action('admin_post_nopriv_propvendor_user_reset_password', 'propvendor_marketplace_handle_user_reset_password');
+add_action('admin_post_propvendor_user_reset_password', 'propvendor_marketplace_handle_user_reset_password');
+
+/**
+ * Route WordPress lost password URL to branded front-end portal (Phase 12.1).
+ */
+function propvendor_marketplace_lostpassword_url($lostpassword_url, $redirect = '') {
+    if (is_admin()) {
+        return $lostpassword_url;
+    }
+    $url = home_url('/login-and-my-account/?tab=forgot&action=lostpassword');
+    if (!empty($redirect)) {
+        $url = add_query_arg('redirect_to', urlencode($redirect), $url);
+    }
+    return $url;
+}
+add_filter('lostpassword_url', 'propvendor_marketplace_lostpassword_url', 10, 2);
+
+/**
+ * Route WordPress login URL to branded front-end portal (Phase 13).
+ */
+function propvendor_marketplace_login_url($login_url, $redirect = '', $force_reauth = false) {
+    if (is_admin()) {
+        return $login_url;
+    }
+    $url = home_url('/login-and-my-account/?tab=login');
+    if (!empty($redirect)) {
+        $url = add_query_arg('redirect_to', urlencode($redirect), $url);
+    }
+    return $url;
+}
+add_filter('login_url', 'propvendor_marketplace_login_url', 10, 3);
+
+/**
+ * Suppress redundant Astra page title headers on custom PropVendor shortcode and landing pages (Phase 13).
+ */
+function propvendor_marketplace_astra_the_title_enabled($enabled) {
+    if (is_front_page() || is_page(array(
+        'browse-listings',
+        'login-and-my-account',
+        'customer-inbox',
+        'vendor-dashboard',
+        'vendor-wallet',
+        'submit-a-listing',
+    ))) {
+        return false;
+    }
+    return $enabled;
+}
+add_filter('astra_the_title_enabled', 'propvendor_marketplace_astra_the_title_enabled');
+
+/**
+ * Customize password reset email body with on-brand styling and front-end link (Phase 12.1).
+ */
+function propvendor_marketplace_retrieve_password_message($message, $key, $user_login, $user_data) {
+    $reset_url = home_url('/login-and-my-account/?action=rp&key=' . rawurlencode($key) . '&login=' . rawurlencode($user_login));
+
+    $site_name = wp_specialchars_decode(get_option('blogname'), ENT_QUOTES);
+    if (empty($site_name)) {
+        $site_name = 'PropVendor';
+    }
+
+    $name = !empty($user_data->display_name) ? $user_data->display_name : $user_login;
+
+    $custom_message  = sprintf(__('Hello %s,', 'propvendor-marketplace'), $name) . "\r\n\r\n";
+    $custom_message .= sprintf(__('Someone has requested a password reset for your account on %s.', 'propvendor-marketplace'), $site_name) . "\r\n\r\n";
+    $custom_message .= __('If this was you, please click the secure link below to choose a new password:', 'propvendor-marketplace') . "\r\n";
+    $custom_message .= $reset_url . "\r\n\r\n";
+    $custom_message .= __('This link is valid for 24 hours. If you did not request a password reset, you can safely ignore this email; your existing password will remain unchanged.', 'propvendor-marketplace') . "\r\n\r\n";
+    $custom_message .= sprintf(__('Regards,') . "\r\n" . __('%s Security & Support Team', 'propvendor-marketplace'), $site_name);
+
+    return $custom_message;
+}
+add_filter('retrieve_password_message', 'propvendor_marketplace_retrieve_password_message', 20, 4);
+
+/**
+ * Filter Nav Menu Objects for Dynamic Role-Based Navigation (Phase 12B).
+ */
+function propvendor_marketplace_filter_nav_menu_objects($items, $args = null) {
+    if (!is_array($items) || empty($items)) {
+        return $items;
+    }
+
+    $is_logged_in = is_user_logged_in();
+    $current_user = $is_logged_in ? wp_get_current_user() : null;
+    $roles = $is_logged_in ? (array) $current_user->roles : array();
+
+    $is_admin = in_array('administrator', $roles, true);
+    $is_vendor = in_array('vendor', $roles, true);
+    $is_customer = $is_logged_in && !$is_vendor && !$is_admin;
+
+    $vendor_only_slugs = array('vendor-dashboard', 'vendor-wallet', 'submit-a-listing');
+    $filtered = array();
+
+    foreach ($items as $item) {
+        $path = trim((string) wp_parse_url($item->url, PHP_URL_PATH), '/');
+        $segments = explode('/', $path);
+        $slug = end($segments);
+
+        // Filter out vendor-only links for logged-out visitors and customers
+        if ((!$is_logged_in || $is_customer) && in_array($slug, $vendor_only_slugs, true)) {
+            continue;
+        }
+
+        // Avoid duplicating Login / Register if somehow already in DB menu
+        if ($is_logged_in && in_array($slug, array('login', 'register'), true)) {
+            continue;
+        }
+
+        $filtered[] = $item;
+    }
+
+    $base_id = 999100;
+    $helper_build = function($id, $title, $url, $classes = array()) {
+        $obj = new stdClass();
+        $obj->ID = $id;
+        $obj->db_id = $id;
+        $obj->title = $title;
+        $obj->url = $url;
+        $obj->menu_order = 999;
+        $obj->menu_item_parent = 0;
+        $obj->type = 'custom';
+        $obj->object = 'custom';
+        $obj->object_id = 0;
+        $obj->classes = array_merge(array('menu-item', 'menu-item-type-custom'), $classes);
+        $obj->target = '';
+        $obj->attr_title = '';
+        $obj->description = '';
+        $obj->xfn = '';
+        $obj->status = 'publish';
+        return wp_setup_nav_menu_item($obj);
+    };
+
+    if (!$is_logged_in) {
+        $filtered[] = $helper_build($base_id + 1, __('Login', 'propvendor-marketplace'), home_url('/login-and-my-account/?tab=login'), array('pv-nav-login'));
+        $filtered[] = $helper_build($base_id + 2, __('Register', 'propvendor-marketplace'), home_url('/login-and-my-account/?tab=register'), array('pv-nav-register'));
+    } elseif ($is_customer) {
+        $filtered[] = $helper_build($base_id + 3, __('Customer Dashboard', 'propvendor-marketplace'), home_url('/customer-inbox/'), array('pv-nav-dashboard'));
+        $filtered[] = $helper_build($base_id + 4, __('Account', 'propvendor-marketplace'), home_url('/login-and-my-account/'), array('pv-nav-account'));
+        $filtered[] = $helper_build($base_id + 5, __('Logout', 'propvendor-marketplace'), wp_logout_url(home_url('/login-and-my-account/')), array('pv-nav-logout'));
+    } elseif ($is_vendor) {
+        $filtered[] = $helper_build($base_id + 6, __('Account', 'propvendor-marketplace'), home_url('/login-and-my-account/'), array('pv-nav-account'));
+        $filtered[] = $helper_build($base_id + 7, __('Logout', 'propvendor-marketplace'), wp_logout_url(home_url('/login-and-my-account/')), array('pv-nav-logout'));
+    } elseif ($is_admin) {
+        $filtered[] = $helper_build($base_id + 8, __('Admin', 'propvendor-marketplace'), admin_url(), array('pv-nav-admin'));
+        $filtered[] = $helper_build($base_id + 9, __('Account', 'propvendor-marketplace'), home_url('/login-and-my-account/'), array('pv-nav-account'));
+        $filtered[] = $helper_build($base_id + 10, __('Logout', 'propvendor-marketplace'), wp_logout_url(home_url('/login-and-my-account/')), array('pv-nav-logout'));
+    }
+
+    return $filtered;
+}
+add_filter('wp_nav_menu_objects', 'propvendor_marketplace_filter_nav_menu_objects', 20, 2);
+
+/**
+ * Role-Based Login Redirect Filter (Phase 12C).
+ */
+function propvendor_marketplace_login_redirect($redirect_to, $requested_redirect_to, $user) {
+    if (!is_a($user, 'WP_User')) {
+        return $redirect_to;
+    }
+
+    $roles = (array) $user->roles;
+    if (in_array('administrator', $roles, true)) {
+        $default_dest = admin_url();
+    } elseif (in_array('vendor', $roles, true)) {
+        $default_dest = home_url('/vendor-dashboard/');
+    } else {
+        $default_dest = home_url('/customer-inbox/');
+    }
+
+    if (!empty($requested_redirect_to)) {
+        $safe_redirect = wp_validate_redirect($requested_redirect_to, false);
+        if ($safe_redirect) {
+            $login_path = wp_parse_url(home_url('/login-and-my-account/'), PHP_URL_PATH);
+            $req_path   = wp_parse_url($safe_redirect, PHP_URL_PATH);
+            $home_path  = wp_parse_url(home_url('/'), PHP_URL_PATH);
+
+            $is_generic_home = empty($req_path) || $req_path === '/' || $req_path === $home_path;
+            $is_login_page   = ($req_path === $login_path || $req_path === '/wp-login.php');
+
+            if (!$is_generic_home && !$is_login_page) {
+                if (in_array('customer', $roles, true) && (strpos($safe_redirect, '/vendor-dashboard/') !== false || strpos($safe_redirect, '/submit-a-listing/') !== false || strpos($safe_redirect, '/vendor-wallet/') !== false)) {
+                    return $default_dest;
+                }
+                return $safe_redirect;
+            }
+        }
+    }
+
+    return $default_dest;
+}
+add_filter('login_redirect', 'propvendor_marketplace_login_redirect', 10, 3);
+
 
 /**
  * 6. Property Details Informational Guide Shortcode [propvendor_property_details_guide]
@@ -4563,7 +5314,7 @@ function propvendor_marketplace_render_global_footer() {
         return;
     }
 
-    $verified_email = 'afriabglobalventures@gmail.com';
+    $verified_email = propvendor_marketplace_get_support_email();
 
     echo '<footer class="propvendor-global-footer" role="contentinfo">';
     echo '<div class="propvendor-footer-container">';
@@ -8838,7 +9589,14 @@ function propvendor_marketplace_render_vendor_inbox($vendor_id) {
 function propvendor_marketplace_customer_inbox_shortcode() {
     if (!is_user_logged_in()) {
         $login_url = wp_login_url(home_url('/customer-inbox/'));
-        return '<div class="propvendor-dashboard"><h2>Customer Inbox</h2><p class="propvendor-empty">Please <a href="' . esc_url($login_url) . '">log in</a> with your account to view your messages and enquiries.</p></div>';
+        $reg_url   = home_url('/login-and-my-account/?tab=register');
+        return '<div class="propvendor-dashboard propvendor-auth-gate-card"><h2>Customer Inbox</h2>'
+            . '<p class="propvendor-empty">' . sprintf(__('Please <a href="%s">log in</a> with your account to view your messages and enquiries.', 'propvendor-marketplace'), esc_url($login_url)) . '</p>'
+            . '<div class="pv-auth-gate-actions">'
+            . '<a href="' . esc_url($login_url) . '" class="pv-btn-primary">' . esc_html__('Sign In to Messages', 'propvendor-marketplace') . '</a>'
+            . '<a href="' . esc_url($reg_url) . '" class="pv-btn-secondary">' . esc_html__('Create Account', 'propvendor-marketplace') . '</a>'
+            . '</div>'
+            . '</div>';
     }
 
     $current_user_id = get_current_user_id();
@@ -10367,9 +11125,15 @@ add_action('wp_ajax_propvendor_unlock_thread_lead', 'propvendor_marketplace_ajax
 function propvendor_marketplace_vendor_wallet_shortcode($atts = array()) {
     if (!is_user_logged_in()) {
         $login_url = wp_login_url(get_permalink());
-        return '<div class="propvendor-wallet-login-prompt"><p>' .
-            sprintf(__('Please <a href="%s">log in</a> with your vendor account to access your wallet and subscription options.', 'propvendor-marketplace'), esc_url($login_url)) .
-            '</p></div>';
+        $reg_url   = home_url('/login-and-my-account/?tab=register');
+        return '<div class="propvendor-wallet-login-prompt propvendor-auth-gate-card">' .
+            '<h2>' . esc_html__('Vendor Wallet & Credits', 'propvendor-marketplace') . '</h2>' .
+            '<p>' . sprintf(__('Please <a href="%s">log in</a> with your vendor account to access your wallet and subscription options.', 'propvendor-marketplace'), esc_url($login_url)) . '</p>'
+            . '<div class="pv-auth-gate-actions">'
+            . '<a href="' . esc_url($login_url) . '" class="pv-btn-primary">' . esc_html__('Sign In to Access Wallet', 'propvendor-marketplace') . '</a>'
+            . '<a href="' . esc_url($reg_url) . '" class="pv-btn-secondary">' . esc_html__('Create Account', 'propvendor-marketplace') . '</a>'
+            . '</div>'
+            . '</div>';
     }
 
     $vendor_id      = get_current_user_id();

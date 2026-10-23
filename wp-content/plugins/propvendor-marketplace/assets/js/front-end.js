@@ -14,6 +14,8 @@
         initWalletCheckout();
         initInboxLeadUnlock();
         initSafetyNoticeDismiss();
+        initAuthPortal();
+        initPasswordToggles();
     });
 
     /**
@@ -766,6 +768,206 @@
             try {
                 localStorage.setItem(storageKey, '1');
             } catch (err) {}
+        });
+    }
+
+    /**
+     * 9. Phase 12A Secure Front-End Authentication Portal
+     */
+    function initAuthPortal() {
+        var portal = document.querySelector('.propvendor-auth-portal-wrapper');
+        if (!portal) {
+            return;
+        }
+
+        // Tab Switching
+        var tabBtns = portal.querySelectorAll('.pv-auth-tab-btn');
+        var tabPanels = portal.querySelectorAll('.pv-auth-tab-panel');
+
+        function switchTab(targetTab) {
+            tabBtns.forEach(function(btn) {
+                var isTarget = btn.getAttribute('data-tab') === targetTab;
+                btn.classList.toggle('active', isTarget);
+                btn.setAttribute('aria-selected', isTarget ? 'true' : 'false');
+            });
+
+            tabPanels.forEach(function(panel) {
+                var isTarget = panel.id === ('pv-auth-panel-' + targetTab);
+                panel.classList.toggle('active', isTarget);
+                panel.style.display = isTarget ? 'block' : 'none';
+            });
+
+            // Update URL without reloading page if supported
+            if (window.history && window.history.replaceState) {
+                var currentUrl = new URL(window.location.href);
+                currentUrl.searchParams.set('tab', targetTab);
+                window.history.replaceState(null, '', currentUrl.toString());
+            }
+        }
+
+        tabBtns.forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                var tab = this.getAttribute('data-tab');
+                if (tab) {
+                    switchTab(tab);
+                }
+            });
+        });
+
+        // Forgot Password and Back to Sign In links
+        var forgotLinks = portal.querySelectorAll('.pv-forgot-password-link');
+        forgotLinks.forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                switchTab('forgot');
+            });
+        });
+
+        var backLinks = portal.querySelectorAll('.pv-link-back');
+        backLinks.forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                switchTab('login');
+            });
+        });
+
+        // Password Show/Hide Toggles
+        initPasswordToggles(portal);
+
+        // Account Type Toggle (Customer vs Vendor)
+        var roleRadios = portal.querySelectorAll('input[name="account_type"]');
+        var roleCards = portal.querySelectorAll('.pv-role-card');
+        var vendorFields = document.getElementById('pv-vendor-reg-fields');
+        var expCustomer = document.getElementById('pv-exp-customer');
+        var expVendor = document.getElementById('pv-exp-vendor');
+        var bnameInput = document.getElementById('pv-reg-bname');
+        var phoneInput = document.getElementById('pv-reg-phone');
+
+        function updateRoleView() {
+            var selectedRole = 'customer';
+            roleRadios.forEach(function(radio) {
+                var card = radio.closest('.pv-role-card');
+                if (radio.checked) {
+                    selectedRole = radio.value;
+                    if (card) {
+                        card.classList.add('is-selected', 'selected', 'active');
+                    }
+                } else {
+                    if (card) {
+                        card.classList.remove('is-selected', 'selected', 'active');
+                    }
+                }
+            });
+
+            if (selectedRole === 'vendor') {
+                if (vendorFields) {
+                    vendorFields.style.display = 'block';
+                }
+                if (expVendor) {
+                    expVendor.style.display = 'block';
+                    expVendor.classList.add('active');
+                }
+                if (expCustomer) {
+                    expCustomer.style.display = 'none';
+                    expCustomer.classList.remove('active');
+                }
+                if (bnameInput) {
+                    bnameInput.required = true;
+                }
+                if (phoneInput) {
+                    phoneInput.required = true;
+                }
+            } else {
+                if (vendorFields) {
+                    vendorFields.style.display = 'none';
+                }
+                if (expVendor) {
+                    expVendor.style.display = 'none';
+                    expVendor.classList.remove('active');
+                }
+                if (expCustomer) {
+                    expCustomer.style.display = 'block';
+                    expCustomer.classList.add('active');
+                }
+                if (bnameInput) {
+                    bnameInput.required = false;
+                }
+                if (phoneInput) {
+                    phoneInput.required = false;
+                }
+            }
+
+            // Switch the benefits banner text dynamically if title element exists
+            var bannerTitle = portal.querySelector('.pv-benefits-banner-title, .pv-benefits-title');
+            if (bannerTitle) {
+                bannerTitle.textContent = (selectedRole === 'vendor') ? 'Vendor Account Benefits' : 'Customer Account Benefits';
+            }
+        }
+
+        roleRadios.forEach(function(radio) {
+            radio.addEventListener('change', updateRoleView);
+        });
+
+        // Ensure clicking anywhere on the card toggles the corresponding radio input
+        roleCards.forEach(function(card) {
+            card.addEventListener('click', function(e) {
+                var radio = this.querySelector('input[type="radio"][name="account_type"]');
+                if (radio) {
+                    if (!radio.checked) {
+                        radio.checked = true;
+                        updateRoleView();
+                        var changeEvt = new Event('change', { bubbles: true });
+                        radio.dispatchEvent(changeEvt);
+                    } else {
+                        updateRoleView();
+                    }
+                }
+            });
+        });
+
+        // Initial sync of role view
+        if (roleRadios.length > 0) {
+            updateRoleView();
+        }
+    }
+
+    /**
+     * 10. Global Password Visibility Toggles
+     */
+    function initPasswordToggles(context) {
+        var root = context || document;
+        var pwdToggles = root.querySelectorAll('.pv-toggle-pwd-btn');
+        pwdToggles.forEach(function(btn) {
+            if (btn.getAttribute('data-pwd-init') === '1') {
+                return;
+            }
+            btn.setAttribute('data-pwd-init', '1');
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var targetId = this.getAttribute('data-toggle-target');
+                var input = targetId ? document.getElementById(targetId) : null;
+                if (!input) {
+                    var wrap = this.closest('.pv-pwd-wrap');
+                    if (wrap) {
+                        input = wrap.querySelector('input');
+                    }
+                }
+                if (!input) {
+                    return;
+                }
+
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    this.setAttribute('aria-label', 'Hide password');
+                    this.innerHTML = '&#128064;';
+                } else {
+                    input.type = 'password';
+                    this.setAttribute('aria-label', 'Show password');
+                    this.innerHTML = '&#128065;';
+                }
+            });
         });
     }
 

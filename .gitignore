@@ -37,6 +37,7 @@ wp-config-local.php
 *.sqlite
 *.bak
 *.backup
+*.zip
 
 # WordPress runtime logs
 wp-content/debug.log
