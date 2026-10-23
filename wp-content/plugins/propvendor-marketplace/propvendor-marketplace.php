@@ -1206,7 +1206,7 @@ function propvendor_marketplace_enqueue_assets() {
         'propvendor-marketplace',
         plugins_url('assets/css/front-end.css', __FILE__),
         array(),
-        '0.5.0'
+        time()
     );
     wp_enqueue_script(
         'paystack-inline',
