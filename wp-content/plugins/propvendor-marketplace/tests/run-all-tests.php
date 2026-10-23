@@ -2,7 +2,7 @@
 /**
  * PropVendor Master 1-Click Test Runner
  *
- * Discovers and executes all 17 regression test suites in isolated PHP subprocesses,
+ * Discovers and executes all 18 regression test suites in isolated PHP subprocesses,
  * collecting assertion counts, execution times, and exit statuses into a unified report.
  *
  * Usage:
@@ -32,7 +32,7 @@ $options = getopt('v::', ['verbose::', 'filter::', 'help']);
 if (isset($options['help'])) {
     echo "PropVendor Test Runner\n";
     echo "Usage:\n";
-    echo "  php run-all-tests.php            Run all 17 regression suites\n";
+    echo "  php run-all-tests.php            Run all 18 regression suites\n";
     echo "  php run-all-tests.php --verbose  Display full assertion outputs from all suites\n";
     echo "  php run-all-tests.php --filter=X Run only suites matching pattern X\n";
     exit(0);
@@ -129,6 +129,11 @@ $suites = [
         'file'                => 'test_phase14_comprehensive_e2e_staging_qa.php',
         'name'                => 'Phase 14: Comprehensive End-to-End Staging QA',
         'expected_assertions' => 48,
+    ],
+    [
+        'file'                => 'test_phase15_payments_and_operational_integrity.php',
+        'name'                => 'Phase 15: Staging Payments & Operational Integrity QA',
+        'expected_assertions' => 59,
     ],
 ];
 
