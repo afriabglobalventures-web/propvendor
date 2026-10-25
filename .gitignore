@@ -45,3 +45,8 @@ debug.log
 
 # Uploads and private uploads
 wp-content/uploads/
+
+# Local testing and scratch directories
+scratch/
+build_and_hash_zip.py
+

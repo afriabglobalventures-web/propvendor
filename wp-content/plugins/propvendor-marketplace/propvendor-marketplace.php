@@ -1219,8 +1219,11 @@ function propvendor_marketplace_enqueue_assets() {
         'propvendor-marketplace-frontend',
         plugins_url('assets/js/front-end.js', __FILE__),
         array('jquery'),
-        '0.5.0',
-        true
+        time(),
+        array(
+            'strategy'  => 'defer',
+            'in_footer' => true,
+        )
     );
     wp_localize_script(
         'propvendor-marketplace-frontend',
@@ -1237,6 +1240,416 @@ function propvendor_marketplace_enqueue_assets() {
     );
 }
 add_action('wp_enqueue_scripts', 'propvendor_marketplace_enqueue_assets');
+
+/**
+ * Modern Mobile Off-Canvas Navigation Drawer (Phase 18.5 / Phase 2).
+ * Renders an accessible, semantic mobile drawer with role-aware destinations.
+ */
+function propvendor_render_mobile_drawer() {
+    static $rendered = false;
+    if ($rendered) {
+        return;
+    }
+    $rendered = true;
+
+    // Determine current path for normalized active state matching
+    $current_uri  = isset($_SERVER['REQUEST_URI']) ? (string) $_SERVER['REQUEST_URI'] : '/';
+    $current_path = trim((string) wp_parse_url($current_uri, PHP_URL_PATH), '/');
+
+    // Navigation items with inline SVG icons (2px stroke line geometry)
+    $nav_items = array(
+        array(
+            'id'    => 'home',
+            'label' => __('Home', 'propvendor-marketplace'),
+            'url'   => home_url('/'),
+            'path'  => '',
+            'icon'  => '<svg class="pv-drawer-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>',
+        ),
+        array(
+            'id'    => 'browse',
+            'label' => __('Browse Listings', 'propvendor-marketplace'),
+            'url'   => home_url('/browse-listings/'),
+            'path'  => 'browse-listings',
+            'icon'  => '<svg class="pv-drawer-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>',
+        ),
+        array(
+            'id'    => 'about',
+            'label' => __('About PropVendor', 'propvendor-marketplace'),
+            'url'   => home_url('/about-propvendor/'),
+            'path'  => 'about-propvendor',
+            'icon'  => '<svg class="pv-drawer-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>',
+        ),
+        array(
+            'id'    => 'safety',
+            'label' => __('Safety Guidelines', 'propvendor-marketplace'),
+            'url'   => home_url('/listing-and-transaction-safety-guidelines/'),
+            'path'  => 'listing-and-transaction-safety-guidelines',
+            'icon'  => '<svg class="pv-drawer-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>',
+        ),
+        array(
+            'id'    => 'faqs',
+            'label' => __('Help & FAQs', 'propvendor-marketplace'),
+            'url'   => home_url('/help-and-faqs/'),
+            'path'  => 'help-and-faqs',
+            'icon'  => '<svg class="pv-drawer-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
+        ),
+    );
+
+    // Authentication state & role-aware footer buttons
+    $is_logged_in = is_user_logged_in();
+    $dashboard_url = home_url('/login-and-my-account/');
+    $dashboard_label = __('Dashboard', 'propvendor-marketplace');
+
+    if ($is_logged_in) {
+        $current_user = wp_get_current_user();
+        $roles = (array) $current_user->roles;
+        if (in_array('administrator', $roles, true)) {
+            $dashboard_url   = admin_url();
+            $dashboard_label = __('Dashboard', 'propvendor-marketplace');
+        } elseif (in_array('vendor', $roles, true)) {
+            $dashboard_url   = home_url('/vendor-dashboard/');
+            $dashboard_label = __('Dashboard', 'propvendor-marketplace');
+        } else {
+            $dashboard_url   = home_url('/customer-inbox/');
+            $dashboard_label = __('Dashboard', 'propvendor-marketplace');
+        }
+    }
+
+    $logout_url   = wp_logout_url(home_url('/login-and-my-account/'));
+    $login_url    = home_url('/login-and-my-account/?tab=login');
+    $register_url = home_url('/login-and-my-account/?tab=register');
+    ?>
+    <!-- PropVendor Modern Mobile Navigation Drawer -->
+    <div id="pv-drawer-backdrop" class="pv-drawer-backdrop" aria-hidden="true"></div>
+    <aside id="pv-mobile-drawer" class="pv-drawer" role="dialog" aria-modal="true" aria-label="<?php esc_attr_e('Mobile Navigation', 'propvendor-marketplace'); ?>" aria-hidden="true">
+        <div class="pv-drawer-inner">
+            <div class="pv-drawer-header">
+                <a href="<?php echo esc_url(home_url('/')); ?>" class="pv-drawer-brand" aria-label="<?php esc_attr_e('PropVendor Home', 'propvendor-marketplace'); ?>">
+                    <span class="pv-drawer-brand-name">propvendor</span><span class="pv-drawer-brand-domain">.com.ng</span>
+                </a>
+                <button type="button" class="pv-drawer-close" aria-label="<?php esc_attr_e('Close menu', 'propvendor-marketplace'); ?>">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <nav class="pv-drawer-nav" aria-label="<?php esc_attr_e('Main Mobile Menu', 'propvendor-marketplace'); ?>">
+                <ul class="pv-drawer-list">
+                    <?php foreach ($nav_items as $item) :
+                        $is_active = ($current_path === $item['path']);
+                        $active_class = $is_active ? ' pv-drawer-item--active' : '';
+                        $aria_current = $is_active ? ' aria-current="page"' : '';
+                    ?>
+                        <li class="pv-drawer-item<?php echo esc_attr($active_class); ?>">
+                            <a href="<?php echo esc_url($item['url']); ?>" class="pv-drawer-link"<?php echo $aria_current; ?>>
+                                <span class="pv-drawer-link-icon" aria-hidden="true"><?php echo $item['icon']; ?></span>
+                                <span class="pv-drawer-link-text"><?php echo esc_html($item['label']); ?></span>
+                            </a>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </nav>
+
+            <div class="pv-drawer-divider" role="separator" aria-hidden="true"></div>
+
+            <div class="pv-drawer-footer">
+                <?php if ($is_logged_in) : ?>
+                    <a href="<?php echo esc_url($dashboard_url); ?>" class="pv-drawer-btn pv-drawer-btn--primary">
+                        <?php echo esc_html($dashboard_label); ?>
+                    </a>
+                    <a href="<?php echo esc_url($logout_url); ?>" class="pv-drawer-btn pv-drawer-btn--outline">
+                        <?php esc_html_e('Logout', 'propvendor-marketplace'); ?>
+                    </a>
+                <?php else : ?>
+                    <a href="<?php echo esc_url($login_url); ?>" class="pv-drawer-btn pv-drawer-btn--outline">
+                        <?php esc_html_e('Login', 'propvendor-marketplace'); ?>
+                    </a>
+                    <a href="<?php echo esc_url($register_url); ?>" class="pv-drawer-btn pv-drawer-btn--primary">
+                        <?php esc_html_e('Register', 'propvendor-marketplace'); ?>
+                    </a>
+                <?php endif; ?>
+            </div>
+        </div>
+    </aside>
+    <?php
+}
+add_action('wp_footer', 'propvendor_render_mobile_drawer', 15);
+
+/**
+ * Phase 18.4A.1: Safely add defer attribute to front-end script for non-render-blocking execution
+ */
+function propvendor_marketplace_defer_frontend_script($tag, $handle, $src) {
+    if ('propvendor-marketplace-frontend' === $handle) {
+        if (false === strpos($tag, 'defer')) {
+            $tag = str_replace('<script ', '<script defer ', $tag);
+        }
+    }
+    return $tag;
+}
+add_filter('script_loader_tag', 'propvendor_marketplace_defer_frontend_script', 10, 3);
+
+/**
+ * Phase 18.4A.1: Preload high-priority hero background WebP on front page for optimized LCP
+ */
+function propvendor_marketplace_preload_hero_lcp() {
+    if (is_front_page()) {
+        $hero_webp = plugins_url('assets/images/hero-real-estate.webp', __FILE__);
+        echo '<link rel="preload" as="image" href="' . esc_url($hero_webp) . '" type="image/webp" fetchpriority="high">' . "\n";
+    }
+}
+add_action('wp_head', 'propvendor_marketplace_preload_hero_lcp', 1);
+
+/**
+ * Phase 18.4A.1: Ensure core XML sitemaps are active and private account routes are excluded
+ */
+add_filter('wp_sitemaps_enabled', '__return_true');
+
+function propvendor_marketplace_filter_sitemap_pages($args, $post_type) {
+    if ('page' === $post_type) {
+        $excluded_slugs = array('vendor-dashboard', 'customer-inbox', 'vendor-wallet', 'vendor-profile', 'login-and-my-account');
+        $excluded_ids = array();
+        foreach ($excluded_slugs as $slug) {
+            $p = get_page_by_path($slug);
+            if ($p) {
+                $excluded_ids[] = (int) $p->ID;
+            }
+        }
+        if (!empty($excluded_ids)) {
+            $args['post__not_in'] = isset($args['post__not_in']) ? array_merge((array) $args['post__not_in'], $excluded_ids) : $excluded_ids;
+        }
+    }
+    return $args;
+}
+add_filter('wp_sitemaps_posts_query_args', 'propvendor_marketplace_filter_sitemap_pages', 10, 2);
+
+function propvendor_marketplace_maybe_flush_rewrites() {
+    if (!get_option('propvendor_rewrites_flushed_18_4a')) {
+        flush_rewrite_rules(false);
+        update_option('propvendor_rewrites_flushed_18_4a', 1);
+    }
+}
+add_action('init', 'propvendor_marketplace_maybe_flush_rewrites', 99);
+
+function propvendor_marketplace_get_privacy_policy_content() {
+    return <<<'HTML'
+<p><strong>Effective Date:</strong> November 1, 2026</p>
+<p><strong>Last Updated:</strong> October 20, 2026</p>
+<p><strong>Governing Standard:</strong> Nigeria Data Protection Act (NDPA) 2023</p>
+<hr />
+<h2>1. Introduction and Data Controller Information</h2>
+<p>PropVendor Technologies Ltd. ("PropVendor", "we", "our", or "us") operates the online property, land, and vehicle marketplace platform accessible at <code>https://propvendor.ng</code> (and associated local and staging domains).</p>
+<p>For the purposes of the <strong>Nigeria Data Protection Act 2023 (NDPA)</strong>, PropVendor Technologies Ltd. is the <strong>Data Controller</strong> responsible for your personal data.</p>
+<ul>
+<li><strong>Data Controller:</strong> PropVendor Technologies Ltd.</li>
+<li><strong>Principal Address:</strong> Lagos, Nigeria</li>
+<li><strong>Privacy Office Email:</strong> <code>privacy@propvendor.ng</code></li>
+<li><strong>Customer Support Email:</strong> <code>support@propvendor.ng</code></li>
+</ul>
+<hr />
+<h2>2. Categories of Personal Data We Collect</h2>
+<p>Depending on how you interact with PropVendor (as a visitor, prospective buyer/tenant, or vendor/agent), we collect and process the following categories of personal data:</p>
+<h3>A. Information You Provide Directly</h3>
+<p><strong>Prospective Buyers and Renters (Inquirers):</strong></p>
+<ul>
+<li><strong>Full Name:</strong> To identify you in communications with listing vendors.</li>
+<li><strong>Email Address & Phone Number:</strong> To enable vendors to respond directly to your property or vehicle inquiries.</li>
+<li><strong>Enquiry Message:</strong> Specific questions, property preferences, inspection scheduling requests, or offer terms.</li>
+</ul>
+<p><strong>Vendors and Real Estate / Vehicle Agents:</strong></p>
+<ul>
+<li><strong>Account Details:</strong> Full name, business or agency name, mobile telephone number, and primary email address.</li>
+<li><strong>Business Profile:</strong> Business category, CAC business registration details, and professional credentials.</li>
+<li><strong>Verification Documents:</strong> Proof of ownership, title documents (such as Certificate of Occupancy, Governor's Consent, Deed of Assignment, Gazette, or Survey Plan), and government-issued identification submitted for vendor vetting and badge verification.</li>
+<li><strong>Listing Data:</strong> Property addresses, location states, vehicle specifications, asking prices, photos, and listing descriptions.</li>
+</ul>
+<p><strong>Transaction & Financial Records:</strong></p>
+<ul>
+<li>Transaction references, credit package selections (Free Basic, Starter Pack, Pro Pack, VIP Agent Monthly), payment timestamps, and credit balance ledger entries.</li>
+<li>*Note: Payment card details (card number, PIN, CVV) are processed directly by our payment partner, Paystack. PropVendor does not store, process, or transmit credit or debit card numbers.*</li>
+</ul>
+<h3>B. Information Collected Automatically</h3>
+<ul>
+<li><strong>Technical & Log Data:</strong> Internet Protocol (IP) address, browser type, device information, timestamp of access, and referring URL.</li>
+<li><strong>Security & Anti-Spam Data:</strong> Honeypot field validation tokens and enquiry submission frequency counters used for rate-limiting (limiting consecutive inquiries to prevent automated scraping).</li>
+<li><strong>Cookies & Session Identifiers:</strong> Functional cookies strictly necessary to maintain authenticated sessions, CSRF security tokens, and user preferences.</li>
+</ul>
+<hr />
+<h2>3. Lawful Bases for Processing (Under NDPA 2023)</h2>
+<p>In accordance with Section 25 of the NDPA 2023, we only process your personal data where a valid lawful basis exists:</p>
+<p><strong>Performance of a Contract:</strong></p>
+<ul>
+<li>Processing is necessary to facilitate marketplace introductions between inquirers and vendors.</li>
+<li>Managing vendor accounts, processing credit purchases, and delivering subscription entitlements.</li>
+</ul>
+<p><strong>Legitimate Interests:</strong></p>
+<ul>
+<li>Protecting the marketplace against fraudulent listings, identity theft, and malicious bots.</li>
+<li>Enforcing enquiry rate limits and contact security safeguards.</li>
+<li>Improving user interface responsiveness and marketplace reliability.</li>
+</ul>
+<p><strong>Compliance with Legal Obligations:</strong></p>
+<ul>
+<li>Maintaining financial ledgers and transaction history pursuant to Nigerian tax and commercial laws.</li>
+<li>Complying with lawful directives from Nigerian law enforcement, regulatory authorities, or courts of competent jurisdiction.</li>
+</ul>
+<p><strong>Consent:</strong></p>
+<ul>
+<li>Where you explicitly opt in to receive marketing communications or promotional newsletters. You may withdraw consent at any time.</li>
+</ul>
+<hr />
+<h2>4. Privacy Safeguards & Technical Controls</h2>
+<p>PropVendor implements rigorous technical and organizational measures to safeguard personal data against unauthorized access, loss, alteration, or disclosure:</p>
+<ul>
+<li><strong>Contact Masking:</strong> Customer phone numbers and email addresses submitted through property enquiry forms are <strong>masked and shielded</strong> from public display. Vendors can only access complete buyer contact details through an authenticated, credit-unlocked inbox session or active VIP Agent entitlement.</li>
+<li><strong>Private Document Isolation:</strong> Identity and title verification documents submitted by vendors are stored in a dedicated, isolated server directory (<code>/propvendor-private/</code>) protected by server configuration rules (<code>.htaccess</code> / <code>web.config</code>) preventing direct URL access or public search engine indexing.</li>
+<li><strong>Cryptographic Protections:</strong> Enforced HTTPS transmission (TLS 1.3), hashed authentication cookies, and per-form CSRF nonces.</li>
+<li><strong>Automated Stale Order Purging:</strong> Unfulfilled or abandoned payment transactions are scheduled for automated cleanup via cron routines to prevent lingering incomplete financial artifacts.</li>
+</ul>
+<hr />
+<h2>5. Sharing and Disclosure of Personal Data</h2>
+<p>We do not sell, rent, or trade your personal data. Personal data is shared only with the following categories of recipients:</p>
+<p><strong>Listing Vendors / Agents:</strong> When an inquirer submits an inquiry form on a listing, their name, message, and (upon credit unlock) phone number and email are shared with the specific vendor who published that listing.</p>
+<p><strong>Third-Party Service Providers (Data Processors):</strong></p>
+<ul>
+<li><strong>Paystack Payments Limited:</strong> Nigerian licensed payment processor handling credit and subscription checkouts under PCI-DSS Level 1 compliance.</li>
+<li><strong>Transactional Email Service:</strong> SMTP mail servers delivering secure account emails and lead notifications via encrypted TLS connections.</li>
+<li><strong>Cloud Hosting & Infrastructure Providers:</strong> Data centers hosting our database, web assets, and backups.</li>
+</ul>
+<p><strong>Law Enforcement & Regulatory Bodies:</strong> Where required by Nigerian law, court order, or formal request from the Nigeria Data Protection Commission (NDPC).</p>
+<hr />
+<h2>6. Data Retention and Deletion</h2>
+<p>We retain personal data only for as long as necessary to fulfill the purposes for which it was collected:</p>
+<ul>
+<li><strong>Active Accounts:</strong> Retained for the duration of your active account registration.</li>
+<li><strong>Inquiry & Thread Records:</strong> Retained in the vendor/buyer message thread for the duration of the communication and up to 24 months thereafter for dispute resolution and audit integrity.</li>
+<li><strong>Financial & Order Records:</strong> Retained for a minimum of 7 years in compliance with Nigerian financial recordkeeping and tax statutes.</li>
+<li><strong>Inactive / Deleted Accounts:</strong> Upon verified account deletion request, personal identifying data will be removed or irreversibly anonymized, except where statutory retention is legally mandated.</li>
+</ul>
+<hr />
+<h2>7. Your Data Subject Rights (NDPA 2023)</h2>
+<p>Under Section 34 of the Nigeria Data Protection Act 2023, you have the following rights regarding your personal data:</p>
+<p><strong>Right of Access:</strong> You may request confirmation of whether we process your data and receive a copy of your personal data.</p>
+<p><strong>Right to Rectification:</strong> You may request correction of inaccurate, outdated, or incomplete data.</p>
+<p><strong>Right to Erasure ("Right to be Forgotten"):</strong> You may request deletion of your personal data where it is no longer necessary for the purposes collected, subject to statutory retention exceptions.</p>
+<p><strong>Right to Restrict Processing:</strong> You may request suspension of processing under specific legal conditions.</p>
+<p><strong>Right to Object:</strong> You may object at any time to the processing of your personal data for direct marketing or legitimate-interest purposes.</p>
+<p><strong>Right to Data Portability:</strong> You may request transmission of your personal data to another controller in a structured, commonly used format.</p>
+<p><strong>Right to Lodge a Complaint:</strong> You have the right to lodge a complaint with the <strong>Nigeria Data Protection Commission (NDPC)</strong> (<code>https://ndpc.gov.ng</code>) if you believe our processing violates the NDPA.</p>
+<p>To exercise any of these rights, please contact our privacy desk at <code>privacy@propvendor.ng</code>.</p>
+<hr />
+<h2>8. Third-Party Links and External Services</h2>
+<p>Our marketplace contains links to external websites, maps, and social networks. We are not responsible for the privacy practices or content of third-party platforms. We encourage users to read the privacy notices of external websites they visit.</p>
+<hr />
+<h2>9. Updates to this Policy</h2>
+<p>We may update this Privacy Policy from time to time to reflect operational, technical, or legal changes. When changes are made, the "Last Updated" date at the top of this policy will be revised. Material changes will be communicated via on-site notification or email to registered users.</p>
+<hr />
+<h2>10. Contact Us</h2>
+<p>If you have questions, concerns, or requests regarding this Privacy Policy or our data protection practices, please contact us:</p>
+<ul>
+<li><strong>Entity:</strong> PropVendor Technologies Ltd.</li>
+<li><strong>Email:</strong> <code>privacy@propvendor.ng</code></li>
+<li><strong>Support:</strong> <code>support@propvendor.ng</code></li>
+<li><strong>Location:</strong> Lagos, Nigeria</li>
+</ul>
+HTML;
+}
+
+function propvendor_marketplace_get_help_faqs_content() {
+    return <<<'HTML'
+<div class="propvendor-faq-accordion">
+    <div class="propvendor-faq-intro">
+        <p>Find answers to common questions about buying, renting, and listing properties, land, and vehicles on PropVendor.</p>
+    </div>
+
+    <details class="pv-faq-item">
+        <summary class="pv-faq-question"><strong>Are there any inspection fees or upfront viewing charges on PropVendor?</strong></summary>
+        <div class="pv-faq-answer">
+            <p><strong>Zero Inspection Fees:</strong> PropVendor strictly prohibits unverified middlemen from demanding upfront "inspection fees" or "mobilization charges" simply to view a property or vehicle. General browsing, inquiries, and initial viewings are completely free. You only deal with verified owners, developers, or accredited agency representatives.</p>
+        </div>
+    </details>
+
+    <details class="pv-faq-item">
+        <summary class="pv-faq-question"><strong>What are the vendor listing limits and quota options?</strong></summary>
+        <div class="pv-faq-answer">
+            <p><strong>3 Free Active Listings:</strong> Every registered vendor account is granted up to 3 active listings free of charge with full marketplace visibility. To publish beyond 3 listings, vendors can upgrade to credit packages (Starter Pack, Growth Pack, Pro Pack) or subscribe to the <strong>VIP Agent Monthly</strong> tier for unlimited active listings, verified agent badges, and priority search placement.</p>
+        </div>
+    </details>
+
+    <details class="pv-faq-item">
+        <summary class="pv-faq-question"><strong>Why is my submitted listing showing "Pending Review"?</strong></summary>
+        <div class="pv-faq-answer">
+            <p><strong>Trust &amp; Quality Moderation:</strong> Every new submission or major revision enters a temporary "Pending Review" status while our compliance desk checks title documentation, verifies image authenticity, checks price consistency, and ensures zero duplicate entries. Moderation is typically completed within 2 to 6 hours during standard operating windows.</p>
+        </div>
+    </details>
+
+    <details class="pv-faq-item">
+        <summary class="pv-faq-question"><strong>How does buyer and inquirer privacy masking work?</strong></summary>
+        <div class="pv-faq-answer">
+            <p><strong>NDPA 2023 Compliance &amp; Lead Masking:</strong> In strict compliance with the Nigeria Data Protection Act (NDPA) 2023, your personal contact details (telephone number and email address) are masked from public display and shielded from automated scrapers. Only the verified vendor whose listing you contact can unlock your direct contact details inside their authenticated inbox, ensuring you are never exposed to unsolicited spam or unauthorized third parties.</p>
+        </div>
+    </details>
+
+    <details class="pv-faq-item">
+        <summary class="pv-faq-question"><strong>How do I report a suspicious listing or unverified agent?</strong></summary>
+        <div class="pv-faq-answer">
+            <p>If you encounter a listing with inaccurate information, an agent demanding unauthorized fees, or suspicious behavior, please notify us immediately through our <a href="/contact-us/">Contact Us</a> form or email <code>safety@propvendor.ng</code>. We review and take swift disciplinary and moderation action on all reports.</p>
+        </div>
+    </details>
+</div>
+HTML;
+}
+
+function propvendor_marketplace_get_about_us_content() {
+    return <<<'HTML'
+<div class="propvendor-about-content">
+    <div class="propvendor-about-hero-lead">
+        <p class="pv-lead-text">PropVendor Technologies Ltd. is a modern, trust-anchored marketplace engineered to democratize real estate, land acquisition, and vehicle commerce across Nigeria. Founded with roots in <strong>Ilorin, Kwara State</strong>, PropVendor was created to bridge the critical integrity gap between property owners, certified dealerships, and prospective buyers across all 37 Nigerian states.</p>
+    </div>
+
+    <hr class="pv-divider" />
+
+    <h2>Our Origin: The Kwara Foundation Expanding Nationwide</h2>
+    <p>The journey of PropVendor began in the historic commercial crossroads of <strong>Ilorin, Kwara State</strong>—a central gateway connecting the northern and southern trade corridors of Nigeria. Observing the widespread challenges of real estate transactions in growing urban centers—such as fraudulent title claims, opaque "inspection fee" scams, and unvetted agents—our founders set out to architect an online exchange where transparency is enforced by technology rather than left to chance.</p>
+    <p>From our Kwara State roots, PropVendor has systematically expanded nationwide, delivering verified real estate listings, surveyed agricultural and commercial land parcels, and inspected vehicles in Lagos, Abuja (FCT), Ibadan, Port Harcourt, Kano, and every state in Nigeria.</p>
+
+    <hr class="pv-divider" />
+
+    <h2>The Three Core Pillars of PropVendor</h2>
+    <div class="propvendor-pillars-grid">
+        <div class="pv-pillar-card">
+            <h3>1. Universal Accessibility</h3>
+            <p>Every Nigerian—whether a first-time home buyer, student renter, commercial developer, or family purchasing an automobile—deserves intuitive, unhindered access to verified listings. We provide high-speed mobile search, standardized pricing in Naira (₦), transparent location data, and 100% free browsing without paywalls or preliminary viewing charges.</p>
+        </div>
+        <div class="pv-pillar-card">
+            <h3>2. Uncompromising Trust</h3>
+            <p>Trust is the cornerstone of capital transactions. PropVendor implements mandatory seller verification, strict moderation workflows (ensuring listings undergo rigorous provenance checks before publication), and privacy protection compliant with the <strong>Nigeria Data Protection Act (NDPA) 2023</strong>. Buyers and inquirers communicate safely without unauthorized public exposure of their contact information.</p>
+        </div>
+        <div class="pv-pillar-card">
+            <h3>3. Sustainable Value</h3>
+            <p>We empower legitimate property developers, direct landowners, and certified vehicle dealerships to thrive without paying exorbitant intermediary commissions. With generous free-tier allowances, transparent subscription packages, and direct buyer-to-vendor communication, we maximize economic return for vendors while saving buyers millions in bogus fees.</p>
+        </div>
+    </div>
+
+    <hr class="pv-divider" />
+
+    <h2>Disintermediating the Unverified Middleman</h2>
+    <p>The traditional Nigerian property and auto market has historically suffered from layers of informal, unaccountable middlemen who inflate prices, misrepresent asset conditions, and demand arbitrary upfront cash fees. PropVendor fundamentally changes this dynamic:</p>
+    <ul>
+        <li><strong>Direct Connections:</strong> Inquirers communicate directly with verified vendors, asset owners, or licensed agency desks.</li>
+        <li><strong>Document Verification:</strong> Highlighting legal title classifications (Certificate of Occupancy, Governor's Consent, Gazette, Survey Plan, or registered CAC details).</li>
+        <li><strong>Zero Viewing Extortion:</strong> No phantom viewing charges; viewings and inquiries are facilitated respectfully and professionally.</li>
+    </ul>
+
+    <hr class="pv-divider" />
+
+    <h2>Our Vision for the Future</h2>
+    <p>As Nigeria's digital economy surges, PropVendor is dedicated to becoming Africa's most dependable marketplace platform for high-value asset discovery and acquisition. We welcome buyers, sellers, landlords, and automotive professionals to experience commerce built on integrity, innovation, and respect.</p>
+</div>
+HTML;
+}
+
 
 function propvendor_marketplace_create_default_pages() {
     $pages = array(
@@ -1274,7 +1687,7 @@ function propvendor_marketplace_create_default_pages() {
         ),
         'about-propvendor' => array(
             'title' => 'About PropVendor',
-            'content' => '<p>PropVendor links Nigerian buyers with reputable vendors for properties, land sales and vehicles across the country.</p>',
+            'content' => propvendor_marketplace_get_about_us_content(),
         ),
         'contact-us' => array(
             'title' => 'Contact Us',
@@ -1282,11 +1695,11 @@ function propvendor_marketplace_create_default_pages() {
         ),
         'help-and-faqs' => array(
             'title' => 'Help and FAQs',
-            'content' => '<h3>Frequently asked questions</h3><p>How do I list a property? Who approves listings? How do I request a viewing?</p>',
+            'content' => propvendor_marketplace_get_help_faqs_content(),
         ),
         'privacy-policy' => array(
             'title' => 'Privacy Policy',
-            'content' => '<p>PropVendor respects customer and vendor privacy and stores contact details securely for marketplace operations.</p>',
+            'content' => propvendor_marketplace_get_privacy_policy_content(),
         ),
         'terms-and-conditions' => array(
             'title' => 'Terms and Conditions',
@@ -1313,6 +1726,14 @@ function propvendor_marketplace_create_default_pages() {
     foreach ($pages as $slug => $page) {
         $existing = get_page_by_path($slug);
         if ($existing) {
+            if ($slug === 'privacy-policy' && !get_option('propvendor_privacy_policy_published_18_4a') && false !== strpos($existing->post_content, 'privacy-policy-tutorial')) {
+                wp_update_post(array(
+                    'ID'           => $existing->ID,
+                    'post_content' => $page['content'],
+                    'post_status'  => 'publish',
+                ));
+                update_option('propvendor_privacy_policy_published_18_4a', 1);
+            }
             continue;
         }
 
@@ -1348,6 +1769,52 @@ function propvendor_marketplace_ensure_customer_inbox_page() {
     }
 }
 add_action('init', 'propvendor_marketplace_ensure_customer_inbox_page');
+
+function propvendor_marketplace_ensure_default_pages_content_updated() {
+    // 1. Ensure Privacy Policy is published & sanitized
+    if (!get_option('propvendor_privacy_policy_sanitized_18_4b')) {
+        $page = get_post(3);
+        if (!$page || ('privacy-policy' !== $page->post_name && 3 !== (int) $page->ID)) {
+            $page = get_page_by_path('privacy-policy');
+        }
+        if ($page) {
+            wp_update_post(array(
+                'ID'           => $page->ID,
+                'post_content' => propvendor_marketplace_get_privacy_policy_content(),
+                'post_status'  => 'publish',
+            ));
+            update_option('propvendor_privacy_policy_sanitized_18_4b', 1);
+            update_option('propvendor_privacy_policy_published_18_4a', 1);
+        }
+    }
+
+    // 2. Ensure Help & FAQs content is updated with semantic accordion
+    if (!get_option('propvendor_help_faqs_updated_18_4b')) {
+        $faq_page = get_page_by_path('help-and-faqs');
+        if ($faq_page && (false !== strpos($faq_page->post_content, 'Frequently asked questions') || false !== strpos($faq_page->post_content, 'How do I list a property'))) {
+            wp_update_post(array(
+                'ID'           => $faq_page->ID,
+                'post_content' => propvendor_marketplace_get_help_faqs_content(),
+                'post_status'  => 'publish',
+            ));
+            update_option('propvendor_help_faqs_updated_18_4b', 1);
+        }
+    }
+
+    // 3. Ensure About Us content is updated with strategic narrative & 3 pillars
+    if (!get_option('propvendor_about_us_updated_18_4b')) {
+        $about_page = get_page_by_path('about-propvendor');
+        if ($about_page && (false !== strpos($about_page->post_content, 'links Nigerian buyers') || false !== strpos($about_page->post_content, 'across the country'))) {
+            wp_update_post(array(
+                'ID'           => $about_page->ID,
+                'post_content' => propvendor_marketplace_get_about_us_content(),
+                'post_status'  => 'publish',
+            ));
+            update_option('propvendor_about_us_updated_18_4b', 1);
+        }
+    }
+}
+add_action('init', 'propvendor_marketplace_ensure_default_pages_content_updated', 20);
 
 function propvendor_marketplace_public_listing_meta_query() {
     $moderation_keys = array('propvendor_listing_status', 'propvendor_status');
@@ -3323,14 +3790,16 @@ function propvendor_marketplace_browse_shortcode() {
     <div class="propvendor-browse-hero">
         <div class="propvendor-browse-hero-overlay"></div>
         <div class="propvendor-browse-hero-content">
-            <nav class="propvendor-browse-breadcrumb" aria-label="' . esc_attr__('Breadcrumb', 'propvendor-marketplace') . '">
-                <a href="' . esc_url(home_url('/')) . '">' . esc_html__('Home', 'propvendor-marketplace') . '</a>
-                <span class="breadcrumb-sep">/</span>
-                <span>' . esc_html__('Browse Listings', 'propvendor-marketplace') . '</span>
-            </nav>
-            <div class="propvendor-browse-status-pill">
-                <span class="trust-dot"></span>
-                <span>' . esc_html($active_filters_text) . '</span>
+            <div class="propvendor-browse-header propvendor-browse-breadcrumb-wrapper">
+                <nav class="propvendor-browse-breadcrumb" aria-label="' . esc_attr__('Breadcrumb', 'propvendor-marketplace') . '">
+                    <a href="' . esc_url(home_url('/')) . '">' . esc_html__('Home', 'propvendor-marketplace') . '</a>
+                    <span class="breadcrumb-sep">/</span>
+                    <span>' . esc_html__('Browse Listings', 'propvendor-marketplace') . '</span>
+                </nav>
+                <div class="propvendor-browse-status-pill propvendor-active-filters">
+                    <span class="trust-dot"></span>
+                    <span>' . esc_html($active_filters_text) . '</span>
+                </div>
             </div>
             <h1 class="propvendor-browse-hero-title">' . esc_html__('Browse Verified Listings', 'propvendor-marketplace') . '</h1>
             <p class="propvendor-browse-hero-subtitle">' . esc_html__('Explore properties, land, and vehicles across all 37 Nigerian states.', 'propvendor-marketplace') . '</p>
@@ -3849,7 +4318,12 @@ function propvendor_marketplace_vendor_dashboard_shortcode() {
     // Stage 3: Vendor Listing Quota Card
     $output .= propvendor_marketplace_render_vendor_quota_card($user_id);
 
-    $output .= '<div class="propvendor-dashboard-header"><div><h2 id="propvendor-dashboard-title">My listings</h2><p>Manage and track your marketplace submissions.</p></div><a class="propvendor-dashboard-add" href="' . esc_url(home_url('/submit-a-listing/')) . '">Add New Listing</a></div>';
+    $total_listings = !empty($listings) ? count($listings) : 0;
+    $output .= '<div class="propvendor-dashboard-header"><div><h2 id="propvendor-dashboard-title">' . esc_html__('My listings', 'propvendor-marketplace') . '</h2><p>' . esc_html__('Manage and track your marketplace submissions.', 'propvendor-marketplace') . '</p></div>';
+    if ($total_listings > 0) {
+        $output .= '<a class="propvendor-dashboard-add" href="' . esc_url(home_url('/submit-a-listing/')) . '">' . esc_html__('Add New Listing', 'propvendor-marketplace') . '</a>';
+    }
+    $output .= '</div>';
     if (empty($listings)) {
         $output .= '<div class="propvendor-dashboard-empty"><p class="propvendor-empty">You have no listings yet. Add your first listing to get started.</p><a class="propvendor-dashboard-add" href="' . esc_url(home_url('/submit-a-listing/')) . '">Add your first listing</a></div>';
     } else {
@@ -3904,7 +4378,7 @@ function propvendor_marketplace_vendor_dashboard_shortcode() {
                 $actions .= ' <a href="' . esc_url(get_permalink($listing)) . '">View</a>';
             }
 
-            $output .= '<tr>';
+            $output .= '<tr class="propvendor-vendor-listing-card">';
             $output .= '<td data-label="Listing"><strong>' . esc_html(get_the_title($listing)) . '</strong></td>';
             $output .= '<td data-label="Category / Type">' . esc_html($category) . '</td>';
             $output .= '<td data-label="Location">' . esc_html($location ?: 'Not provided') . '</td>';
@@ -12322,14 +12796,19 @@ function propvendor_marketplace_hero_search_shortcode($atts = array()) {
     $states = function_exists('propvendor_marketplace_get_nigerian_states') ? propvendor_marketplace_get_nigerian_states() : array();
     $action_url = esc_url(home_url('/browse-listings/'));
     ?>
+    <?php
+    $slide1_webp = plugins_url('assets/images/hero-real-estate.webp', __FILE__);
+    $slide2_webp = plugins_url('assets/images/hero-vehicles.webp', __FILE__);
+    $slide3_webp = plugins_url('assets/images/hero-land.webp', __FILE__);
+    ?>
     <section class="propvendor-hero" aria-label="Marketplace Hero Search">
         <div class="propvendor-hero-slides" aria-hidden="true">
-            <!-- Slide 1: Modern Real Estate -->
-            <div class="propvendor-slide active" style="background-image: url('https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1920&q=80');"></div>
-            <!-- Slide 2: Verified Vehicles -->
-            <div class="propvendor-slide" style="background-image: url('https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1920&q=80');"></div>
-            <!-- Slide 3: Surveyed Land & Commercial Plots -->
-            <div class="propvendor-slide" style="background-image: url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1920&q=80');"></div>
+            <!-- Slide 1: Modern Real Estate (Optimized Local WebP) -->
+            <div class="propvendor-slide active" style="background-image: url('<?php echo esc_url($slide1_webp); ?>');"></div>
+            <!-- Slide 2: Verified Vehicles (Optimized Local WebP) -->
+            <div class="propvendor-slide" style="background-image: url('<?php echo esc_url($slide2_webp); ?>');"></div>
+            <!-- Slide 3: Surveyed Land & Commercial Plots (Optimized Local WebP) -->
+            <div class="propvendor-slide" style="background-image: url('<?php echo esc_url($slide3_webp); ?>');"></div>
         </div>
         <div class="propvendor-hero-overlay"></div>
         <div class="propvendor-hero-content">

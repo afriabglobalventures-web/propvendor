@@ -971,4 +971,155 @@
         });
     }
 
+    /**
+     * 11. Modern Mobile Off-Canvas Navigation Drawer Controller (Phase 18.5 / Phase 2)
+     */
+    function initMobileDrawer() {
+        var drawer = document.getElementById('pv-mobile-drawer');
+        var backdrop = document.getElementById('pv-drawer-backdrop');
+        if (!drawer || !backdrop) {
+            return;
+        }
+
+        // Target all mobile menu toggles (Astra's hamburger buttons and any custom triggers)
+        var triggers = document.querySelectorAll('.main-header-menu-toggle, .menu-toggle, [data-pv-drawer-trigger]');
+        var closeBtn = drawer.querySelector('.pv-drawer-close');
+        var navLinks = drawer.querySelectorAll('.pv-drawer-link, .pv-drawer-btn');
+        var lastFocusedElement = null;
+
+        function openDrawer(trigger) {
+            lastFocusedElement = trigger || document.activeElement;
+            drawer.classList.add('pv-drawer--open');
+            backdrop.classList.add('pv-drawer-backdrop--open');
+            drawer.setAttribute('aria-hidden', 'false');
+            backdrop.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('pv-drawer-open');
+
+            triggers.forEach(function(btn) {
+                btn.setAttribute('aria-expanded', 'true');
+                btn.setAttribute('aria-controls', 'pv-mobile-drawer');
+            });
+
+            // Focus management: move focus into the close button or first actionable element
+            if (closeBtn) {
+                setTimeout(function() {
+                    closeBtn.focus();
+                }, 50);
+            }
+        }
+
+        function closeDrawer() {
+            if (!drawer.classList.contains('pv-drawer--open')) {
+                return;
+            }
+            drawer.classList.remove('pv-drawer--open');
+            backdrop.classList.remove('pv-drawer-backdrop--open');
+            drawer.setAttribute('aria-hidden', 'true');
+            backdrop.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('pv-drawer-open');
+
+            triggers.forEach(function(btn) {
+                btn.setAttribute('aria-expanded', 'false');
+            });
+
+            // Restore focus to the trigger element that opened the drawer
+            if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+                lastFocusedElement.focus();
+            }
+        }
+
+        // Attach event listeners to hamburger triggers
+        triggers.forEach(function(btn) {
+            if (btn.getAttribute('data-pv-drawer-init') === '1') {
+                return;
+            }
+            btn.setAttribute('data-pv-drawer-init', '1');
+            btn.setAttribute('aria-controls', 'pv-mobile-drawer');
+
+            btn.addEventListener('click', function(e) {
+                if (window.innerWidth <= 921) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (drawer.classList.contains('pv-drawer--open')) {
+                        closeDrawer();
+                    } else {
+                        openDrawer(this);
+                    }
+                }
+            });
+        });
+
+        // Close button click
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                closeDrawer();
+            });
+        }
+
+        // Backdrop click to dismiss
+        backdrop.addEventListener('click', function(e) {
+            e.preventDefault();
+            closeDrawer();
+        });
+
+        // Close drawer on internal navigation link click
+        navLinks.forEach(function(link) {
+            link.addEventListener('click', function() {
+                closeDrawer();
+            });
+        });
+
+        // Keyboard navigation: Escape key to close & focus trapping
+        document.addEventListener('keydown', function(e) {
+            if (!drawer.classList.contains('pv-drawer--open')) {
+                return;
+            }
+
+            // Escape key
+            if (e.key === 'Escape' || e.keyCode === 27) {
+                e.preventDefault();
+                closeDrawer();
+                return;
+            }
+
+            // Tab key focus trap
+            if (e.key === 'Tab' || e.keyCode === 9) {
+                var focusables = drawer.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])');
+                if (!focusables || focusables.length === 0) {
+                    return;
+                }
+                var firstFocusable = focusables[0];
+                var lastFocusable = focusables[focusables.length - 1];
+
+                if (e.shiftKey) {
+                    // Shift + Tab
+                    if (document.activeElement === firstFocusable) {
+                        e.preventDefault();
+                        lastFocusable.focus();
+                    }
+                } else {
+                    // Tab
+                    if (document.activeElement === lastFocusable) {
+                        e.preventDefault();
+                        firstFocusable.focus();
+                    }
+                }
+            }
+        });
+
+        // Automatically close drawer if user resizes window to desktop breakpoint (>921px)
+        window.addEventListener('resize', function() {
+            if (window.innerWidth > 921 && drawer.classList.contains('pv-drawer--open')) {
+                closeDrawer();
+            }
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initMobileDrawer);
+    } else {
+        initMobileDrawer();
+    }
+
 })();

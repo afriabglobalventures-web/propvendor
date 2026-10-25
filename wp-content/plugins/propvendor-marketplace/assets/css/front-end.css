@@ -5,6 +5,18 @@
  * =========================================================================
  */
 
+/**
+ * Phase 18.4A.1: Font Display Swap for Icon Fonts to Prevent Render-Blocking FOIT
+ */
+@font-face {
+    font-family: 'dashicons';
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Astra';
+    font-display: swap;
+}
+
 :root {
     /* --- Brand Core Palette --- */
     --pv-color-navy: #142B3B;
@@ -7581,3 +7593,507 @@ body.page-id-194 .entry-header,
         text-wrap: balance;
     }
 }
+
+
+/* ==========================================================================
+   PHASE 18.4B.1: RESPONSIVE BROWSE HEADER, LISTING CARD CENTERING & FAQS
+   ========================================================================== */
+
+/* 1. Responsive Browse Header (Pill Badge Collision Prevention) */
+.propvendor-browse-header,
+.propvendor-browse-breadcrumb-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.propvendor-browse-breadcrumb {
+    margin-bottom: 0 !important;
+}
+
+.propvendor-active-filters,
+.propvendor-browse-status-pill {
+    margin-bottom: 0 !important;
+}
+
+@media (max-width: 768px) {
+    .propvendor-browse-header,
+    .propvendor-browse-breadcrumb-wrapper {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 8px !important;
+    }
+
+    .propvendor-active-filters,
+    .propvendor-browse-status-pill {
+        position: static !important;
+        margin-top: 4px !important;
+        float: none !important;
+        align-self: flex-start !important;
+    }
+}
+
+/* 2. Listing Card Mobile Centering & Actions Alignment */
+@media (max-width: 768px) {
+    .propvendor-vendor-listing-card,
+    .propvendor-dashboard-table tr {
+        margin: 12px auto !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .propvendor-vendor-listing-card .propvendor-dashboard-actions,
+    .propvendor-vendor-listing-card-actions,
+    .propvendor-dashboard-table tr td:last-child {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 10px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .propvendor-dashboard-actions a {
+        flex: 1 1 auto !important;
+        text-align: center !important;
+    }
+}
+
+/* 3. Semantic HTML FAQ Accordion (<details>/<summary>) */
+.propvendor-faq-accordion {
+    max-width: 860px;
+    margin: 1.5rem auto 3rem;
+}
+
+.propvendor-faq-intro {
+    font-size: 1.05rem;
+    color: var(--pv-text-secondary, #475569);
+    margin-bottom: 1.75rem;
+    line-height: 1.6;
+}
+
+.pv-faq-item {
+    background: var(--pv-color-surface, #ffffff);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    border-radius: var(--pv-radius-md, 8px);
+    margin-bottom: 1rem;
+    overflow: hidden;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.pv-faq-item:hover {
+    border-color: var(--pv-color-teal, #087F8C);
+    box-shadow: 0 4px 12px rgba(8, 127, 140, 0.08);
+}
+
+.pv-faq-item[open] {
+    border-color: var(--pv-color-teal, #087F8C);
+    box-shadow: 0 4px 16px rgba(8, 127, 140, 0.12);
+}
+
+.pv-faq-question {
+    padding: 1rem 1.25rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--pv-color-navy, #142B3B);
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+}
+
+.pv-faq-question::-webkit-details-marker {
+    display: none;
+}
+
+.pv-faq-question::after {
+    content: '+';
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--pv-color-teal, #087F8C);
+    transition: transform 0.2s ease;
+    margin-left: 12px;
+}
+
+.pv-faq-item[open] .pv-faq-question::after {
+    content: '−';
+    transform: rotate(0deg);
+}
+
+.pv-faq-answer {
+    padding: 0 1.25rem 1.25rem;
+    font-size: 0.95rem;
+    line-height: 1.65;
+    color: var(--pv-text-secondary, #475569);
+    border-top: 1px solid var(--pv-color-border-subtle, #f1f5f9);
+    padding-top: 1rem;
+}
+
+.pv-faq-answer p:last-child {
+    margin-bottom: 0;
+}
+
+/* 4. About Us Strategic Narrative & 3 Core Pillars Grid */
+.propvendor-about-content {
+    max-width: 900px;
+    margin: 1.5rem auto 3rem;
+    line-height: 1.7;
+    color: var(--pv-text-main, #0f172a);
+}
+
+.propvendor-about-hero-lead .pv-lead-text {
+    font-size: 1.15rem;
+    font-weight: 500;
+    color: var(--pv-color-navy, #142B3B);
+    line-height: 1.75;
+}
+
+.pv-divider {
+    border: 0;
+    height: 1px;
+    background: var(--pv-color-border, #e2e8f0);
+    margin: 2rem 0;
+}
+
+.propvendor-pillars-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.5rem;
+    margin: 1.5rem 0 2rem;
+}
+
+.pv-pillar-card {
+    background: var(--pv-color-surface, #ffffff);
+    border: 1px solid var(--pv-color-border, #e2e8f0);
+    border-top: 4px solid var(--pv-color-teal, #087F8C);
+    border-radius: var(--pv-radius-md, 8px);
+    padding: 1.5rem 1.25rem;
+    box-shadow: 0 2px 8px rgba(20, 43, 59, 0.04);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pv-pillar-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(8, 127, 140, 0.1);
+}
+
+.pv-pillar-card h3 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--pv-color-navy, #142B3B);
+    margin: 0 0 0.75rem;
+}
+
+.pv-pillar-card p {
+    font-size: 0.92rem;
+    color: var(--pv-text-secondary, #475569);
+    margin: 0;
+    line-height: 1.6;
+}
+
+/* ==========================================================================
+   PHASE 18.5 / PHASE 2: MODERN MOBILE OFF-CANVAS DRAWER & PAGE TITLE CENTERING
+   ========================================================================== */
+
+/* 1. Backdrop Overlay */
+.pv-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(17, 24, 39, 0.45);
+    z-index: 99998;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.pv-drawer-backdrop.pv-drawer-backdrop--open {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* 2. Off-Canvas Drawer Panel */
+.pv-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 320px;
+    max-width: 86vw;
+    background: #FFFFFF;
+    z-index: 99999;
+    box-shadow: -4px 0 24px rgba(17, 24, 39, 0.12);
+    transform: translateX(100%);
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.pv-drawer.pv-drawer--open {
+    transform: translateX(0);
+}
+
+.pv-drawer-inner {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: calc(1.1rem + env(safe-area-inset-top, 0px)) 1.25rem calc(1.25rem + env(safe-area-inset-bottom, 0px));
+    background: #FFFFFF;
+    box-sizing: border-box;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* 3. Drawer Header */
+.pv-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 1.15rem;
+    border-bottom: 1px solid #E5E7EB;
+}
+
+.pv-drawer-brand {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #111827;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: baseline;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    letter-spacing: -0.01em;
+}
+
+.pv-drawer-brand:hover,
+.pv-drawer-brand:focus {
+    color: #111827;
+    text-decoration: none;
+}
+
+.pv-drawer-brand-domain {
+    color: #0B666A;
+    font-weight: 800;
+}
+
+.pv-drawer-close {
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #111827;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.pv-drawer-close:hover,
+.pv-drawer-close:focus {
+    background: #F9FAFB;
+    border-color: #0B666A;
+    color: #0B666A;
+    outline: none;
+}
+
+.pv-drawer-close:focus-visible {
+    outline: 2px solid #0B666A;
+    outline-offset: 2px;
+}
+
+/* 4. Drawer Navigation List */
+.pv-drawer-nav {
+    flex: 1 1 auto;
+    padding-top: 1rem;
+}
+
+.pv-drawer-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.pv-drawer-item {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.pv-drawer-link {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 11px 14px;
+    color: #111827;
+    text-decoration: none;
+    font-size: 0.98rem;
+    font-weight: 500;
+    border-radius: 8px;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.pv-drawer-link:hover {
+    background: #F9FAFB;
+    color: #0B666A;
+    text-decoration: none;
+}
+
+.pv-drawer-link:focus-visible {
+    outline: 2px solid #0B666A;
+    outline-offset: 2px;
+}
+
+.pv-drawer-link-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    color: #475569;
+}
+
+.pv-drawer-link-icon svg {
+    width: 20px;
+    height: 20px;
+    display: block;
+    stroke: currentColor;
+}
+
+.pv-drawer-link-text {
+    flex: 1 1 auto;
+    line-height: 1.35;
+}
+
+/* 5. Active Navigation Item State */
+.pv-drawer-item.pv-drawer-item--active .pv-drawer-link {
+    background: #E4F1EE !important;
+    color: #0B666A !important;
+    font-weight: 600 !important;
+}
+
+.pv-drawer-item.pv-drawer-item--active .pv-drawer-link-icon {
+    color: #0B666A !important;
+}
+
+.pv-drawer-item.pv-drawer-item--active .pv-drawer-link-icon svg {
+    stroke: #0B666A !important;
+}
+
+/* 6. Visual Divider */
+.pv-drawer-divider {
+    height: 1px;
+    background: #E5E7EB;
+    margin: 1.15rem 0 1rem;
+    border: none;
+}
+
+/* 7. Footer Actions Layout */
+.pv-drawer-footer {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding-top: 0.25rem;
+}
+
+.pv-drawer-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 14px;
+    font-size: 0.92rem;
+    font-weight: 600;
+    text-align: center;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+    min-height: 42px;
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+.pv-drawer-btn:focus-visible {
+    outline: 2px solid #0B666A;
+    outline-offset: 2px;
+}
+
+.pv-drawer-btn--primary {
+    background: #0B666A;
+    color: #FFFFFF !important;
+    border: 1px solid #0B666A;
+}
+
+.pv-drawer-btn--primary:hover,
+.pv-drawer-btn--primary:focus {
+    background: #084C4F;
+    border-color: #084C4F;
+    color: #FFFFFF !important;
+    text-decoration: none;
+}
+
+.pv-drawer-btn--outline {
+    background: #FFFFFF;
+    color: #111827 !important;
+    border: 1px solid #E5E7EB;
+}
+
+.pv-drawer-btn--outline:hover,
+.pv-drawer-btn--outline:focus {
+    background: #F9FAFB;
+    border-color: #0B666A;
+    color: #0B666A !important;
+    text-decoration: none;
+}
+
+/* 8. Body Background Scroll-Lock */
+body.pv-drawer-open {
+    overflow: hidden !important;
+    touch-action: none;
+}
+
+/* 9. Astra Dropdown Suppression on Mobile & Tablet */
+@media (max-width: 921px) {
+    #ast-mobile-header .ast-mobile-header-content {
+        display: none !important;
+    }
+}
+
+/* 9b. Desktop Suppression (Above 921px) */
+@media (min-width: 922px) {
+    #pv-mobile-drawer,
+    #pv-drawer-backdrop {
+        display: none !important;
+    }
+}
+
+/* 10. Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+    .pv-drawer,
+    .pv-drawer-backdrop {
+        transition: none !important;
+    }
+}
+
+/* 11. Scoped Page Title Centering (Page IDs 13, 15, 17, and Staging 19) */
+body.page-id-13 .entry-header .entry-title,
+body.page-id-15 .entry-header .entry-title,
+body.page-id-17 .entry-header .entry-title,
+body.page-id-19 .entry-header .entry-title,
+body.page-id-19 .propvendor-static-title {
+    text-align: center !important;
+}
+
