@@ -6365,6 +6365,16 @@ footer.site-footer .ast-footer-copyright a:focus-visible {
     transition: border-color var(--pv-transition-fast), box-shadow var(--pv-transition-fast);
 }
 
+.propvendor-form-group .pv-select {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding-right: 2.5rem;
+    min-height: 44px;
+    line-height: 1.4;
+    cursor: pointer;
+}
+
 .propvendor-form-group .pv-input:focus,
 .propvendor-form-group .pv-select:focus,
 .propvendor-form-group .pv-textarea:focus {
@@ -7473,8 +7483,13 @@ body.page-id-188 .entry-header,
 body.page-id-190 .entry-header,
 body.page-id-192 .entry-header,
 body.page-id-194 .entry-header,
+body.page-id-16 .entry-header,
+.page-id-16 .entry-header,
+body.page-id-16 .entry-title,
+.page-id-16 .entry-title,
 .ast-article-single:has(.propvendor-hero) .entry-header,
 .ast-article-single:has(.propvendor-browse) .entry-header,
+.ast-article-single:has(.propvendor-contact-page) .entry-header,
 .ast-article-single:has(.propvendor-auth-portal-wrapper) .entry-header,
 .ast-article-single:has(.propvendor-auth-gate-card) .entry-header,
 .ast-article-single:has(.propvendor-dashboard) .entry-header {
