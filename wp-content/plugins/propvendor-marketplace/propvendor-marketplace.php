@@ -1197,6 +1197,7 @@ function propvendor_marketplace_activate() {
     propvendor_marketplace_create_credit_ledger_table();
     propvendor_marketplace_create_payment_tables();
     propvendor_marketplace_create_notifications_table();
+    propvendor_marketplace_create_contact_reports_table();
     propvendor_marketplace_schedule_cron_jobs();
     flush_rewrite_rules();
 }
@@ -1439,13 +1440,13 @@ function propvendor_marketplace_get_privacy_policy_content() {
 <p><strong>Governing Standard:</strong> Nigeria Data Protection Act (NDPA) 2023</p>
 <hr />
 <h2>1. Introduction and Data Controller Information</h2>
-<p>PropVendor Technologies Ltd. ("PropVendor", "we", "our", or "us") operates the online property, land, and vehicle marketplace platform accessible at <code>https://propvendor.ng</code> (and associated local and staging domains).</p>
+<p>PropVendor Technologies Ltd. ("PropVendor", "we", "our", or "us") operates the online property, land, and vehicle marketplace platform accessible at <code>https://propvendor.com.ng</code> (and associated local and staging domains).</p>
 <p>For the purposes of the <strong>Nigeria Data Protection Act 2023 (NDPA)</strong>, PropVendor Technologies Ltd. is the <strong>Data Controller</strong> responsible for your personal data.</p>
 <ul>
 <li><strong>Data Controller:</strong> PropVendor Technologies Ltd.</li>
 <li><strong>Principal Address:</strong> Lagos, Nigeria</li>
-<li><strong>Privacy Office Email:</strong> <code>privacy@propvendor.ng</code></li>
-<li><strong>Customer Support Email:</strong> <code>support@propvendor.ng</code></li>
+<li><strong>Privacy Office Email:</strong> <code>privacy@propvendor.com.ng</code></li>
+<li><strong>Customer Support Email:</strong> <code>support@propvendor.com.ng</code></li>
 </ul>
 <hr />
 <h2>2. Categories of Personal Data We Collect</h2>
@@ -1537,7 +1538,7 @@ function propvendor_marketplace_get_privacy_policy_content() {
 <p><strong>Right to Object:</strong> You may object at any time to the processing of your personal data for direct marketing or legitimate-interest purposes.</p>
 <p><strong>Right to Data Portability:</strong> You may request transmission of your personal data to another controller in a structured, commonly used format.</p>
 <p><strong>Right to Lodge a Complaint:</strong> You have the right to lodge a complaint with the <strong>Nigeria Data Protection Commission (NDPC)</strong> (<code>https://ndpc.gov.ng</code>) if you believe our processing violates the NDPA.</p>
-<p>To exercise any of these rights, please contact our privacy desk at <code>privacy@propvendor.ng</code>.</p>
+<p>To exercise any of these rights, please contact our privacy desk at <code>privacy@propvendor.com.ng</code>.</p>
 <hr />
 <h2>8. Third-Party Links and External Services</h2>
 <p>Our marketplace contains links to external websites, maps, and social networks. We are not responsible for the privacy practices or content of third-party platforms. We encourage users to read the privacy notices of external websites they visit.</p>
@@ -1549,8 +1550,8 @@ function propvendor_marketplace_get_privacy_policy_content() {
 <p>If you have questions, concerns, or requests regarding this Privacy Policy or our data protection practices, please contact us:</p>
 <ul>
 <li><strong>Entity:</strong> PropVendor Technologies Ltd.</li>
-<li><strong>Email:</strong> <code>privacy@propvendor.ng</code></li>
-<li><strong>Support:</strong> <code>support@propvendor.ng</code></li>
+<li><strong>Email:</strong> <code>privacy@propvendor.com.ng</code></li>
+<li><strong>Support:</strong> <code>support@propvendor.com.ng</code></li>
 <li><strong>Location:</strong> Lagos, Nigeria</li>
 </ul>
 HTML;
@@ -1594,7 +1595,7 @@ function propvendor_marketplace_get_help_faqs_content() {
     <details class="pv-faq-item">
         <summary class="pv-faq-question"><strong>How do I report a suspicious listing or unverified agent?</strong></summary>
         <div class="pv-faq-answer">
-            <p>If you encounter a listing with inaccurate information, an agent demanding unauthorized fees, or suspicious behavior, please notify us immediately through our <a href="/contact-us/">Contact Us</a> form or email <code>safety@propvendor.ng</code>. We review and take swift disciplinary and moderation action on all reports.</p>
+            <p>If you encounter a listing with inaccurate information, an agent demanding unauthorized fees, or suspicious behavior, please notify us immediately through our <a href="/contact-us/">Contact Us</a> form or email <code>safety@propvendor.com.ng</code>. We review and take swift disciplinary and moderation action on all reports.</p>
         </div>
     </details>
 </div>
@@ -1707,7 +1708,7 @@ function propvendor_marketplace_create_default_pages() {
         ),
         'listing-and-transaction-safety-guidelines' => array(
             'title' => 'Listing and Transaction Safety Guidelines',
-            'content' => '<p>Verify identity, confirm documentation, use trusted communication channels and avoid cash-only transactions without due diligence.</p>',
+            'content' => '[propvendor_safety_guidelines]',
         ),
         'login-and-my-account' => array(
             'title' => 'Login and My Account',
@@ -1755,6 +1756,16 @@ function propvendor_marketplace_create_default_pages() {
 }
 
 function propvendor_marketplace_ensure_customer_inbox_page() {
+    // Persistent option guard: Fast exit if page creation already verified
+    if (get_option('propvendor_customer_inbox_page_created')) {
+        return;
+    }
+
+    // Never execute database lookups on standard frontend page requests
+    if (!is_admin() && !defined('WP_CLI')) {
+        return;
+    }
+
     $existing = get_page_by_path('customer-inbox');
     if (!$existing) {
         wp_insert_post(
@@ -1767,10 +1778,21 @@ function propvendor_marketplace_ensure_customer_inbox_page() {
             )
         );
     }
+    update_option('propvendor_customer_inbox_page_created', 1);
 }
 add_action('init', 'propvendor_marketplace_ensure_customer_inbox_page');
 
 function propvendor_marketplace_ensure_default_pages_content_updated() {
+    // 1. Persistent master guard: Fast exit immediately if default pages content check is already complete
+    if (get_option('propvendor_default_pages_content_v19_0_complete')) {
+        return;
+    }
+
+    // 2. Performance guard: NEVER execute database lookups, post updates, or content checks on standard frontend page requests
+    if (!is_admin() && !defined('WP_CLI') && !doing_action('activate_propvendor-marketplace/propvendor-marketplace.php')) {
+        return;
+    }
+
     // 1. Ensure Privacy Policy is published & sanitized
     if (!get_option('propvendor_privacy_policy_sanitized_18_4b')) {
         $page = get_post(3);
@@ -1785,6 +1807,8 @@ function propvendor_marketplace_ensure_default_pages_content_updated() {
             ));
             update_option('propvendor_privacy_policy_sanitized_18_4b', 1);
             update_option('propvendor_privacy_policy_published_18_4a', 1);
+        } else {
+            update_option('propvendor_privacy_policy_sanitized_18_4b', 1);
         }
     }
 
@@ -1797,8 +1821,8 @@ function propvendor_marketplace_ensure_default_pages_content_updated() {
                 'post_content' => propvendor_marketplace_get_help_faqs_content(),
                 'post_status'  => 'publish',
             ));
-            update_option('propvendor_help_faqs_updated_18_4b', 1);
         }
+        update_option('propvendor_help_faqs_updated_18_4b', 1);
     }
 
     // 3. Ensure About Us content is updated with strategic narrative & 3 pillars
@@ -1810,9 +1834,63 @@ function propvendor_marketplace_ensure_default_pages_content_updated() {
                 'post_content' => propvendor_marketplace_get_about_us_content(),
                 'post_status'  => 'publish',
             ));
-            update_option('propvendor_about_us_updated_18_4b', 1);
         }
+        update_option('propvendor_about_us_updated_18_4b', 1);
     }
+
+    // 4. Ensure Safety Guidelines page content uses the [propvendor_safety_guidelines] shortcode
+    if (!get_option('propvendor_safety_guidelines_updated_18_8')) {
+        $safety_page = get_page_by_path('listing-and-transaction-safety-guidelines');
+        if (!$safety_page) {
+            $safety_page = get_post(17);
+        }
+        if ($safety_page && (false !== strpos($safety_page->post_content, 'Verify identity') || trim($safety_page->post_content) === '' || false !== strpos($safety_page->post_content, 'cash-only transactions'))) {
+            wp_update_post(array(
+                'ID'           => $safety_page->ID,
+                'post_content' => '[propvendor_safety_guidelines]',
+                'post_status'  => 'publish',
+            ));
+        }
+        update_option('propvendor_safety_guidelines_updated_18_8', 1);
+    }
+
+    // 5. Phase 19.0: Ensure Privacy Policy, Help & FAQs, and About Us content reflect @propvendor.com.ng
+    if (!get_option('propvendor_support_emails_updated_19_0')) {
+        $privacy_page = get_post(3);
+        if (!$privacy_page || ('privacy-policy' !== $privacy_page->post_name && 3 !== (int) $privacy_page->ID)) {
+            $privacy_page = get_page_by_path('privacy-policy');
+        }
+        if ($privacy_page && false !== strpos($privacy_page->post_content, 'propvendor.ng')) {
+            wp_update_post(array(
+                'ID'           => $privacy_page->ID,
+                'post_content' => propvendor_marketplace_get_privacy_policy_content(),
+                'post_status'  => 'publish',
+            ));
+        }
+
+        $faq_page = get_page_by_path('help-and-faqs');
+        if ($faq_page && false !== strpos($faq_page->post_content, 'propvendor.ng')) {
+            wp_update_post(array(
+                'ID'           => $faq_page->ID,
+                'post_content' => propvendor_marketplace_get_help_faqs_content(),
+                'post_status'  => 'publish',
+            ));
+        }
+
+        $about_page = get_page_by_path('about-propvendor');
+        if ($about_page && false !== strpos($about_page->post_content, 'propvendor.ng')) {
+            wp_update_post(array(
+                'ID'           => $about_page->ID,
+                'post_content' => propvendor_marketplace_get_about_us_content(),
+                'post_status'  => 'publish',
+            ));
+        }
+
+        update_option('propvendor_support_emails_updated_19_0', 1);
+    }
+
+    // Mark master option so it never runs again
+    update_option('propvendor_default_pages_content_v19_0_complete', 1);
 }
 add_action('init', 'propvendor_marketplace_ensure_default_pages_content_updated', 20);
 
@@ -4445,17 +4523,34 @@ add_shortcode('propvendor_vendor_dashboard', 'propvendor_marketplace_vendor_dash
  */
 
 /**
- * Handle Contact Form submission
+ * Phase 19.1: Handle Contact Form & Safety Report submission
+ * 
+ * Validates nonces, applies rate limits, checks for duplicate submissions,
+ * verifies optional listing references, generates a collision-safe ticket reference (TKT-XXXXXX),
+ * persists the report to {prefix}propvendor_contact_reports with full audit history,
+ * and notifies platform administrators.
  */
 function propvendor_marketplace_handle_contact_submission() {
     if (!isset($_POST['propvendor_contact_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['propvendor_contact_nonce'])), 'propvendor_contact_action')) {
         return array('status' => 'error', 'message' => esc_html__('Security verification failed. Please try again.', 'propvendor-marketplace'));
     }
 
-    $name = sanitize_text_field(wp_unslash($_POST['pv_contact_name'] ?? ''));
-    $email = sanitize_email(wp_unslash($_POST['pv_contact_email'] ?? ''));
-    $phone = sanitize_text_field(wp_unslash($_POST['pv_contact_phone'] ?? ''));
-    $topic = sanitize_text_field(wp_unslash($_POST['pv_contact_topic'] ?? 'General Enquiry'));
+    $ip = sanitize_text_field($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1');
+
+    // 1. Rate Limiting: Max 5 submissions per 15 minutes per IP
+    $rate_key = 'pv_contact_rate_' . md5($ip);
+    $attempts = (int) get_transient($rate_key);
+    if ($attempts >= 5) {
+        return array(
+            'status'  => 'error',
+            'message' => esc_html__('Too many requests submitted from your IP address. Please wait a few minutes before submitting another report.', 'propvendor-marketplace'),
+        );
+    }
+
+    $name    = sanitize_text_field(wp_unslash($_POST['pv_contact_name'] ?? ''));
+    $email   = sanitize_email(wp_unslash($_POST['pv_contact_email'] ?? ''));
+    $phone   = sanitize_text_field(wp_unslash($_POST['pv_contact_phone'] ?? ''));
+    $topic   = sanitize_text_field(wp_unslash($_POST['pv_contact_topic'] ?? 'General Enquiry'));
     $message = sanitize_textarea_field(wp_unslash($_POST['pv_contact_message'] ?? ''));
 
     if (empty($name) || empty($email) || empty($message)) {
@@ -4466,24 +4561,117 @@ function propvendor_marketplace_handle_contact_submission() {
         return array('status' => 'error', 'message' => esc_html__('Please provide a valid email address.', 'propvendor-marketplace'));
     }
 
+    // 2. Duplicate Submission Guard: Reject identical submission within 10 minutes
+    $dup_key = 'pv_contact_dup_' . md5($email . '|' . $topic . '|' . $message);
+    if (get_transient($dup_key)) {
+        return array(
+            'status'  => 'error',
+            'message' => esc_html__('You have recently submitted an identical message. Our team is actively reviewing your request.', 'propvendor-marketplace'),
+        );
+    }
+
+    // 3. Validate Optional Listing Reference
+    $raw_listing_id = isset($_POST['pv_contact_listing_id']) ? absint($_POST['pv_contact_listing_id']) : 0;
+    $valid_listing_id = 0;
+    $vendor_id = 0;
+    if ($raw_listing_id > 0) {
+        $post = get_post($raw_listing_id);
+        if ($post && in_array($post->post_type, propvendor_marketplace_get_listing_post_types(), true)) {
+            $valid_listing_id = (int) $post->ID;
+            $vendor_id = (int) $post->post_author;
+        }
+    }
+
+    // 4. Ensure table exists & generate unique ticket reference
+    global $wpdb;
+    $table_reports = $wpdb->prefix . 'propvendor_contact_reports';
+    propvendor_marketplace_create_contact_reports_table();
+
+    $priority = ('Fraud / Safety Report' === $topic) ? 'high' : 'medium';
+    $ticket = propvendor_marketplace_generate_ticket_reference();
+    $current_user_id = get_current_user_id();
+    $user_login_str = is_user_logged_in() ? wp_get_current_user()->user_login : 'public_visitor';
+    $now = current_time('mysql');
+
+    $initial_audit = array(
+        array(
+            'action'    => 'created',
+            'timestamp' => $now,
+            'actor'     => $user_login_str,
+            'user_id'   => $current_user_id,
+            'notes'     => 'Report submitted through Contact Us portal.',
+        )
+    );
+
+    // 5. Persist Report to Database
+    $insert_result = $wpdb->insert(
+        $table_reports,
+        array(
+            'ticket_reference'  => $ticket,
+            'category'          => $topic,
+            'description'       => $message,
+            'listing_id'        => $valid_listing_id,
+            'vendor_id'         => $vendor_id,
+            'user_id'           => $current_user_id,
+            'reporter_name'     => $name,
+            'reporter_email'    => $email,
+            'reporter_phone'    => $phone,
+            'status'            => 'open',
+            'priority'          => $priority,
+            'assigned_admin_id' => 0,
+            'resolution_notes'  => '',
+            'audit_trail'       => wp_json_encode($initial_audit),
+            'ip_address'        => $ip,
+            'user_agent'        => substr(sanitize_text_field(wp_unslash($_SERVER['HTTP_USER_AGENT'] ?? '')), 0, 255),
+            'created_at'        => $now,
+            'updated_at'        => $now,
+            'resolved_at'       => null,
+        ),
+        array('%s', '%s', '%s', '%d', '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s')
+    );
+
+    // 6. Fail Safely if Persistence Fails (Truthful reporting)
+    if (false === $insert_result) {
+        error_log('PropVendor Safety Report Error: Failed to insert report into ' . $table_reports . '. Database error: ' . $wpdb->last_error);
+        return array(
+            'status'  => 'error',
+            'message' => esc_html__('We were unable to securely register your report due to a database error. Please try again or email support@propvendor.com.ng directly.', 'propvendor-marketplace'),
+        );
+    }
+
+    // 7. Update Rate Limiting and Duplicate Prevention Transients
+    set_transient($rate_key, $attempts + 1, 15 * MINUTE_IN_SECONDS);
+    set_transient($dup_key, 1, 10 * MINUTE_IN_SECONDS);
+
+    // 8. Dispatch Email Notification with Ticket Reference
     $admin_email = get_option('admin_email', propvendor_marketplace_get_support_email());
-    $subject = sprintf('[PropVendor Enquiry] %s: %s', $topic, $name);
+    $subject = sprintf('[PropVendor %s] %s: %s', $ticket, $topic, $name);
     $body = sprintf(
-        "New Contact Form Submission on PropVendor:\n\nName: %s\nEmail: %s\nPhone: %s\nTopic: %s\n\nMessage:\n%s\n\nSubmitted on: %s\nIP: %s",
+        "New Report / Contact Submission on PropVendor:\n\nTicket Reference: %s\nCategory: %s\nPriority: %s\nName: %s\nEmail: %s\nPhone: %s\nReferenced Listing ID: %s\n\nDescription:\n%s\n\nSubmitted on: %s\nIP: %s\n\nManage in WP Admin: %s",
+        $ticket,
+        $topic,
+        strtoupper($priority),
         $name,
         $email,
         $phone ? $phone : 'Not provided',
-        $topic,
+        $valid_listing_id ? (string) $valid_listing_id : 'None',
         $message,
-        current_time('mysql'),
-        sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'] ?? 'Unknown'))
+        $now,
+        $ip,
+        admin_url('admin.php?page=propvendor-safety-reports&ticket=' . $ticket)
     );
     $headers = array('Reply-To: ' . $name . ' <' . $email . '>');
 
-    // Send email to admin
     @wp_mail($admin_email, $subject, $body, $headers);
 
-    return array('status' => 'success', 'message' => esc_html__('Thank you for contacting PropVendor. Your message has been received by our support team, and we will follow up with you shortly via your verified email.', 'propvendor-marketplace'));
+    return array(
+        'status' => 'success',
+        'ticket' => $ticket,
+        'message' => sprintf(
+            esc_html__('Thank you for contacting PropVendor. Your report has been securely registered under reference Ticket #%s. Our team has received your submission and will investigate promptly.', 'propvendor-marketplace'),
+            $ticket
+        ),
+    );
 }
 
 /**
@@ -4495,7 +4683,7 @@ function propvendor_marketplace_handle_contact_submission() {
  * @return string Filterable official support email address.
  */
 function propvendor_marketplace_get_support_email() {
-    return apply_filters('propvendor_marketplace_support_email', 'support@propvendor.ng');
+    return apply_filters('propvendor_marketplace_support_email', 'support@propvendor.com.ng');
 }
 
 function propvendor_marketplace_contact_form_shortcode() {
@@ -4505,6 +4693,10 @@ function propvendor_marketplace_contact_form_shortcode() {
     }
 
     $verified_email = propvendor_marketplace_get_support_email();
+
+    // Support pre-selection from URL query arguments (e.g. from Safety Guidelines page)
+    $prefill_topic = sanitize_text_field(wp_unslash($_GET['topic'] ?? ''));
+    $prefill_listing_id = isset($_GET['listing_id']) ? absint($_GET['listing_id']) : 0;
 
     $output = '<div class="propvendor-static-page propvendor-contact-page">';
     $output .= '<header class="propvendor-static-header">';
@@ -4553,7 +4745,14 @@ function propvendor_marketplace_contact_form_shortcode() {
 
     if ($submission_result) {
         $alert_class = $submission_result['status'] === 'success' ? 'pv-alert-success' : 'pv-alert-danger';
-        $output .= '<div class="propvendor-alert ' . esc_attr($alert_class) . '">' . esc_html($submission_result['message']) . '</div>';
+        $output .= '<div class="propvendor-alert ' . esc_attr($alert_class) . '">';
+        $output .= esc_html($submission_result['message']);
+        if (!empty($submission_result['ticket'])) {
+            $output .= '<div style="margin-top: 10px; font-weight: bold;">';
+            $output .= '<span class="pv-badge pv-badge-accent" style="font-size: 1rem; padding: 4px 10px; display: inline-block;">' . sprintf(esc_html__('Ticket Reference: %s', 'propvendor-marketplace'), esc_html($submission_result['ticket'])) . '</span>';
+            $output .= '</div>';
+        }
+        $output .= '</div>';
     }
 
     $output .= '<form method="post" action="" class="propvendor-contact-form-element">';
@@ -4580,18 +4779,31 @@ function propvendor_marketplace_contact_form_shortcode() {
     $output .= '<div class="propvendor-form-group">';
     $output .= '<label for="pv_contact_topic">' . esc_html__('Enquiry Topic', 'propvendor-marketplace') . ' <span class="required">*</span></label>';
     $output .= '<select id="pv_contact_topic" name="pv_contact_topic" class="pv-select" required>';
-    $output .= '<option value="Listing Enquiry">' . esc_html__('Listing Enquiry / Assistance', 'propvendor-marketplace') . '</option>';
-    $output .= '<option value="Vendor Registration">' . esc_html__('Vendor Registration & Onboarding', 'propvendor-marketplace') . '</option>';
-    $output .= '<option value="VIP Plans & Wallet">' . esc_html__('VIP Agent Plans & Wallet Credits', 'propvendor-marketplace') . '</option>';
-    $output .= '<option value="Fraud / Safety Report">' . esc_html__('Fraud or Safety Report', 'propvendor-marketplace') . '</option>';
-    $output .= '<option value="Technical Support">' . esc_html__('Technical Support / Account Issue', 'propvendor-marketplace') . '</option>';
+    
+    $topic_options = array(
+        'Listing Enquiry'       => __('Listing Enquiry / Assistance', 'propvendor-marketplace'),
+        'Vendor Registration'   => __('Vendor Registration & Onboarding', 'propvendor-marketplace'),
+        'VIP Plans & Wallet'    => __('VIP Agent Plans & Wallet Credits', 'propvendor-marketplace'),
+        'Fraud / Safety Report' => __('Fraud or Safety Report', 'propvendor-marketplace'),
+        'Technical Support'     => __('Technical Support / Account Issue', 'propvendor-marketplace'),
+    );
+    foreach ($topic_options as $topic_val => $topic_label) {
+        $selected_attr = ($prefill_topic === $topic_val) ? ' selected="selected"' : '';
+        $output .= '<option value="' . esc_attr($topic_val) . '"' . $selected_attr . '>' . esc_html($topic_label) . '</option>';
+    }
     $output .= '</select>';
     $output .= '</div>';
     $output .= '</div>'; // row
 
+    // Optional Listing ID Field
+    $output .= '<div class="propvendor-form-group">';
+    $output .= '<label for="pv_contact_listing_id">' . esc_html__('Referenced Listing ID', 'propvendor-marketplace') . ' <span class="optional">(' . esc_html__('Optional — If reporting a specific listing', 'propvendor-marketplace') . ')</span></label>';
+    $output .= '<input type="number" id="pv_contact_listing_id" name="pv_contact_listing_id" class="pv-input" placeholder="' . esc_attr__('e.g. 1042', 'propvendor-marketplace') . '" value="' . ($prefill_listing_id > 0 ? esc_attr($prefill_listing_id) : '') . '" />';
+    $output .= '</div>';
+
     $output .= '<div class="propvendor-form-group">';
     $output .= '<label for="pv_contact_message">' . esc_html__('Message', 'propvendor-marketplace') . ' <span class="required">*</span></label>';
-    $output .= '<textarea id="pv_contact_message" name="pv_contact_message" class="pv-textarea" rows="5" placeholder="' . esc_attr__('How can our team assist you?', 'propvendor-marketplace') . '" required></textarea>';
+    $output .= '<textarea id="pv_contact_message" name="pv_contact_message" class="pv-textarea" rows="5" placeholder="' . esc_attr__('How can our team assist you? Provide full details or report evidence.', 'propvendor-marketplace') . '" required></textarea>';
     $output .= '</div>';
 
     $output .= '<div class="propvendor-form-safety-notice">';
@@ -4659,7 +4871,7 @@ function propvendor_marketplace_about_shortcode() {
     // Staged Verification Note
     $output .= '<div class="propvendor-staged-box">';
     $output .= '<h4>' . esc_html__('Operational Verification Notice', 'propvendor-marketplace') . '</h4>';
-    $output .= '<p>' . esc_html__('PropVendor\'s regional customer walkthrough centers and dedicated telephone helplines are currently undergoing staged operational verification prior to nationwide deployment. Inquiries and official support are handled directly via support@propvendor.ng.', 'propvendor-marketplace') . '</p>';
+    $output .= '<p>' . esc_html__('PropVendor\'s regional customer walkthrough centers and dedicated telephone helplines are currently undergoing staged operational verification prior to nationwide deployment. Inquiries and official support are handled directly via support@propvendor.com.ng.', 'propvendor-marketplace') . '</p>';
     $output .= '</div>';
 
     // CTA Banner
@@ -4746,7 +4958,7 @@ function propvendor_marketplace_help_faqs_shortcode() {
 
     $output .= '<div class="pv-card propvendor-faq-card">';
     $output .= '<h3>' . esc_html__('What should I do if a vendor requests an advance inspection fee?', 'propvendor-marketplace') . '</h3>';
-    $output .= '<p>' . esc_html__('Never pay any inspection fee, deposit, or commitment charge before seeing a property or vehicle in person. Report suspicious vendors immediately via our Contact Us form under "Fraud or Safety Report" or email support@propvendor.ng.', 'propvendor-marketplace') . '</p>';
+    $output .= '<p>' . esc_html__('Never pay any inspection fee, deposit, or commitment charge before seeing a property or vehicle in person. Report suspicious vendors immediately via our Contact Us form under "Fraud or Safety Report" or email support@propvendor.com.ng.', 'propvendor-marketplace') . '</p>';
     $output .= '</div>';
 
     $output .= '</div>'; // faq-group 3
@@ -8081,7 +8293,7 @@ function propvendor_marketplace_seed_default_plans() {
             'credits'       => 12,
             'duration_days' => 0,
             'description'   => '12 Contact Unlocks (₦833 per lead). Best value for active agents. Credits never expire.',
-            'is_active'     => 1,
+            'is_active'     => 0, // Inactive by default (retired plan)
         ),
         array(
             'plan_key'      => 'credit_pack_pro',
@@ -8096,8 +8308,14 @@ function propvendor_marketplace_seed_default_plans() {
     );
 
     foreach ($default_plans as $p) {
-        $existing = $wpdb->get_row($wpdb->prepare("SELECT id FROM {$table_plans} WHERE plan_key = %s", $p['plan_key']));
+        $existing = $wpdb->get_row($wpdb->prepare("SELECT id, is_active FROM {$table_plans} WHERE plan_key = %s", $p['plan_key']));
         if ($existing) {
+            // Determine active status:
+            // 1. If seed specifies inactive (e.g. retired credit_pack_growth), ensure it is inactive (0).
+            // 2. If the existing database record was intentionally disabled (is_active == 0), preserve that administrative deactivation (0).
+            // 3. Otherwise, use the seed definition is_active.
+            $target_is_active = ($p['is_active'] === 0 || (int) $existing->is_active === 0) ? 0 : (int) $p['is_active'];
+
             $wpdb->update(
                 $table_plans,
                 array(
@@ -8107,7 +8325,7 @@ function propvendor_marketplace_seed_default_plans() {
                     'credits'       => $p['credits'],
                     'duration_days' => $p['duration_days'],
                     'description'   => $p['description'],
-                    'is_active'     => $p['is_active'],
+                    'is_active'     => $target_is_active,
                 ),
                 array('id' => $existing->id),
                 array('%s', '%s', '%d', '%d', '%d', '%s', '%d'),
@@ -8718,6 +8936,14 @@ function propvendor_marketplace_add_admin_menu() {
         'manage_options',
         'propvendor-notifications',
         'propvendor_marketplace_render_admin_notifications_page'
+    );
+    add_submenu_page(
+        'propvendor-enquiries',
+        'Safety & Fraud Reports',
+        'Safety Reports',
+        'manage_options',
+        'propvendor-safety-reports',
+        'propvendor_marketplace_render_admin_safety_reports_page'
     );
 }
 add_action('admin_menu', 'propvendor_marketplace_add_admin_menu');
@@ -10535,7 +10761,7 @@ function propvendor_marketplace_handle_send_inbox_reply() {
         $vendor_inbox_link = home_url('/vendor-dashboard/?view=inbox&thread_id=' . $thread_id);
 
         $headers = array(
-            'From: PropVendor Marketplace <no-reply@' . wp_parse_url(home_url(), PHP_URL_HOST) . '>',
+            'From: PropVendor Marketplace <' . propvendor_marketplace_get_notification_sender_email() . '>',
         );
 
         $vendor_email = '';
@@ -10815,6 +11041,11 @@ function propvendor_marketplace_create_order($vendor_id, $plan_id, $gateway = 'p
     $plan = propvendor_marketplace_get_plan_by_id($plan_id);
     if (!$plan || (int) $plan->is_active !== 1) {
         return new WP_Error('invalid_plan', __('The selected plan does not exist or is inactive.', 'propvendor-marketplace'));
+    }
+
+    // Defense-in-depth: Explicitly guard against purchasing retired plans even if temporarily activated in DB
+    if (isset($plan->plan_key) && in_array($plan->plan_key, array('credit_pack_growth'), true)) {
+        return new WP_Error('retired_plan', __('The selected plan has been retired and is no longer available for purchase.', 'propvendor-marketplace'));
     }
 
     global $wpdb;
@@ -11457,6 +11688,11 @@ function propvendor_marketplace_ajax_create_checkout_order() {
         wp_send_json_error(array('message' => __('Invalid plan selected.', 'propvendor-marketplace')));
     }
 
+    $plan = propvendor_marketplace_get_plan_by_id($plan_id);
+    if ($plan && in_array($plan->plan_key, array('credit_pack_growth'), true)) {
+        wp_send_json_error(array('message' => __('The selected plan has been retired and is no longer available for purchase.', 'propvendor-marketplace')));
+    }
+
     $order = propvendor_marketplace_create_order($vendor_id, $plan_id, 'paystack');
     if (is_wp_error($order)) {
         wp_send_json_error(array('message' => $order->get_error_message()));
@@ -11834,11 +12070,11 @@ function propvendor_marketplace_get_notification_sender_email() {
     }
     $host = wp_parse_url(home_url(), PHP_URL_HOST);
     if (empty($host) || strpos($host, '.') === false) {
-        $host = 'propvendor.ng';
+        $host = 'propvendor.com.ng';
     }
-    $fallback = 'no-reply@' . $host;
+    $fallback = 'noreply@' . $host;
     if (!is_email($fallback)) {
-        $fallback = 'no-reply@propvendor.ng';
+        $fallback = 'noreply@propvendor.com.ng';
     }
     return $fallback;
 }
@@ -11850,6 +12086,79 @@ function propvendor_marketplace_get_notification_sender_name() {
     }
     return sanitize_text_field($name);
 }
+
+/**
+ * 2b. Phase 19.0: Authenticated Hostinger SMTP Relay Hook via phpmailer_init.
+ *
+ * Configured via protected wp-config.php constants or administrator options.
+ * Credentials are NEVER stored in plaintext in the database or exposed in UI.
+ *
+ * Supported constants (defined in wp-config.php):
+ * - PROPVENDOR_SMTP_ENABLED  (bool)   Default: false/0
+ * - PROPVENDOR_SMTP_HOST     (string) Default: 'smtp.hostinger.com'
+ * - PROPVENDOR_SMTP_PORT     (int)    Default: 465
+ * - PROPVENDOR_SMTP_SECURE   (string) Default: 'ssl' (or 'tls')
+ * - PROPVENDOR_SMTP_USER     (string) e.g. 'support@propvendor.com.ng' or 'noreply@propvendor.com.ng'
+ * - PROPVENDOR_SMTP_PASS     (string) Hostinger App/Mailbox Password
+ *
+ * @param PHPMailer\PHPMailer\PHPMailer $phpmailer
+ */
+function propvendor_marketplace_configure_phpmailer_smtp($phpmailer) {
+    $smtp_enabled = defined('PROPVENDOR_SMTP_ENABLED')
+        ? (bool) PROPVENDOR_SMTP_ENABLED
+        : (bool) get_option('propvendor_smtp_enabled', 0);
+
+    if (!$smtp_enabled) {
+        return;
+    }
+
+    $smtp_host   = defined('PROPVENDOR_SMTP_HOST') ? PROPVENDOR_SMTP_HOST : get_option('propvendor_smtp_host', 'smtp.hostinger.com');
+    $smtp_port   = defined('PROPVENDOR_SMTP_PORT') ? (int) PROPVENDOR_SMTP_PORT : (int) get_option('propvendor_smtp_port', 465);
+    $smtp_secure = defined('PROPVENDOR_SMTP_SECURE') ? PROPVENDOR_SMTP_SECURE : get_option('propvendor_smtp_secure', 'ssl');
+    $smtp_user   = defined('PROPVENDOR_SMTP_USER') ? PROPVENDOR_SMTP_USER : get_option('propvendor_smtp_user', '');
+    $smtp_pass   = defined('PROPVENDOR_SMTP_PASS') ? PROPVENDOR_SMTP_PASS : '';
+
+    // Safety guard: If SMTP was explicitly requested but credentials are missing,
+    // do NOT silently fall back to unauthenticated mail transmission.
+    if (empty($smtp_user) || empty($smtp_pass)) {
+        error_log('PropVendor SMTP Error: SMTP relay is enabled, but credentials (PROPVENDOR_SMTP_USER/PASS) are missing. Transmission aborted to prevent unauthenticated leakage.');
+        $phpmailer->isSMTP();
+        $phpmailer->Host = 'unconfigured-smtp-auth.invalid';
+        return;
+    }
+
+    $phpmailer->isSMTP();
+    $phpmailer->Host       = sanitize_text_field($smtp_host);
+    $phpmailer->SMTPAuth   = true;
+    $phpmailer->Port       = $smtp_port;
+    $phpmailer->Username   = sanitize_email($smtp_user);
+    $phpmailer->Password   = $smtp_pass;
+    $phpmailer->SMTPSecure = sanitize_key($smtp_secure);
+    $phpmailer->Timeout    = 10;
+
+    $sender_email = propvendor_marketplace_get_notification_sender_email();
+    $sender_name  = propvendor_marketplace_get_notification_sender_name();
+    $phpmailer->From     = $sender_email;
+    $phpmailer->FromName = $sender_name;
+}
+add_action('phpmailer_init', 'propvendor_marketplace_configure_phpmailer_smtp');
+
+/**
+ * 2c. Phase 19.0: Sanitized Mail Failure Logging Hook.
+ * Ensures diagnostic errors are recorded without exposing secrets or credentials in logs.
+ *
+ * @param WP_Error $wp_error
+ */
+function propvendor_marketplace_handle_wp_mail_failed($wp_error) {
+    if (!is_wp_error($wp_error)) {
+        return;
+    }
+    $raw_message = $wp_error->get_error_message();
+    // Redact any password, token, or secret strings if present in transport debug traces
+    $sanitized = preg_replace('/(password|pass|secret|pwd)\s*[=:]\s*\S+/i', '$1=***REDACTED***', $raw_message);
+    error_log('PropVendor Mail Delivery Failure: ' . sanitize_text_field($sanitized));
+}
+add_action('wp_mail_failed', 'propvendor_marketplace_handle_wp_mail_failed');
 
 /**
  * 3. User Preferences (Opt-out Support)
@@ -12614,6 +12923,669 @@ function propvendor_marketplace_render_admin_notifications_page() {
                 </tbody>
             </table>
         </div>
+    </div>
+    <?php
+}
+
+/**
+ * =========================================================================
+ * PHASE 19.1: PERSISTENT SAFETY & FRAUD REPORTING ENGINE
+ * =========================================================================
+ */
+
+/**
+ * 1. Database Schema & Migration for Contact Reports.
+ *
+ * Dedicated database table for persistent storage of contact submissions,
+ * fraud reports, and safety inquiries with unique ticket references.
+ */
+function propvendor_marketplace_create_contact_reports_table() {
+    global $wpdb;
+    $charset_collate = $wpdb->get_charset_collate();
+    $table_reports = $wpdb->prefix . 'propvendor_contact_reports';
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+    $sql = "CREATE TABLE {$table_reports} (
+        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+        ticket_reference varchar(32) NOT NULL,
+        category varchar(64) NOT NULL DEFAULT 'General Enquiry',
+        description text NOT NULL,
+        listing_id bigint(20) unsigned NOT NULL DEFAULT 0,
+        vendor_id bigint(20) unsigned NOT NULL DEFAULT 0,
+        user_id bigint(20) unsigned NOT NULL DEFAULT 0,
+        reporter_name varchar(191) NOT NULL DEFAULT '',
+        reporter_email varchar(191) NOT NULL DEFAULT '',
+        reporter_phone varchar(64) NOT NULL DEFAULT '',
+        status varchar(32) NOT NULL DEFAULT 'open',
+        priority varchar(32) NOT NULL DEFAULT 'medium',
+        assigned_admin_id bigint(20) unsigned NOT NULL DEFAULT 0,
+        resolution_notes text NULL,
+        audit_trail longtext NULL,
+        ip_address varchar(45) NOT NULL DEFAULT '',
+        user_agent varchar(255) NOT NULL DEFAULT '',
+        created_at datetime NOT NULL,
+        updated_at datetime NOT NULL,
+        resolved_at datetime NULL,
+        PRIMARY KEY  (id),
+        UNIQUE KEY ticket_reference (ticket_reference),
+        KEY category (category),
+        KEY status (status),
+        KEY priority (priority),
+        KEY listing_id (listing_id),
+        KEY vendor_id (vendor_id),
+        KEY user_id (user_id),
+        KEY assigned_admin_id (assigned_admin_id),
+        KEY created_at (created_at)
+    ) ENGINE=InnoDB {$charset_collate};";
+
+    dbDelta($sql);
+
+    // Ensure InnoDB engine for transaction consistency and row-level locking
+    $wpdb->query("ALTER TABLE {$table_reports} ENGINE = InnoDB");
+}
+
+/**
+ * 2. Generate a unique, cryptographically secure ticket reference in TKT-XXXXXX format.
+ * Includes collision check with database.
+ *
+ * @return string Unique ticket reference, e.g. 'TKT-8KF2P9'
+ */
+function propvendor_marketplace_generate_ticket_reference() {
+    global $wpdb;
+    $table_reports = $wpdb ? ($wpdb->prefix . 'propvendor_contact_reports') : '';
+
+    $chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // 32 characters, non-ambiguous
+    $max_idx = strlen($chars) - 1;
+
+    for ($attempt = 0; $attempt < 10; $attempt++) {
+        $code = '';
+        for ($i = 0; $i < 6; $i++) {
+            $code .= $chars[wp_rand(0, $max_idx)];
+        }
+        $ticket = 'TKT-' . $code;
+
+        if ($wpdb && !empty($table_reports)) {
+            // Check collision
+            $existing_id = $wpdb->get_var($wpdb->prepare("SELECT id FROM {$table_reports} WHERE ticket_reference = %s LIMIT 1", $ticket));
+            if (!$existing_id) {
+                return $ticket;
+            }
+        } else {
+            return $ticket;
+        }
+    }
+
+    // High-entropy fallback if 10 collisions occur (extremely unlikely)
+    return 'TKT-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
+}
+
+/**
+ * 3. Retrieve Safety Reports with filtering, search, and pagination.
+ *
+ * @param array $args Filter and pagination arguments.
+ * @return array Array of report objects.
+ */
+function propvendor_marketplace_get_safety_reports($args = array()) {
+    global $wpdb;
+    $table_reports = $wpdb->prefix . 'propvendor_contact_reports';
+
+    $defaults = array(
+        'status'   => '',
+        'category' => '',
+        'priority' => '',
+        'search'   => '',
+        'per_page' => 20,
+        'offset'   => 0,
+        'orderby'  => 'id',
+        'order'    => 'DESC',
+    );
+    $r = wp_parse_args($args, $defaults);
+
+    $where = array('1=1');
+    $query_params = array();
+
+    if (!empty($r['status'])) {
+        $where[] = 'status = %s';
+        $query_params[] = sanitize_key($r['status']);
+    }
+
+    if (!empty($r['category'])) {
+        $where[] = 'category = %s';
+        $query_params[] = sanitize_text_field($r['category']);
+    }
+
+    if (!empty($r['priority'])) {
+        $where[] = 'priority = %s';
+        $query_params[] = sanitize_key($r['priority']);
+    }
+
+    if (!empty($r['search'])) {
+        $like = '%' . $wpdb->esc_like(sanitize_text_field($r['search'])) . '%';
+        $where[] = '(ticket_reference LIKE %s OR reporter_name LIKE %s OR reporter_email LIKE %s OR description LIKE %s)';
+        $query_params[] = $like;
+        $query_params[] = $like;
+        $query_params[] = $like;
+        $query_params[] = $like;
+    }
+
+    $where_sql = implode(' AND ', $where);
+    $order_sql = sanitize_key($r['order']) === 'ASC' ? 'ASC' : 'DESC';
+    $orderby_sql = in_array($r['orderby'], array('id', 'created_at', 'status', 'priority'), true) ? $r['orderby'] : 'id';
+    $limit_sql = sprintf('LIMIT %d, %d', absint($r['offset']), absint($r['per_page']));
+
+    $sql = "SELECT * FROM {$table_reports} WHERE {$where_sql} ORDER BY {$orderby_sql} {$order_sql} {$limit_sql}";
+
+    if (!empty($query_params)) {
+        return $wpdb->get_results($wpdb->prepare($sql, $query_params));
+    }
+
+    return $wpdb->get_results($sql);
+}
+
+/**
+ * 4. Retrieve a single Safety Report by internal ID.
+ *
+ * @param int $report_id
+ * @return object|null
+ */
+function propvendor_marketplace_get_safety_report_by_id($report_id) {
+    global $wpdb;
+    $table_reports = $wpdb->prefix . 'propvendor_contact_reports';
+    return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table_reports} WHERE id = %d LIMIT 1", absint($report_id)));
+}
+
+/**
+ * 5. Retrieve a single Safety Report by public ticket reference.
+ *
+ * @param string $ticket
+ * @return object|null
+ */
+function propvendor_marketplace_get_safety_report_by_ticket($ticket) {
+    global $wpdb;
+    $table_reports = $wpdb->prefix . 'propvendor_contact_reports';
+    return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table_reports} WHERE ticket_reference = %s LIMIT 1", sanitize_text_field($ticket)));
+}
+
+/**
+ * 6. Admin Safety & Fraud Reports Triage Page.
+ *
+ * Restricted triage dashboard for administrators to review, prioritize,
+ * assign, update, and resolve user-submitted fraud reports and contact inquiries.
+ */
+function propvendor_marketplace_render_admin_safety_reports_page() {
+    if (!current_user_can('manage_options')) {
+        wp_die(esc_html__('Access denied: You do not have sufficient permissions to view safety reports.', 'propvendor-marketplace'));
+    }
+
+    global $wpdb;
+    $table_reports = $wpdb->prefix . 'propvendor_contact_reports';
+    propvendor_marketplace_create_contact_reports_table();
+
+    $notice = '';
+
+    // Handle Triage Update Action
+    if (isset($_POST['pv_action']) && 'update_report_triage' === $_POST['pv_action']) {
+        $report_id = absint($_POST['report_id'] ?? 0);
+        check_admin_referer('propvendor_triage_report_' . $report_id);
+
+        $report = propvendor_marketplace_get_safety_report_by_id($report_id);
+        if ($report) {
+            $allowed_statuses   = array('open', 'in_review', 'resolved', 'dismissed');
+            $allowed_priorities = array('low', 'medium', 'high', 'urgent');
+
+            $new_status = sanitize_key($_POST['pv_report_status'] ?? $report->status);
+            if (!in_array($new_status, $allowed_statuses, true)) {
+                $new_status = $report->status;
+            }
+
+            $new_priority = sanitize_key($_POST['pv_report_priority'] ?? $report->priority);
+            if (!in_array($new_priority, $allowed_priorities, true)) {
+                $new_priority = $report->priority;
+            }
+
+            $new_admin_id    = absint($_POST['pv_assigned_admin_id'] ?? $report->assigned_admin_id);
+            $resolution_note = sanitize_textarea_field(wp_unslash($_POST['pv_resolution_notes'] ?? ''));
+
+            $audit = json_decode($report->audit_trail, true);
+            if (!is_array($audit)) {
+                $audit = array();
+            }
+
+            $current_admin = wp_get_current_user();
+            $admin_login = $current_admin ? $current_admin->user_login : 'admin';
+
+            $audit[] = array(
+                'action'        => 'status_update',
+                'timestamp'     => current_time('mysql'),
+                'admin_id'      => get_current_user_id(),
+                'admin_login'   => $admin_login,
+                'from_status'   => $report->status,
+                'to_status'     => $new_status,
+                'from_priority' => $report->priority,
+                'to_priority'   => $new_priority,
+                'assigned_to'   => $new_admin_id,
+                'notes'         => $resolution_note,
+            );
+
+            $update_data = array(
+                'status'            => $new_status,
+                'priority'          => $new_priority,
+                'assigned_admin_id' => $new_admin_id,
+                'resolution_notes'  => $resolution_note,
+                'audit_trail'       => wp_json_encode($audit),
+                'updated_at'        => current_time('mysql'),
+            );
+            $update_format = array('%s', '%s', '%d', '%s', '%s', '%s');
+
+            if ('resolved' === $new_status && empty($report->resolved_at)) {
+                $update_data['resolved_at'] = current_time('mysql');
+                $update_format[] = '%s';
+            } elseif ('resolved' !== $new_status) {
+                $update_data['resolved_at'] = null;
+                $update_format[] = '%s';
+            }
+
+            $wpdb->update($table_reports, $update_data, array('id' => $report_id), $update_format, array('%d'));
+            $notice = '<div class="notice notice-success is-dismissible"><p>' . sprintf(esc_html__('Report #%s updated successfully.', 'propvendor-marketplace'), esc_html($report->ticket_reference)) . '</p></div>';
+        }
+    }
+
+    // Active Filters
+    $filter_status   = sanitize_key($_GET['status'] ?? '');
+    $filter_category = sanitize_text_field(wp_unslash($_GET['category'] ?? ''));
+    $filter_priority = sanitize_key($_GET['priority'] ?? '');
+    $search_query    = sanitize_text_field(wp_unslash($_GET['s'] ?? ''));
+    $view_report_id  = absint($_GET['view_report'] ?? 0);
+    $view_ticket     = sanitize_text_field(wp_unslash($_GET['ticket'] ?? ''));
+
+    if ($view_ticket && !$view_report_id) {
+        $rep_by_tkt = propvendor_marketplace_get_safety_report_by_ticket($view_ticket);
+        if ($rep_by_tkt) {
+            $view_report_id = (int) $rep_by_tkt->id;
+        }
+    }
+
+    // KPI Counts
+    $total_count    = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table_reports}");
+    $open_count     = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table_reports} WHERE status = 'open'");
+    $high_count     = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table_reports} WHERE (priority IN ('high', 'urgent') OR category = 'Fraud / Safety Report') AND status != 'resolved'");
+    $resolved_count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table_reports} WHERE status = 'resolved'");
+
+    // Pagination
+    $per_page = 20;
+    $paged    = isset($_GET['paged']) ? max(1, absint($_GET['paged'])) : 1;
+    $offset   = ($paged - 1) * $per_page;
+
+    $reports = propvendor_marketplace_get_safety_reports(array(
+        'status'   => $filter_status,
+        'category' => $filter_category,
+        'priority' => $filter_priority,
+        'search'   => $search_query,
+        'per_page' => $per_page,
+        'offset'   => $offset,
+    ));
+
+    // Total filtered count for pagination
+    $count_args = array(
+        'status'   => $filter_status,
+        'category' => $filter_category,
+        'priority' => $filter_priority,
+        'search'   => $search_query,
+        'per_page' => 999999,
+        'offset'   => 0,
+    );
+    $filtered_count = count(propvendor_marketplace_get_safety_reports($count_args));
+    $total_pages    = ceil($filtered_count / $per_page);
+
+    // List of admins for assignment
+    $admins = get_users(array('capability' => 'manage_options', 'fields' => array('ID', 'display_name', 'user_login')));
+
+    // Detailed Report if viewing single report
+    $active_report = $view_report_id ? propvendor_marketplace_get_safety_report_by_id($view_report_id) : null;
+    ?>
+    <div class="wrap">
+        <h1 class="wp-heading-inline"><?php esc_html_e('Safety & Fraud Reports Triage', 'propvendor-marketplace'); ?></h1>
+        <hr class="wp-header-end">
+
+        <?php echo $notice; // escaped above ?>
+
+        <!-- KPI Metrics Grid -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0;">
+            <div class="card" style="margin: 0; padding: 15px 20px; border-left: 4px solid #2563eb;">
+                <h3 style="margin: 0 0 5px; font-size: 13px; color: #64748b; text-transform: uppercase;"><?php esc_html_e('Total Reports', 'propvendor-marketplace'); ?></h3>
+                <span style="font-size: 26px; font-weight: bold; color: #0f172a;"><?php echo esc_html($total_count); ?></span>
+            </div>
+            <div class="card" style="margin: 0; padding: 15px 20px; border-left: 4px solid #ef4444;">
+                <h3 style="margin: 0 0 5px; font-size: 13px; color: #64748b; text-transform: uppercase;"><?php esc_html_e('Open Triage', 'propvendor-marketplace'); ?></h3>
+                <span style="font-size: 26px; font-weight: bold; color: #ef4444;"><?php echo esc_html($open_count); ?></span>
+            </div>
+            <div class="card" style="margin: 0; padding: 15px 20px; border-left: 4px solid #f97316;">
+                <h3 style="margin: 0 0 5px; font-size: 13px; color: #64748b; text-transform: uppercase;"><?php esc_html_e('High Priority / Fraud', 'propvendor-marketplace'); ?></h3>
+                <span style="font-size: 26px; font-weight: bold; color: #ea580c;"><?php echo esc_html($high_count); ?></span>
+            </div>
+            <div class="card" style="margin: 0; padding: 15px 20px; border-left: 4px solid #10b981;">
+                <h3 style="margin: 0 0 5px; font-size: 13px; color: #64748b; text-transform: uppercase;"><?php esc_html_e('Resolved Cases', 'propvendor-marketplace'); ?></h3>
+                <span style="font-size: 26px; font-weight: bold; color: #10b981;"><?php echo esc_html($resolved_count); ?></span>
+            </div>
+        </div>
+
+        <?php if ($active_report) : ?>
+            <!-- Single Report Detailed View & Triage Form -->
+            <div class="card" style="margin: 20px 0; padding: 20px; max-width: 1000px; border-top: 4px solid #0284c7;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 15px;">
+                    <div>
+                        <h2 style="margin: 0;">
+                            <?php printf(esc_html__('Report Details — Ticket #%s', 'propvendor-marketplace'), esc_html($active_report->ticket_reference)); ?>
+                        </h2>
+                        <span style="color: #64748b; font-size: 13px;">
+                            <?php printf(esc_html__('Submitted on %s via IP %s', 'propvendor-marketplace'), esc_html($active_report->created_at), esc_html($active_report->ip_address)); ?>
+                        </span>
+                    </div>
+                    <div>
+                        <a href="<?php echo esc_url(admin_url('admin.php?page=propvendor-safety-reports')); ?>" class="button">&larr; <?php esc_html_e('Back to All Reports', 'propvendor-marketplace'); ?></a>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                    <div>
+                        <h3 style="margin: 0 0 8px; font-size: 14px; color: #334155;"><?php esc_html_e('Reporter Information', 'propvendor-marketplace'); ?></h3>
+                        <p style="margin: 0 0 4px;"><strong><?php esc_html_e('Name:', 'propvendor-marketplace'); ?></strong> <?php echo esc_html($active_report->reporter_name); ?></p>
+                        <p style="margin: 0 0 4px;"><strong><?php esc_html_e('Email:', 'propvendor-marketplace'); ?></strong> <a href="mailto:<?php echo esc_attr($active_report->reporter_email); ?>"><?php echo esc_html($active_report->reporter_email); ?></a></p>
+                        <p style="margin: 0 0 4px;"><strong><?php esc_html_e('Phone:', 'propvendor-marketplace'); ?></strong> <?php echo esc_html($active_report->reporter_phone ? $active_report->reporter_phone : 'Not provided'); ?></p>
+                        <p style="margin: 0 0 4px;"><strong><?php esc_html_e('Account Status:', 'propvendor-marketplace'); ?></strong> <?php echo $active_report->user_id ? sprintf(esc_html__('Registered User (ID #%d)', 'propvendor-marketplace'), (int) $active_report->user_id) : esc_html__('Public Visitor', 'propvendor-marketplace'); ?></p>
+                    </div>
+                    <div>
+                        <h3 style="margin: 0 0 8px; font-size: 14px; color: #334155;"><?php esc_html_e('Referenced Listing & Vendor', 'propvendor-marketplace'); ?></h3>
+                        <?php if ($active_report->listing_id) : 
+                            $listing_post = get_post($active_report->listing_id);
+                            $listing_title = $listing_post ? $listing_post->post_title : ('Listing #' . $active_report->listing_id);
+                            $listing_edit_link = get_edit_post_link($active_report->listing_id);
+                        ?>
+                            <p style="margin: 0 0 4px;">
+                                <strong><?php esc_html_e('Listing:', 'propvendor-marketplace'); ?></strong> 
+                                <?php if ($listing_edit_link) : ?>
+                                    <a href="<?php echo esc_url($listing_edit_link); ?>" target="_blank"><?php echo esc_html($listing_title); ?> &rarr;</a>
+                                <?php else : ?>
+                                    <?php echo esc_html($listing_title); ?>
+                                <?php endif; ?>
+                            </p>
+                            <?php if ($active_report->vendor_id) : 
+                                $vendor_user = get_userdata($active_report->vendor_id);
+                                $vendor_name = $vendor_user ? $vendor_user->display_name : ('User #' . $active_report->vendor_id);
+                                $vendor_edit_link = get_edit_user_link($active_report->vendor_id);
+                            ?>
+                                <p style="margin: 0 0 4px;">
+                                    <strong><?php esc_html_e('Vendor / Owner:', 'propvendor-marketplace'); ?></strong> 
+                                    <a href="<?php echo esc_url($vendor_edit_link); ?>" target="_blank"><?php echo esc_html($vendor_name); ?> &rarr;</a>
+                                </p>
+                            <?php endif; ?>
+                        <?php else : ?>
+                            <p style="color: #64748b; margin: 0;"><?php esc_html_e('No specific marketplace listing was linked to this enquiry.', 'propvendor-marketplace'); ?></p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- Message Description -->
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 15px; margin-bottom: 20px;">
+                    <h3 style="margin: 0 0 8px; font-size: 14px; color: #334155;">
+                        <?php printf(esc_html__('Reported Issue / Message [%s]', 'propvendor-marketplace'), esc_html($active_report->category)); ?>
+                    </h3>
+                    <div style="white-space: pre-wrap; font-family: inherit; line-height: 1.6; color: #1e293b;">
+                        <?php echo esc_html($active_report->description); ?>
+                    </div>
+                </div>
+
+                <!-- Triage Action Form -->
+                <div style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 4px; padding: 20px; margin-bottom: 20px;">
+                    <h3 style="margin: 0 0 15px; color: #0f172a;"><?php esc_html_e('Update Triage & Resolution', 'propvendor-marketplace'); ?></h3>
+                    <form method="post" action="">
+                        <?php wp_nonce_field('propvendor_triage_report_' . $active_report->id); ?>
+                        <input type="hidden" name="pv_action" value="update_report_triage">
+                        <input type="hidden" name="report_id" value="<?php echo (int) $active_report->id; ?>">
+
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px;">
+                            <div>
+                                <label for="pv_report_status" style="font-weight: bold; display: block; margin-bottom: 5px;"><?php esc_html_e('Status', 'propvendor-marketplace'); ?></label>
+                                <select name="pv_report_status" id="pv_report_status" class="regular-text" style="width: 100%;">
+                                    <option value="open" <?php selected($active_report->status, 'open'); ?>><?php esc_html_e('Open', 'propvendor-marketplace'); ?></option>
+                                    <option value="in_review" <?php selected($active_report->status, 'in_review'); ?>><?php esc_html_e('In Review', 'propvendor-marketplace'); ?></option>
+                                    <option value="resolved" <?php selected($active_report->status, 'resolved'); ?>><?php esc_html_e('Resolved', 'propvendor-marketplace'); ?></option>
+                                    <option value="dismissed" <?php selected($active_report->status, 'dismissed'); ?>><?php esc_html_e('Dismissed', 'propvendor-marketplace'); ?></option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label for="pv_report_priority" style="font-weight: bold; display: block; margin-bottom: 5px;"><?php esc_html_e('Priority', 'propvendor-marketplace'); ?></label>
+                                <select name="pv_report_priority" id="pv_report_priority" class="regular-text" style="width: 100%;">
+                                    <option value="low" <?php selected($active_report->priority, 'low'); ?>><?php esc_html_e('Low', 'propvendor-marketplace'); ?></option>
+                                    <option value="medium" <?php selected($active_report->priority, 'medium'); ?>><?php esc_html_e('Medium', 'propvendor-marketplace'); ?></option>
+                                    <option value="high" <?php selected($active_report->priority, 'high'); ?>><?php esc_html_e('High', 'propvendor-marketplace'); ?></option>
+                                    <option value="urgent" <?php selected($active_report->priority, 'urgent'); ?>><?php esc_html_e('Urgent', 'propvendor-marketplace'); ?></option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label for="pv_assigned_admin_id" style="font-weight: bold; display: block; margin-bottom: 5px;"><?php esc_html_e('Assigned Administrator', 'propvendor-marketplace'); ?></label>
+                                <select name="pv_assigned_admin_id" id="pv_assigned_admin_id" class="regular-text" style="width: 100%;">
+                                    <option value="0"><?php esc_html_e('— Unassigned —', 'propvendor-marketplace'); ?></option>
+                                    <?php foreach ($admins as $adm) : ?>
+                                        <option value="<?php echo (int) $adm->ID; ?>" <?php selected($active_report->assigned_admin_id, $adm->ID); ?>>
+                                            <?php echo esc_html($adm->display_name . ' (' . $adm->user_login . ')'); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 15px;">
+                            <label for="pv_resolution_notes" style="font-weight: bold; display: block; margin-bottom: 5px;"><?php esc_html_e('Resolution & Internal Notes', 'propvendor-marketplace'); ?></label>
+                            <textarea name="pv_resolution_notes" id="pv_resolution_notes" rows="4" style="width: 100%; font-family: inherit;" placeholder="<?php esc_attr_e('Record investigative findings, vendor moderation actions, or buyer contact outcomes here...', 'propvendor-marketplace'); ?>"><?php echo esc_textarea($active_report->resolution_notes); ?></textarea>
+                        </div>
+
+                        <button type="submit" class="button button-primary button-large"><?php esc_html_e('Save Triage Updates', 'propvendor-marketplace'); ?></button>
+                    </form>
+                </div>
+
+                <!-- Audit History Trail -->
+                <div>
+                    <h3 style="margin: 0 0 10px; color: #334155;"><?php esc_html_e('Action & Audit Trail', 'propvendor-marketplace'); ?></h3>
+                    <?php
+                    $audit_trail = json_decode($active_report->audit_trail, true);
+                    if (!empty($audit_trail) && is_array($audit_trail)) : ?>
+                        <table class="widefat striped" style="border: 1px solid #cbd5e1;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 180px;"><?php esc_html_e('Date & Time', 'propvendor-marketplace'); ?></th>
+                                    <th style="width: 140px;"><?php esc_html_e('Actor', 'propvendor-marketplace'); ?></th>
+                                    <th style="width: 140px;"><?php esc_html_e('Action', 'propvendor-marketplace'); ?></th>
+                                    <th><?php esc_html_e('Details / Notes', 'propvendor-marketplace'); ?></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($audit_trail as $audit_item) : ?>
+                                    <tr>
+                                        <td><?php echo esc_html($audit_item['timestamp'] ?? '—'); ?></td>
+                                        <td><?php echo esc_html($audit_item['admin_login'] ?? ($audit_item['actor'] ?? 'system')); ?></td>
+                                        <td><code><?php echo esc_html($audit_item['action'] ?? 'action'); ?></code></td>
+                                        <td>
+                                            <?php 
+                                            if (!empty($audit_item['from_status']) || !empty($audit_item['to_status'])) {
+                                                printf(esc_html__('Status: %s &rarr; %s | Priority: %s &rarr; %s', 'propvendor-marketplace'),
+                                                    esc_html($audit_item['from_status'] ?? ''),
+                                                    esc_html($audit_item['to_status'] ?? ''),
+                                                    esc_html($audit_item['from_priority'] ?? ''),
+                                                    esc_html($audit_item['to_priority'] ?? '')
+                                                );
+                                            }
+                                            if (!empty($audit_item['notes'])) {
+                                                echo '<div style="margin-top: 4px; color: #475569;">' . esc_html($audit_item['notes']) . '</div>';
+                                            }
+                                            ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    <?php else : ?>
+                        <p style="color: #64748b;"><?php esc_html_e('No previous audit entries recorded.', 'propvendor-marketplace'); ?></p>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <!-- Search and Filters Bar -->
+        <form method="get" action="<?php echo esc_url(admin_url('admin.php')); ?>" style="margin: 20px 0; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+            <input type="hidden" name="page" value="propvendor-safety-reports">
+
+            <!-- Status Filter -->
+            <select name="status">
+                <option value=""><?php esc_html_e('All Statuses', 'propvendor-marketplace'); ?></option>
+                <option value="open" <?php selected($filter_status, 'open'); ?>><?php esc_html_e('Open', 'propvendor-marketplace'); ?></option>
+                <option value="in_review" <?php selected($filter_status, 'in_review'); ?>><?php esc_html_e('In Review', 'propvendor-marketplace'); ?></option>
+                <option value="resolved" <?php selected($filter_status, 'resolved'); ?>><?php esc_html_e('Resolved', 'propvendor-marketplace'); ?></option>
+                <option value="dismissed" <?php selected($filter_status, 'dismissed'); ?>><?php esc_html_e('Dismissed', 'propvendor-marketplace'); ?></option>
+            </select>
+
+            <!-- Priority Filter -->
+            <select name="priority">
+                <option value=""><?php esc_html_e('All Priorities', 'propvendor-marketplace'); ?></option>
+                <option value="urgent" <?php selected($filter_priority, 'urgent'); ?>><?php esc_html_e('Urgent', 'propvendor-marketplace'); ?></option>
+                <option value="high" <?php selected($filter_priority, 'high'); ?>><?php esc_html_e('High', 'propvendor-marketplace'); ?></option>
+                <option value="medium" <?php selected($filter_priority, 'medium'); ?>><?php esc_html_e('Medium', 'propvendor-marketplace'); ?></option>
+                <option value="low" <?php selected($filter_priority, 'low'); ?>><?php esc_html_e('Low', 'propvendor-marketplace'); ?></option>
+            </select>
+
+            <!-- Category Filter -->
+            <select name="category">
+                <option value=""><?php esc_html_e('All Categories', 'propvendor-marketplace'); ?></option>
+                <option value="Fraud / Safety Report" <?php selected($filter_category, 'Fraud / Safety Report'); ?>><?php esc_html_e('Fraud / Safety Report', 'propvendor-marketplace'); ?></option>
+                <option value="Listing Enquiry" <?php selected($filter_category, 'Listing Enquiry'); ?>><?php esc_html_e('Listing Enquiry', 'propvendor-marketplace'); ?></option>
+                <option value="Vendor Registration" <?php selected($filter_category, 'Vendor Registration'); ?>><?php esc_html_e('Vendor Registration', 'propvendor-marketplace'); ?></option>
+                <option value="VIP Plans & Wallet" <?php selected($filter_category, 'VIP Plans & Wallet'); ?>><?php esc_html_e('VIP Plans & Wallet', 'propvendor-marketplace'); ?></option>
+                <option value="Technical Support" <?php selected($filter_category, 'Technical Support'); ?>><?php esc_html_e('Technical Support', 'propvendor-marketplace'); ?></option>
+            </select>
+
+            <!-- Search input -->
+            <input type="search" name="s" value="<?php echo esc_attr($search_query); ?>" placeholder="<?php esc_attr_e('Search ticket, name, email...', 'propvendor-marketplace'); ?>" style="min-width: 240px;">
+
+            <button type="submit" class="button"><?php esc_html_e('Filter Reports', 'propvendor-marketplace'); ?></button>
+            <?php if ($filter_status || $filter_category || $filter_priority || $search_query) : ?>
+                <a href="<?php echo esc_url(admin_url('admin.php?page=propvendor-safety-reports')); ?>" class="button"><?php esc_html_e('Reset', 'propvendor-marketplace'); ?></a>
+            <?php endif; ?>
+        </form>
+
+        <!-- Reports List Table -->
+        <table class="wp-list-table widefat fixed striped">
+            <thead>
+                <tr>
+                    <th scope="col" style="width: 120px;"><?php esc_html_e('Ticket', 'propvendor-marketplace'); ?></th>
+                    <th scope="col" style="width: 140px;"><?php esc_html_e('Date', 'propvendor-marketplace'); ?></th>
+                    <th scope="col" style="width: 180px;"><?php esc_html_e('Reporter', 'propvendor-marketplace'); ?></th>
+                    <th scope="col" style="width: 160px;"><?php esc_html_e('Category', 'propvendor-marketplace'); ?></th>
+                    <th scope="col" style="width: 100px;"><?php esc_html_e('Priority', 'propvendor-marketplace'); ?></th>
+                    <th scope="col" style="width: 110px;"><?php esc_html_e('Status', 'propvendor-marketplace'); ?></th>
+                    <th scope="col" style="width: 110px;"><?php esc_html_e('Listing ID', 'propvendor-marketplace'); ?></th>
+                    <th scope="col" style="width: 140px;"><?php esc_html_e('Assigned To', 'propvendor-marketplace'); ?></th>
+                    <th scope="col" style="width: 110px;"><?php esc_html_e('Action', 'propvendor-marketplace'); ?></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (!empty($reports)) : ?>
+                    <?php foreach ($reports as $r) : 
+                        $priority_style = 'background: #e2e8f0; color: #334155;';
+                        if ('urgent' === $r->priority) {
+                            $priority_style = 'background: #fee2e2; color: #991b1b; font-weight: bold;';
+                        } elseif ('high' === $r->priority) {
+                            $priority_style = 'background: #ffedd5; color: #c2410c; font-weight: bold;';
+                        } elseif ('medium' === $r->priority) {
+                            $priority_style = 'background: #fef3c7; color: #92400e;';
+                        }
+
+                        $status_style = 'background: #e2e8f0; color: #334155;';
+                        if ('open' === $r->status) {
+                            $status_style = 'background: #fee2e2; color: #b91c1c; font-weight: bold;';
+                        } elseif ('in_review' === $r->status) {
+                            $status_style = 'background: #dbeafe; color: #1d4ed8; font-weight: bold;';
+                        } elseif ('resolved' === $r->status) {
+                            $status_style = 'background: #dcfce7; color: #15803d; font-weight: bold;';
+                        } elseif ('dismissed' === $r->status) {
+                            $status_style = 'background: #f1f5f9; color: #64748b;';
+                        }
+
+                        $assigned_admin_name = esc_html__('Unassigned', 'propvendor-marketplace');
+                        if ($r->assigned_admin_id) {
+                            $adm_obj = get_userdata($r->assigned_admin_id);
+                            if ($adm_obj) {
+                                $assigned_admin_name = $adm_obj->display_name;
+                            }
+                        }
+                    ?>
+                        <tr>
+                            <td>
+                                <strong>
+                                    <a href="<?php echo esc_url(add_query_arg('view_report', $r->id, admin_url('admin.php?page=propvendor-safety-reports'))); ?>">
+                                        <code><?php echo esc_html($r->ticket_reference); ?></code>
+                                    </a>
+                                </strong>
+                            </td>
+                            <td><?php echo esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($r->created_at))); ?></td>
+                            <td>
+                                <strong><?php echo esc_html($r->reporter_name); ?></strong><br>
+                                <span style="font-size: 12px; color: #64748b;"><?php echo esc_html($r->reporter_email); ?></span>
+                            </td>
+                            <td><?php echo esc_html($r->category); ?></td>
+                            <td>
+                                <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; text-transform: uppercase; <?php echo esc_attr($priority_style); ?>">
+                                    <?php echo esc_html($r->priority); ?>
+                                </span>
+                            </td>
+                            <td>
+                                <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; text-transform: uppercase; <?php echo esc_attr($status_style); ?>">
+                                    <?php echo esc_html(str_replace('_', ' ', $r->status)); ?>
+                                </span>
+                            </td>
+                            <td>
+                                <?php if ($r->listing_id) : ?>
+                                    <a href="<?php echo esc_url(get_edit_post_link($r->listing_id)); ?>" target="_blank">#<?php echo (int) $r->listing_id; ?></a>
+                                <?php else : ?>
+                                    <span style="color: #94a3b8;">—</span>
+                                <?php endif; ?>
+                            </td>
+                            <td><?php echo esc_html($assigned_admin_name); ?></td>
+                            <td>
+                                <a href="<?php echo esc_url(add_query_arg('view_report', $r->id, admin_url('admin.php?page=propvendor-safety-reports'))); ?>" class="button button-small">
+                                    <?php esc_html_e('Triage', 'propvendor-marketplace'); ?>
+                                </a>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else : ?>
+                    <tr>
+                        <td colspan="9"><?php esc_html_e('No safety reports or inquiries match your current filters.', 'propvendor-marketplace'); ?></td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+
+        <!-- Pagination Links -->
+        <?php if ($total_pages > 1) : ?>
+            <div class="tablenav" style="margin-top: 15px;">
+                <div class="tablenav-pages">
+                    <span class="displaying-num"><?php printf(esc_html__('%d items', 'propvendor-marketplace'), $filtered_count); ?></span>
+                    <?php
+                    echo paginate_links(array(
+                        'base'      => add_query_arg('paged', '%#%'),
+                        'format'    => '',
+                        'prev_text' => '&laquo;',
+                        'next_text' => '&raquo;',
+                        'total'     => $total_pages,
+                        'current'   => $paged,
+                    ));
+                    ?>
+                </div>
+            </div>
+        <?php endif; ?>
     </div>
     <?php
 }

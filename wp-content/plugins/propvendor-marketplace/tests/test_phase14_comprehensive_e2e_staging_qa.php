@@ -333,7 +333,7 @@ try {
 
     // 6.1 Official Support Email Helper
     $supp_email = propvendor_marketplace_get_support_email();
-    run_test('support@propvendor.ng' === $supp_email, '6.1 Official support email defaults to support@propvendor.ng', $supp_email);
+    run_test('support@propvendor.com.ng' === $supp_email, '6.1 Official support email defaults to support@propvendor.com.ng', $supp_email);
 
     // 6.2 Redundant Astra Title Header Suppression
     $title_suppressed = propvendor_marketplace_astra_the_title_enabled(true);
