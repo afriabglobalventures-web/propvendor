@@ -1,8 +1,8 @@
 # PropVendor Standard Operating Procedure (SOP)
-## Kwara State Pilot: Vendor Onboarding & Asset Verification
+## Kwara State Pilot: Vendor Onboarding, Agent Outreach & Asset Verification
 
 **Document Reference:** `PV-SOP-OPS-19-3-01`  
-**Version:** 1.0  
+**Version:** 1.1  
 **Effective Date:** October 29, 2026  
 **Target Pilot Region:** Kwara State (Primary Focus: Ilorin Metropolitan Area — GRA, Fate, Tanke, University Road, Ganmo, Eiyenkorin)  
 **Classification:** Operational / Confidential  
@@ -12,7 +12,7 @@
 
 ## 1. Purpose & Scope
 
-This Standard Operating Procedure (SOP) governs the identification, vetting, onboarding, and listing intake of real estate brokers, private property developers, licensed surveyors, and automotive dealerships in Kwara State during the PropVendor Phase 19.3 pilot.
+This Standard Operating Procedure (SOP) governs the identification, outreach, vetting, onboarding, and listing intake of real estate brokers, private property developers, licensed surveyors, and automotive dealerships in Kwara State during the PropVendor Phase 19.3 pilot.
 
 The objective is to seed the PropVendor marketplace exclusively with **100% genuine, permission-based, and physically inspected inventory**, while enforcing consumer safety, anti-advance-fee mandates, and Nigeria Data Protection Act (NDPA) privacy standards.
 
@@ -59,7 +59,163 @@ Automotive dealers marketing vehicles on PropVendor must operate a physical deal
 
 ---
 
-## 3. Standardized Physical Inspection & Authorization Template
+## 3. Field-Ready Agent & Dealership Outreach Communication Templates
+
+These standardized outreach communications must be used by the PropVendor Business Development and Field Operations teams when initiating contact with prospective verified partners in Ilorin.
+
+### Template 3.1: WhatsApp / SMS Direct Outreach (To Licensed Ilorin Realtors & Brokers)
+```text
+Good day [Broker/Agency Name],
+
+My name is [Field Lead Name] from PropVendor Technologies (https://propvendor.com.ng).
+
+We are currently launching our verified real estate marketplace in Kwara State, focusing exclusively on accredited agencies and direct developers in Ilorin (GRA, Fate, Tanke, and environs).
+
+Unlike traditional portals flooded with duplicates and unverified listings, PropVendor only features physically inspected properties with direct marketing mandates. We protect brokers by providing:
+- Guaranteed direct buyer leads with zero inspection fee disputes.
+- A dedicated digital vendor dashboard to track buyer inquiries.
+- Free pilot listing allocation under our Kwara Pioneer Partner cohort.
+
+We would like to schedule a brief 10-minute introduction at your office this week to walk you through our onboarding process and assist in featuring your top 3 verified listings.
+
+Could you let us know if [Day of Week, e.g., Thursday] morning works for a quick visit?
+
+Warm regards,
+[Field Lead Name] | Partner Operations
+PropVendor Technologies Ltd.
+support@propvendor.com.ng | https://propvendor.com.ng
+```
+
+---
+
+### Template 3.2: Formal Email Outreach & Partnership Proposal (To Managing Directors / Heads of Agency)
+```text
+Subject: Invitation to Join PropVendor as an Accredited Pioneer Real Estate Partner in Ilorin
+
+Dear [Managing Director / Lead Broker Name],
+
+I hope this email finds you well.
+
+I am writing on behalf of PropVendor Technologies (https://propvendor.com.ng), an enterprise real estate and automotive marketplace designed to eliminate transaction fraud and connect verified vendors with serious, high-intent buyers across Nigeria.
+
+As part of our Phase 19.3 Kwara State pilot launch, our operations team is selecting 15 premier real estate agencies across Ilorin to participate in our Pioneer Vendor Cohort. Having reviewed your firm’s esteemed standing and market reputation in [Specific Area, e.g., GRA / Fate / Tanke], we would be honored to partner with [Agency Name].
+
+What PropVendor Offers Your Agency:
+1. Premier Search Visibility: Verified agency badge and direct visibility to pre-screened buyers looking for genuine residential and commercial properties in Ilorin.
+2. Lead Protection & Zero Advance Fee Hassle: Clean inquiry workflow with contact masking and direct message management via your dedicated Vendor Dashboard.
+3. Free Pilot Allocation: Full access to the Free Basic Plan allowing you to feature up to 3 active listings at zero subscription cost during the initial pilot phase.
+4. Professional Onboarding Assistance: A dedicated PropVendor Field Inspector will visit your office to handle physical listing photography, document verification, and catalog setup.
+
+What We Require from Pioneer Partners:
+- Proof of CAC Business Registration and corporate office in Kwara State.
+- Written marketing authorization / mandate for every property featured.
+- Commitment to daylight physical inspections without demanding unapproved advance booking or inspection fees from prospective buyers.
+
+We would appreciate the opportunity to discuss this partnership further. Please let us know your availability for a brief meeting or introductory call this week.
+
+Yours sincerely,
+
+[Field Lead Name]
+Head of Regional Operations (Kwara)
+PropVendor Technologies Ltd.
+Email: support@propvendor.com.ng | Web: https://propvendor.com.ng
+```
+
+---
+
+### Template 3.3: Car Dealership Manager Outreach (Tokunbo & Verified Nigerian-Used Dealers)
+```text
+Good day [Dealership Principal / Manager Name],
+
+I am [Field Lead Name] from PropVendor Technologies (https://propvendor.com.ng).
+
+We are introducing our verified automotive marketplace in Ilorin, connecting reputable physical car dealerships directly with genuine private and commercial buyers.
+
+PropVendor addresses the single biggest frustration auto buyers face today: unverified phantom cars, fake customs duty papers, and fraudulent deposits. On PropVendor:
+- Every car listed is tied to a verified 17-character VIN and physical lot inspection.
+- Buyers know they are dealing directly with an accredited dealership with a permanent physical showroom.
+- You receive verified buyer inquiries directly through our secure platform.
+
+As an introductory offer for leading auto dealers along [Dealer Location, e.g., Unity Road / Fate Road / Ajase-Ipo Road], we are providing complimentary vendor onboarding and 3 free active vehicle slots.
+
+Our field officer will be in your area on [Proposed Date] and can stop by for 10 minutes to verify your lot and photograph your first intake vehicles.
+
+Please reply or call +234 [Official Phone] to confirm your convenient time.
+
+Best regards,
+[Field Lead Name] | Automotive Intake Lead
+PropVendor Technologies Ltd.
+```
+
+---
+
+### Template 3.4: Formal Pilot Onboarding Invitation Letter & Free Basic Quota Allocation
+```text
+[PropVendor Technologies Ltd. Letterhead]
+
+Date: ___ / ___ / 2026
+Vendor Reference: PV-VEND-KWR-__________
+Vendor Business Name: ___________________________________________________________
+
+OFFICIAL ONBOARDING & PILOT INTAKE CONFIRMATION
+
+Dear [Vendor Representative Name],
+
+Congratulations! We are pleased to formally welcome [Business Name] as an accredited Pioneer Vendor on the PropVendor Marketplace (https://propvendor.com.ng).
+
+Your vendor profile has been verified and provisioned in our system. You have been assigned the Free Basic Plan, entitling you to market up to three (3) active, verified listings across our Property, Land, or Vehicle categories.
+
+Account Summary:
+- Registered Username / Email: __________________________________________________
+- Vendor Dashboard Access: https://propvendor.com.ng/vendor-dashboard/
+- Active Listing Quota: 3 Concurrent Published Listings
+- Moderation Status: All submissions audited within 12 hours via the Admin Moderation Queue
+
+Operating Compliance Reminder:
+- Zero Smuggled Contact Details: Do not embed phone numbers or external links in descriptions; leads are delivered through your secure dashboard.
+- Zero Inspection Fees: PropVendor enforces a strict prohibition against charging buyers advance booking or inspection deposits prior to physical viewing.
+- Resubmission Support: If a listing is returned for corrections, review the feedback banner in your dashboard and click "Edit & Resubmit".
+
+For dedicated partner assistance, our Kwara operations team is available at support@propvendor.com.ng.
+
+Welcome aboard!
+
+Authorized Signature: ___________________________
+PropVendor Marketplace Operations Lead
+```
+
+---
+
+### Template 3.5: Physical Inspection Appointment Confirmation & Pre-Inspection Checklist
+```text
+Subject: PropVendor Physical Inspection Appointment: [Asset Title / Location] - Reference: PV-INTAKE-ILR-[ID]
+
+Dear [Vendor Name],
+
+Thank you for scheduling a physical asset inspection with PropVendor Technologies.
+
+Inspection Schedule:
+- Date & Time: [Date, e.g., Friday, 31st October 2026] at [Time, e.g., 10:30 AM WAT]
+- Asset Location: [Exact Address / Landmark in Ilorin]
+- Assigned Field Inspector: [Inspector Name] (Phone: +234 [Inspector Phone])
+
+Pre-Inspection Document Checklist:
+To ensure prompt verification and same-day listing approval, please have the following ready on site:
+1. Proof of Representation: Signed Agency Mandate Letter or Title Document.
+2. For Land: Original/Certified copy of the Registered Survey Plan showing beacon coordinates.
+3. For Vehicles: Physical access to the vehicle, original registration paperwork, and Nigerian Customs SGD clearance (for Tokunbo imports).
+4. Physical Premises: Property/vehicle unlocked and accessible for full daylight exterior and interior photography.
+
+If you need to reschedule or have questions, please notify our field lead at least 2 hours prior to the inspection time.
+
+Thank you for choosing PropVendor.
+
+PropVendor Field Operations Team
+```
+
+---
+
+## 4. Standardized Physical Inspection & Authorization Template
 
 This verification schedule must be executed by an authorized PropVendor Field Inspector prior to approving any property, land, or vehicle listing for public display.
 
@@ -160,7 +316,7 @@ Supervisor Approval: ______________________________   Date: ___/___/2026
 
 ---
 
-## 4. Photographic Evidence & Geotagging Standards
+## 5. Photographic Evidence & Geotagging Standards
 
 Every listing must be accompanied by original, high-resolution photographs meeting the following specifications:
 1. **Camera Settings:** Minimum resolution of `1024 x 768` pixels. Geolocation/GPS metadata enabled where feasible.
@@ -173,7 +329,7 @@ Every listing must be accompanied by original, high-resolution photographs meeti
 
 ---
 
-## 5. KW-GIS Cross-Referencing Operational Guidelines
+## 6. KW-GIS Cross-Referencing Operational Guidelines
 
 When reviewing land parcels or newly developed estates in Ilorin, the operations team must adhere to the following KW-GIS search guidelines:
 
