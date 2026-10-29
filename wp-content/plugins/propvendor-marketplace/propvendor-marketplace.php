@@ -120,6 +120,131 @@ function propvendor_marketplace_get_canonical_listing_status($post_id) {
 }
 
 /**
+ * =========================================================================
+ * PHASE 19.2: STRUCTURED REJECTION REASONS & MODERATION AUDIT TRAIL HELPERS
+ * =========================================================================
+ */
+
+/**
+ * Get canonical allowed rejection reason codes and human-readable descriptions.
+ *
+ * @return array Associative array of reason_code => human_label
+ */
+function propvendor_marketplace_get_rejection_reasons() {
+    return array(
+        'missing_documents'  => __('Missing or Unclear Property Documentation (Title, Survey, or C of O)', 'propvendor-marketplace'),
+        'missing_vin'        => __('Missing or Invalid Vehicle VIN / Registration Details', 'propvendor-marketplace'),
+        'poor_images'        => __('Blurred, Low Quality, Watermarked, or Insufficient Images', 'propvendor-marketplace'),
+        'incomplete_details' => __('Incomplete or Inconsistent Listing Details / Pricing', 'propvendor-marketplace'),
+        'suspicious_content' => __('Suspected Misleading or Potentially Fraudulent Content', 'propvendor-marketplace'),
+        'other'              => __('Other / Policy Non-Compliance (Specific Explanation Required)', 'propvendor-marketplace'),
+    );
+}
+
+/**
+ * Resolve a human-readable rejection reason label from its reason code.
+ *
+ * @param string $code
+ * @return string
+ */
+function propvendor_marketplace_get_rejection_reason_label($code) {
+    $reasons = propvendor_marketplace_get_rejection_reasons();
+    $code = sanitize_key((string) $code);
+    return isset($reasons[$code]) ? $reasons[$code] : (!empty($code) ? esc_html($code) : __('Unspecified Reason', 'propvendor-marketplace'));
+}
+
+/**
+ * Append an immutable, validated moderation event to a listing's audit trail.
+ *
+ * Stored in protected postmeta '_propvendor_moderation_audit_trail' as a chronological JSON array.
+ * Protected against vendor modification by WordPress protected meta policy and REST API lockdowns.
+ *
+ * @param int   $post_id Post ID of the listing.
+ * @param array $args    Event details (actor_id, actor_name, actor_role, from_status, to_status, decision, reason_code, notes).
+ * @return array The created audit entry.
+ */
+function propvendor_marketplace_record_moderation_event($post_id, $args = array()) {
+    $post_id = absint($post_id);
+    if ($post_id <= 0) {
+        return array();
+    }
+
+    $existing_trail = get_post_meta($post_id, '_propvendor_moderation_audit_trail', true);
+    if (!is_array($existing_trail)) {
+        $existing_trail = array();
+    }
+
+    $actor_id = isset($args['actor_id']) ? absint($args['actor_id']) : get_current_user_id();
+    $actor_name = '';
+    if (!empty($args['actor_name'])) {
+        $actor_name = sanitize_text_field($args['actor_name']);
+    } elseif ($actor_id > 0) {
+        $user_obj = get_user_by('id', $actor_id);
+        $actor_name = $user_obj ? $user_obj->display_name : ('User #' . $actor_id);
+    } else {
+        $actor_name = __('System / Automated Task', 'propvendor-marketplace');
+    }
+
+    $actor_role = isset($args['actor_role']) ? sanitize_key($args['actor_role']) : '';
+    if (empty($actor_role)) {
+        if ($actor_id > 0) {
+            $actor_role = user_can($actor_id, 'manage_options') ? 'admin' : (user_can($actor_id, 'propvendor_submit_marketplace_listings') ? 'vendor' : 'user');
+        } else {
+            $actor_role = 'system';
+        }
+    }
+
+    $from_status = sanitize_text_field($args['from_status'] ?? '');
+    $to_status   = sanitize_text_field($args['to_status'] ?? '');
+    $decision    = sanitize_key($args['decision'] ?? 'status_change');
+    $reason_code = sanitize_key($args['reason_code'] ?? '');
+    $notes       = sanitize_textarea_field($args['notes'] ?? '');
+
+    $now_mysql = current_time('mysql');
+    $now_ts    = current_time('timestamp');
+
+    $entry = array(
+        'entry_id'    => 'mod_' . wp_generate_password(8, false, false),
+        'timestamp'   => $now_mysql,
+        'timestamp_u' => $now_ts,
+        'actor_id'    => $actor_id,
+        'actor_name'  => $actor_name,
+        'actor_role'  => $actor_role,
+        'from_status' => $from_status,
+        'to_status'   => $to_status,
+        'decision'    => $decision,
+        'reason_code' => $reason_code,
+        'notes'       => $notes,
+    );
+
+    $existing_trail[] = $entry;
+
+    // Bound audit trail size to prevent unbounded postmeta growth
+    if (count($existing_trail) > 50) {
+        $existing_trail = array_slice($existing_trail, -50);
+    }
+
+    update_post_meta($post_id, '_propvendor_moderation_audit_trail', $existing_trail);
+
+    return $entry;
+}
+
+/**
+ * Retrieve chronological moderation audit trail for a listing.
+ *
+ * @param int $post_id
+ * @return array
+ */
+function propvendor_marketplace_get_moderation_audit_trail($post_id) {
+    $post_id = absint($post_id);
+    if ($post_id <= 0) {
+        return array();
+    }
+    $trail = get_post_meta($post_id, '_propvendor_moderation_audit_trail', true);
+    return is_array($trail) ? $trail : array();
+}
+
+/**
  * Check if a listing is currently in the active pool.
  *
  * A listing consumes a slot when ALL of the following are true:
@@ -4033,6 +4158,25 @@ function propvendor_marketplace_submit_listing_form_shortcode() {
             . '</div>';
     }
 
+    // Phase 19.2: Rejection Remediation Banner
+    if ($listing) {
+        $canonical_status = propvendor_marketplace_get_canonical_listing_status($listing->ID);
+        if ('Rejected' === $canonical_status) {
+            $rej_reason = get_post_meta($listing->ID, '_propvendor_rejection_reason', true);
+            $rej_notes  = get_post_meta($listing->ID, '_propvendor_rejection_notes', true);
+            $rej_label  = propvendor_marketplace_get_rejection_reason_label($rej_reason);
+
+            $notice .= '<div class="pv-moderation-remediation-banner">'
+                . '<div class="pv-banner-header"><span class="dashicons dashicons-warning"></span> <strong>' . esc_html__('Action Required: Moderator Corrections Requested', 'propvendor-marketplace') . '</strong></div>'
+                . '<p><strong>' . esc_html__('Rejection Reason:', 'propvendor-marketplace') . '</strong> <span class="pv-reason-pill">' . esc_html($rej_label) . '</span></p>';
+            if (!empty($rej_notes)) {
+                $notice .= '<p><strong>' . esc_html__('Moderator Instructions:', 'propvendor-marketplace') . '</strong> <em>"' . esc_html($rej_notes) . '"</em></p>';
+            }
+            $notice .= '<p class="pv-banner-sub">' . esc_html__('Please update the required information below and click "Update Listing". Your changes will automatically return this listing to Pending Review for priority moderation.', 'propvendor-marketplace') . '</p>'
+                . '</div>';
+        }
+    }
+
     $form_title = $listing ? 'Edit listing' : 'Submit a listing';
     $action = $listing ? 'propvendor_update_listing' : 'propvendor_submit_listing';
     $hidden_id = $listing ? '<input type="hidden" name="propvendor_listing_id" value="' . esc_attr((string) $listing->ID) . '" />' : '';
@@ -4451,9 +4595,13 @@ function propvendor_marketplace_vendor_dashboard_shortcode() {
             $edit_url = add_query_arg(array('propvendor_edit_listing' => $listing->ID), home_url('/vendor-dashboard/'));
             $location = get_post_meta($listing->ID, 'propvendor_location', true);
             $submitted = get_the_date(get_option('date_format'), $listing);
-            $actions = '<a href="' . esc_url($edit_url) . '">Edit</a>';
-            if ('publish' === $listing->post_status) {
-                $actions .= ' <a href="' . esc_url(get_permalink($listing)) . '">View</a>';
+            if ('Rejected' === $status) {
+                $actions = '<a href="' . esc_url($edit_url) . '" class="pv-btn-resubmit">' . esc_html__('Edit & Resubmit', 'propvendor-marketplace') . '</a>';
+            } else {
+                $actions = '<a href="' . esc_url($edit_url) . '">Edit</a>';
+                if ('publish' === $listing->post_status) {
+                    $actions .= ' <a href="' . esc_url(get_permalink($listing)) . '">View</a>';
+                }
             }
 
             $output .= '<tr class="propvendor-vendor-listing-card">';
@@ -4462,7 +4610,23 @@ function propvendor_marketplace_vendor_dashboard_shortcode() {
             $output .= '<td data-label="Location">' . esc_html($location ?: 'Not provided') . '</td>';
             $output .= '<td data-label="Price">' . esc_html($price ? '₦ ' . number_format_i18n((float) $price, 2) : 'Price on request') . '</td>';
             $output .= '<td data-label="Submitted">' . esc_html($submitted) . '</td>';
-            $output .= '<td data-label="Status"><span class="propvendor-dashboard-status propvendor-dashboard-status-' . esc_attr(sanitize_title($status)) . '">' . esc_html($status) . '</span></td>';
+            $output .= '<td data-label="Status">';
+            $output .= '<span class="propvendor-dashboard-status propvendor-dashboard-status-' . esc_attr(sanitize_title($status)) . '">' . esc_html($status) . '</span>';
+            if ('Rejected' === $status) {
+                $rej_code  = get_post_meta($listing->ID, '_propvendor_rejection_reason', true);
+                $rej_notes = get_post_meta($listing->ID, '_propvendor_rejection_notes', true);
+                if (!empty($rej_code) || !empty($rej_notes)) {
+                    $output .= '<div class="pv-dashboard-rejection-info">';
+                    if (!empty($rej_code)) {
+                        $output .= '<div class="pv-rejection-tag"><strong>Reason:</strong> ' . esc_html(propvendor_marketplace_get_rejection_reason_label($rej_code)) . '</div>';
+                    }
+                    if (!empty($rej_notes)) {
+                        $output .= '<div class="pv-rejection-notes"><strong>Notes:</strong> "' . esc_html($rej_notes) . '"</div>';
+                    }
+                    $output .= '</div>';
+                }
+            }
+            $output .= '</td>';
             $output .= '<td data-label="Actions" class="propvendor-dashboard-actions">' . $actions . '</td>';
             $output .= '</tr>';
         }
@@ -6859,6 +7023,42 @@ function propvendor_marketplace_process_listing_submission($data, $files, $curre
     }
     wp_set_object_terms($post_id, array($category_name), 'listing_category', false);
 
+    // Phase 19.2: Moderation Audit Trail & Admin Notification on Submission / Resubmission
+    $is_resubmission = ($existing_post_id > 0);
+    $prior_status_val = $is_resubmission ? get_post_meta($existing_post_id, 'propvendor_listing_status', true) : 'None';
+    if (empty($prior_status_val)) {
+        $prior_status_val = $is_resubmission ? 'Pending review' : 'None';
+    }
+
+    if ($is_resubmission) {
+        delete_post_meta($post_id, '_propvendor_rejection_reason');
+        delete_post_meta($post_id, '_propvendor_rejection_notes');
+    }
+
+    $acting_user = wp_get_current_user();
+    $acting_name = $acting_user ? $acting_user->display_name : ('User #' . $current_user_id);
+    $acting_role = user_can($current_user_id, 'manage_options') ? 'admin' : 'vendor';
+
+    propvendor_marketplace_record_moderation_event($post_id, array(
+        'actor_id'    => $current_user_id,
+        'actor_name'  => $acting_name,
+        'actor_role'  => $acting_role,
+        'from_status' => $prior_status_val,
+        'to_status'   => 'Pending review',
+        'decision'    => $is_resubmission ? 'resubmitted' : 'submitted',
+        'reason_code' => '',
+        'notes'       => $is_resubmission ? __('Listing edited and resubmitted for moderator review.', 'propvendor-marketplace') : __('Initial listing submission awaiting review.', 'propvendor-marketplace'),
+    ));
+
+    // Dispatch non-fatal notification to site administrator
+    try {
+        if (function_exists('propvendor_marketplace_send_listing_submitted_notification')) {
+            propvendor_marketplace_send_listing_submitted_notification($post_id, $is_resubmission);
+        }
+    } catch (Throwable $e) {
+        error_log('PropVendor listing submitted notification failure: ' . $e->getMessage());
+    }
+
     return array('post_id' => $post_id, 'listing_status' => $listing_status);
 }
 
@@ -7161,7 +7361,7 @@ function propvendor_marketplace_render_meta_box($post) {
 
 function propvendor_marketplace_render_moderation_meta_box($post) {
     if (!current_user_can('manage_options')) {
-        echo '<p>Only administrators may approve or reject marketplace listings.</p>';
+        echo '<p>' . esc_html__('Only administrators may approve or reject marketplace listings.', 'propvendor-marketplace') . '</p>';
         return;
     }
 
@@ -7170,6 +7370,9 @@ function propvendor_marketplace_render_moderation_meta_box($post) {
         $current_status = $post->post_status === 'publish' ? 'Published' : 'Pending review';
     }
 
+    $rejection_reason = get_post_meta($post->ID, '_propvendor_rejection_reason', true);
+    $rejection_notes  = get_post_meta($post->ID, '_propvendor_rejection_notes', true);
+
     $is_direct_owner = get_post_meta($post->ID, '_propvendor_is_direct_owner', true);
     $direct_owner_status = get_post_meta($post->ID, '_propvendor_direct_owner_status', true);
     if (empty($direct_owner_status)) {
@@ -7177,7 +7380,7 @@ function propvendor_marketplace_render_moderation_meta_box($post) {
     }
     ?>
     <p>
-        <label for="propvendor_moderation_status">Moderation status</label>
+        <label for="propvendor_moderation_status"><strong>Moderation status</strong></label>
         <select id="propvendor_moderation_status" name="propvendor_moderation_status" class="widefat">
             <?php
             foreach (propvendor_marketplace_get_listing_status_choices() as $status) {
@@ -7186,8 +7389,40 @@ function propvendor_marketplace_render_moderation_meta_box($post) {
             ?>
         </select>
     </p>
-    <p>
+
+    <div id="pv-admin-rejection-wrap" style="<?php echo ('Rejected' === $current_status) ? '' : 'display:none;'; ?> margin-top: 10px; padding: 10px; background: #fff5f5; border: 1px solid #fed7d7; border-radius: 4px;">
+        <p style="margin: 0 0 8px 0;">
+            <label for="propvendor_rejection_reason"><strong>Rejection Reason:</strong></label>
+            <select id="propvendor_rejection_reason" name="propvendor_rejection_reason" class="widefat">
+                <?php
+                foreach (propvendor_marketplace_get_rejection_reasons() as $r_code => $r_label) {
+                    echo '<option value="' . esc_attr($r_code) . '" ' . selected($rejection_reason, $r_code, false) . '>' . esc_html($r_label) . '</option>';
+                }
+                ?>
+            </select>
+        </p>
+        <p style="margin: 0;">
+            <label for="propvendor_rejection_notes"><strong>Remediation Notes for Vendor:</strong></label>
+            <textarea id="propvendor_rejection_notes" name="propvendor_rejection_notes" rows="3" class="widefat" placeholder="<?php esc_attr_e('Specify corrective steps required before resubmission...', 'propvendor-marketplace'); ?>"><?php echo esc_textarea($rejection_notes); ?></textarea>
+        </p>
+    </div>
+    <script>
+    (function() {
+        var modSel = document.getElementById('propvendor_moderation_status');
+        var rejBox = document.getElementById('pv-admin-rejection-wrap');
+        if (modSel && rejBox) {
+            modSel.addEventListener('change', function() {
+                rejBox.style.display = (this.value === 'Rejected') ? 'block' : 'none';
+            });
+        }
+    })();
+    </script>
+
+    <p style="margin-top: 12px;">
         <label><input type="checkbox" name="propvendor_remove_listing" value="1" /> Remove listing</label>
+    </p>
+    <p class="description" style="font-size: 11px; color: #64748b; line-height: 1.4; margin: 8px 0;">
+        <strong>Safety Note:</strong> Approval does not verify legal title authenticity, surveyed boundaries, or vehicle ownership.
     </p>
     <hr style="margin: 15px 0; border: 0; border-top: 1px solid #ddd;" />
     <p>
@@ -7209,6 +7444,40 @@ function propvendor_marketplace_render_moderation_meta_box($post) {
         </select>
         <span class="description" style="display:block; margin-top:4px;">When Approved, public badge "Direct from Owner — Zero Agent Fee" is displayed.</span>
     </p>
+
+    <?php
+    $audit_trail = propvendor_marketplace_get_moderation_audit_trail($post->ID);
+    ?>
+    <hr style="margin: 15px 0; border: 0; border-top: 1px solid #ddd;" />
+    <p style="margin-bottom: 6px;"><strong>Moderation History &amp; Audit Trail:</strong></p>
+    <?php if (empty($audit_trail)): ?>
+        <p style="font-size: 11px; color: #64748b; font-style: italic; margin: 0;">No moderation events recorded yet.</p>
+    <?php else: ?>
+        <div style="max-height: 160px; overflow-y: auto; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 6px 8px; font-size: 11px; line-height: 1.4;">
+            <?php foreach (array_reverse($audit_trail) as $log_entry): ?>
+                <div style="padding: 5px 0; border-bottom: 1px solid #e2e8f0;">
+                    <div style="display: flex; justify-content: space-between; color: #475569;">
+                        <span><strong><?php echo esc_html($log_entry['actor_name'] ?: 'System'); ?></strong> (<?php echo esc_html($log_entry['actor_role'] ?: 'admin'); ?>)</span>
+                        <span style="font-size: 10px;"><?php echo esc_html($log_entry['timestamp']); ?></span>
+                    </div>
+                    <div style="margin-top: 2px;">
+                        <span style="font-weight: 600; color: #1e3a8a;"><?php echo esc_html(strtoupper($log_entry['decision'])); ?>:</span>
+                        <?php echo esc_html($log_entry['from_status'] ?: 'None'); ?> &rarr; <strong><?php echo esc_html($log_entry['to_status']); ?></strong>
+                    </div>
+                    <?php if (!empty($log_entry['reason_code'])): ?>
+                        <div style="color: #b91c1c; margin-top: 2px;">
+                            <em>Reason: <?php echo esc_html(propvendor_marketplace_get_rejection_reason_label($log_entry['reason_code'])); ?></em>
+                        </div>
+                    <?php endif; ?>
+                    <?php if (!empty($log_entry['notes'])): ?>
+                        <div style="color: #64748b; margin-top: 2px;">
+                            "<?php echo esc_html($log_entry['notes']); ?>"
+                        </div>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
     <?php
     wp_nonce_field('propvendor_moderation_nonce', 'propvendor_moderation_nonce');
 }
@@ -7257,6 +7526,26 @@ function propvendor_marketplace_handle_admin_moderation_save($post_id) {
         return;
     }
 
+    $prior_status = get_post_meta($post_id, 'propvendor_listing_status', true);
+    if (empty($prior_status)) {
+        $prior_status = propvendor_marketplace_get_canonical_listing_status($post_id);
+    }
+
+    $rejection_reason = '';
+    $rejection_notes = '';
+    if ('Rejected' === $moderation_status) {
+        $submitted_reason = isset($_POST['propvendor_rejection_reason']) ? sanitize_key(wp_unslash($_POST['propvendor_rejection_reason'])) : '';
+        $allowed_reasons  = array_keys(propvendor_marketplace_get_rejection_reasons());
+        $rejection_reason = in_array($submitted_reason, $allowed_reasons, true) ? $submitted_reason : 'other';
+        $rejection_notes  = isset($_POST['propvendor_rejection_notes']) ? sanitize_textarea_field(wp_unslash($_POST['propvendor_rejection_notes'])) : '';
+
+        update_post_meta($post_id, '_propvendor_rejection_reason', $rejection_reason);
+        update_post_meta($post_id, '_propvendor_rejection_notes', $rejection_notes);
+    } elseif ('Published' === $moderation_status) {
+        delete_post_meta($post_id, '_propvendor_rejection_reason');
+        delete_post_meta($post_id, '_propvendor_rejection_notes');
+    }
+
     $post_status = '';
     if ('Published' === $moderation_status) {
         $post_status = 'publish';
@@ -7287,6 +7576,39 @@ function propvendor_marketplace_handle_admin_moderation_save($post_id) {
 
     update_post_meta($post_id, 'propvendor_listing_status', $moderation_status);
     update_post_meta($post_id, 'propvendor_status', $moderation_status);
+
+    // Record Audit Trail & Dispatch Notifications on transition or rejection
+    if ($prior_status !== $moderation_status || 'Rejected' === $moderation_status) {
+        $decision = ('Published' === $moderation_status) ? 'approved' : (('Rejected' === $moderation_status) ? 'rejected' : 'status_change');
+        $acting_admin = wp_get_current_user();
+        $admin_name   = $acting_admin ? $acting_admin->display_name : 'Admin';
+
+        propvendor_marketplace_record_moderation_event($post_id, array(
+            'actor_id'    => get_current_user_id(),
+            'actor_name'  => $admin_name,
+            'actor_role'  => 'admin',
+            'from_status' => $prior_status,
+            'to_status'   => $moderation_status,
+            'decision'    => $decision,
+            'reason_code' => ('Rejected' === $moderation_status) ? $rejection_reason : '',
+            'notes'       => ('Rejected' === $moderation_status) ? $rejection_notes : sprintf(__('Status changed from %s to %s by administrator.', 'propvendor-marketplace'), $prior_status, $moderation_status),
+        ));
+
+        // Non-fatal notification dispatch
+        try {
+            if ('Published' === $moderation_status && $prior_status !== 'Published') {
+                if (function_exists('propvendor_marketplace_send_listing_approved_notification')) {
+                    propvendor_marketplace_send_listing_approved_notification($post_id);
+                }
+            } elseif ('Rejected' === $moderation_status && $prior_status !== 'Rejected') {
+                if (function_exists('propvendor_marketplace_send_listing_rejected_notification')) {
+                    propvendor_marketplace_send_listing_rejected_notification($post_id, $rejection_reason, $rejection_notes);
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('PropVendor moderation notification dispatch error: ' . $e->getMessage());
+        }
+    }
 }
 add_action('save_post', 'propvendor_marketplace_handle_admin_moderation_save', 20);
 
@@ -8945,8 +9267,421 @@ function propvendor_marketplace_add_admin_menu() {
         'propvendor-safety-reports',
         'propvendor_marketplace_render_admin_safety_reports_page'
     );
+
+    // Phase 19.2: Moderation Queue with dynamic pending count badge
+    global $wpdb;
+    $pending_count = (int) $wpdb->get_var("
+        SELECT COUNT(*) FROM {$wpdb->posts}
+        WHERE post_type IN ('property_listing', 'land_listing', 'vehicle_listing')
+        AND post_status = 'pending'
+    ");
+    $badge = ($pending_count > 0) ? ' <span class="update-plugins count-' . $pending_count . '" style="background:#d97706; color:#fff; border-radius:10px; padding:0 6px; font-weight:600;"><span class="plugin-count">' . $pending_count . '</span></span>' : '';
+
+    add_submenu_page(
+        'propvendor-enquiries',
+        'Marketplace Moderation Queue',
+        'Moderation Queue' . $badge,
+        'manage_options',
+        'propvendor-moderation-queue',
+        'propvendor_marketplace_render_admin_moderation_queue_page'
+    );
 }
 add_action('admin_menu', 'propvendor_marketplace_add_admin_menu');
+
+/**
+ * Phase 19.2 Workstream D: Unified Administrator Moderation Queue Page.
+ */
+function propvendor_marketplace_render_admin_moderation_queue_page() {
+    if (!current_user_can('manage_options')) {
+        wp_die(__('You do not have sufficient permissions to access this page.', 'propvendor-marketplace'), '', array('response' => 403));
+    }
+
+    global $wpdb;
+
+    // Notice handling
+    if (isset($_GET['pv_mod_notice'])) {
+        $notice_key = sanitize_key($_GET['pv_mod_notice']);
+        if ('approved' === $notice_key) {
+            echo '<div class="notice notice-success is-dismissible"><p><strong>' . esc_html__('Success:', 'propvendor-marketplace') . '</strong> ' . esc_html__('Listing approved and published to the live marketplace.', 'propvendor-marketplace') . '</p></div>';
+        } elseif ('rejected' === $notice_key) {
+            echo '<div class="notice notice-warning is-dismissible"><p><strong>' . esc_html__('Listing Rejected:', 'propvendor-marketplace') . '</strong> ' . esc_html__('Rejection reason recorded and corrective instructions dispatched to vendor.', 'propvendor-marketplace') . '</p></div>';
+        }
+    }
+
+    // KPI Counters
+    $counts_raw = $wpdb->get_results("
+        SELECT post_status, COUNT(*) as total
+        FROM {$wpdb->posts}
+        WHERE post_type IN ('property_listing', 'land_listing', 'vehicle_listing')
+        GROUP BY post_status
+    ", OBJECT_K);
+
+    $cnt_pending = isset($counts_raw['pending']) ? (int) $counts_raw['pending']->total : 0;
+    $cnt_publish = isset($counts_raw['publish']) ? (int) $counts_raw['publish']->total : 0;
+    $cnt_draft   = isset($counts_raw['draft']) ? (int) $counts_raw['draft']->total : 0;
+    $cnt_total   = $cnt_pending + $cnt_publish + $cnt_draft;
+
+    $status_filter = isset($_GET['mod_status']) ? sanitize_key($_GET['mod_status']) : 'pending';
+    $type_filter   = isset($_GET['listing_type']) ? sanitize_key($_GET['listing_type']) : 'all';
+    $search_query  = isset($_GET['s']) ? sanitize_text_field(wp_unslash($_GET['s'])) : '';
+    $paged         = max(1, isset($_GET['paged']) ? absint($_GET['paged']) : 1);
+
+    $query_post_types = ('all' === $type_filter) ? propvendor_marketplace_get_listing_post_types() : array($type_filter);
+    $query_post_statuses = ('all' === $status_filter)
+        ? array('pending', 'publish', 'draft')
+        : (('rejected' === $status_filter) ? array('draft') : array($status_filter));
+
+    $query_args = array(
+        'post_type'      => $query_post_types,
+        'post_status'    => $query_post_statuses,
+        'posts_per_page' => 20,
+        'paged'          => $paged,
+        's'              => $search_query,
+        'orderby'        => 'modified',
+        'order'          => 'DESC',
+    );
+    $queue_query = new WP_Query($query_args);
+
+    $base_url = admin_url('admin.php?page=propvendor-moderation-queue');
+    ?>
+    <div class="wrap pv-moderation-queue-wrap">
+        <h1 class="wp-heading-inline"><?php esc_html_e('Marketplace Moderation Queue', 'propvendor-marketplace'); ?></h1>
+        <hr class="wp-header-end" />
+
+        <!-- KPI Metric Cards -->
+        <div style="display: flex; gap: 16px; margin: 18px 0 24px 0; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 180px; background: #ffffff; border: 1px solid #e2e8f0; border-top: 4px solid #d97706; border-radius: 6px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <div style="font-size: 12px; text-transform: uppercase; color: #64748b; font-weight: 600;"><?php esc_html_e('Pending Review', 'propvendor-marketplace'); ?></div>
+                <div style="font-size: 26px; font-weight: 700; color: #d97706; margin-top: 4px;"><?php echo esc_html($cnt_pending); ?></div>
+            </div>
+            <div style="flex: 1; min-width: 180px; background: #ffffff; border: 1px solid #e2e8f0; border-top: 4px solid #16a34a; border-radius: 6px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <div style="font-size: 12px; text-transform: uppercase; color: #64748b; font-weight: 600;"><?php esc_html_e('Published Active', 'propvendor-marketplace'); ?></div>
+                <div style="font-size: 26px; font-weight: 700; color: #16a34a; margin-top: 4px;"><?php echo esc_html($cnt_publish); ?></div>
+            </div>
+            <div style="flex: 1; min-width: 180px; background: #ffffff; border: 1px solid #e2e8f0; border-top: 4px solid #dc2626; border-radius: 6px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <div style="font-size: 12px; text-transform: uppercase; color: #64748b; font-weight: 600;"><?php esc_html_e('Rejected / Returned', 'propvendor-marketplace'); ?></div>
+                <div style="font-size: 26px; font-weight: 700; color: #dc2626; margin-top: 4px;"><?php echo esc_html($cnt_draft); ?></div>
+            </div>
+            <div style="flex: 1; min-width: 180px; background: #ffffff; border: 1px solid #e2e8f0; border-top: 4px solid #2563eb; border-radius: 6px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <div style="font-size: 12px; text-transform: uppercase; color: #64748b; font-weight: 600;"><?php esc_html_e('Total Listings', 'propvendor-marketplace'); ?></div>
+                <div style="font-size: 26px; font-weight: 700; color: #2563eb; margin-top: 4px;"><?php echo esc_html($cnt_total); ?></div>
+            </div>
+        </div>
+
+        <!-- Filter Sub-Nav -->
+        <ul class="subsubsub">
+            <li><a href="<?php echo esc_url(add_query_arg('mod_status', 'pending', $base_url)); ?>" class="<?php echo ('pending' === $status_filter) ? 'current' : ''; ?>"><?php esc_html_e('Pending Review', 'propvendor-marketplace'); ?> <span class="count">(<?php echo esc_html($cnt_pending); ?>)</span></a> |</li>
+            <li><a href="<?php echo esc_url(add_query_arg('mod_status', 'publish', $base_url)); ?>" class="<?php echo ('publish' === $status_filter) ? 'current' : ''; ?>"><?php esc_html_e('Published', 'propvendor-marketplace'); ?> <span class="count">(<?php echo esc_html($cnt_publish); ?>)</span></a> |</li>
+            <li><a href="<?php echo esc_url(add_query_arg('mod_status', 'rejected', $base_url)); ?>" class="<?php echo ('rejected' === $status_filter) ? 'current' : ''; ?>"><?php esc_html_e('Rejected', 'propvendor-marketplace'); ?> <span class="count">(<?php echo esc_html($cnt_draft); ?>)</span></a> |</li>
+            <li><a href="<?php echo esc_url(add_query_arg('mod_status', 'all', $base_url)); ?>" class="<?php echo ('all' === $status_filter) ? 'current' : ''; ?>"><?php esc_html_e('All', 'propvendor-marketplace'); ?> <span class="count">(<?php echo esc_html($cnt_total); ?>)</span></a></li>
+        </ul>
+
+        <!-- Filter Form -->
+        <form method="get" action="<?php echo esc_url(admin_url('admin.php')); ?>" style="clear: both; margin: 12px 0 14px 0; display: flex; gap: 8px; align-items: center;">
+            <input type="hidden" name="page" value="propvendor-moderation-queue" />
+            <input type="hidden" name="mod_status" value="<?php echo esc_attr($status_filter); ?>" />
+
+            <select name="listing_type">
+                <option value="all" <?php selected($type_filter, 'all'); ?>><?php esc_html_e('All Categories', 'propvendor-marketplace'); ?></option>
+                <option value="property_listing" <?php selected($type_filter, 'property_listing'); ?>><?php esc_html_e('Properties', 'propvendor-marketplace'); ?></option>
+                <option value="land_listing" <?php selected($type_filter, 'land_listing'); ?>><?php esc_html_e('Land', 'propvendor-marketplace'); ?></option>
+                <option value="vehicle_listing" <?php selected($type_filter, 'vehicle_listing'); ?>><?php esc_html_e('Vehicles', 'propvendor-marketplace'); ?></option>
+            </select>
+
+            <input type="search" name="s" value="<?php echo esc_attr($search_query); ?>" placeholder="<?php esc_attr_e('Search listings...', 'propvendor-marketplace'); ?>" />
+            <input type="submit" class="button" value="<?php esc_attr_e('Filter', 'propvendor-marketplace'); ?>" />
+            <?php if (!empty($search_query) || 'all' !== $type_filter || 'pending' !== $status_filter): ?>
+                <a href="<?php echo esc_url($base_url); ?>" class="button"><?php esc_html_e('Reset', 'propvendor-marketplace'); ?></a>
+            <?php endif; ?>
+        </form>
+
+        <!-- Main Moderation Table -->
+        <table class="wp-list-table widefat fixed striped table-view-list posts" style="margin-top: 10px;">
+            <thead>
+                <tr>
+                    <th scope="col" style="width: 55px;"><?php esc_html_e('Thumb', 'propvendor-marketplace'); ?></th>
+                    <th scope="col" style="width: 25%;"><?php esc_html_e('Listing Details', 'propvendor-marketplace'); ?></th>
+                    <th scope="col" style="width: 16%;"><?php esc_html_e('Vendor / Agency', 'propvendor-marketplace'); ?></th>
+                    <th scope="col" style="width: 12%;"><?php esc_html_e('Price', 'propvendor-marketplace'); ?></th>
+                    <th scope="col" style="width: 12%;"><?php esc_html_e('Location', 'propvendor-marketplace'); ?></th>
+                    <th scope="col" style="width: 12%;"><?php esc_html_e('Status', 'propvendor-marketplace'); ?></th>
+                    <th scope="col" style="width: 10%;"><?php esc_html_e('Submitted', 'propvendor-marketplace'); ?></th>
+                    <th scope="col" style="width: 13%; text-align: right;"><?php esc_html_e('Actions', 'propvendor-marketplace'); ?></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (!$queue_query->have_posts()): ?>
+                    <tr>
+                        <td colspan="8" style="text-align: center; padding: 24px; color: #64748b;">
+                            <em><?php esc_html_e('No listings match the selected filters.', 'propvendor-marketplace'); ?></em>
+                        </td>
+                    </tr>
+                <?php else: ?>
+                    <?php while ($queue_query->have_posts()): $queue_query->the_post();
+                        $post_id     = get_the_ID();
+                        $post_type   = get_post_type();
+                        $author_id   = get_the_author_meta('ID');
+                        $vendor_user = get_user_by('id', $author_id);
+                        $vendor_name = $vendor_user ? $vendor_user->display_name : ('User #' . $author_id);
+                        $vendor_biz  = get_user_meta($author_id, 'propvendor_business_name', true) ?: $vendor_name;
+
+                        $type_map = array(
+                            'property_listing' => 'Property',
+                            'land_listing'     => 'Land',
+                            'vehicle_listing'  => 'Vehicle',
+                        );
+                        $type_label = isset($type_map[$post_type]) ? $type_map[$post_type] : 'Listing';
+
+                        $price    = get_post_meta($post_id, 'propvendor_price', true);
+                        $location = get_post_meta($post_id, 'propvendor_location', true);
+                        $status   = propvendor_marketplace_get_canonical_listing_status($post_id);
+                        $rej_code = get_post_meta($post_id, '_propvendor_rejection_reason', true);
+                        $rej_notes = get_post_meta($post_id, '_propvendor_rejection_notes', true);
+
+                        $edit_post_url = admin_url('post.php?post=' . $post_id . '&action=edit');
+                        $thumbnail_url = get_the_post_thumbnail_url($post_id, array(50, 50));
+                        $human_time    = human_time_diff(get_the_time('U'), current_time('timestamp')) . ' ago';
+                    ?>
+                        <tr>
+                            <td>
+                                <?php if ($thumbnail_url): ?>
+                                    <img src="<?php echo esc_url($thumbnail_url); ?>" alt="" style="width: 44px; height: 44px; object-fit: cover; border-radius: 4px; border: 1px solid #cbd5e1;" />
+                                <?php else: ?>
+                                    <div style="width: 44px; height: 44px; background: #e2e8f0; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #94a3b8;"><span class="dashicons dashicons-format-image"></span></div>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <strong><a href="<?php echo esc_url($edit_post_url); ?>" style="font-size: 13px;"><?php the_title(); ?></a></strong>
+                                <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
+                                    <span style="background: #f1f5f9; padding: 2px 6px; border-radius: 3px; font-weight: 600;"><?php echo esc_html($type_label); ?></span>
+                                    #<?php echo esc_html($post_id); ?>
+                                </div>
+                            </td>
+                            <td>
+                                <strong><?php echo esc_html($vendor_biz); ?></strong>
+                                <div style="font-size: 11px; color: #64748b;"><?php echo esc_html($vendor_user ? $vendor_user->user_email : ''); ?></div>
+                            </td>
+                            <td>
+                                <?php echo $price ? ('<strong>₦ ' . esc_html(number_format_i18n((float) $price, 2)) . '</strong>') : '<span style="color:#94a3b8;">Price on request</span>'; ?>
+                            </td>
+                            <td>
+                                <?php echo esc_html($location ?: 'Not specified'); ?>
+                            </td>
+                            <td>
+                                <?php if ('Published' === $status): ?>
+                                    <span style="display: inline-block; background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 11px;"><?php esc_html_e('Published', 'propvendor-marketplace'); ?></span>
+                                <?php elseif ('Rejected' === $status): ?>
+                                    <span style="display: inline-block; background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 11px;"><?php esc_html_e('Rejected', 'propvendor-marketplace'); ?></span>
+                                    <?php if (!empty($rej_code)): ?>
+                                        <div style="font-size: 10px; color: #b91c1c; margin-top: 2px;">
+                                            <em><?php echo esc_html(propvendor_marketplace_get_rejection_reason_label($rej_code)); ?></em>
+                                        </div>
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <span style="display: inline-block; background: #fef3c7; color: #b45309; border: 1px solid #fde68a; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 11px;"><?php esc_html_e('Pending review', 'propvendor-marketplace'); ?></span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <span style="font-size: 11px; color: #475569;"><?php echo esc_html($human_time); ?></span>
+                            </td>
+                            <td style="text-align: right;">
+                                <div style="display: flex; gap: 4px; justify-content: flex-end; align-items: center; flex-wrap: wrap;">
+                                    <a href="<?php echo esc_url($edit_post_url); ?>" class="button button-small"><?php esc_html_e('Review', 'propvendor-marketplace'); ?></a>
+
+                                    <?php if ('Published' !== $status): ?>
+                                        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline; margin: 0;">
+                                            <input type="hidden" name="action" value="propvendor_quick_moderation" />
+                                            <input type="hidden" name="listing_id" value="<?php echo esc_attr($post_id); ?>" />
+                                            <input type="hidden" name="moderation_decision" value="approve" />
+                                            <?php wp_nonce_field('propvendor_moderation_queue_action', 'propvendor_mod_nonce'); ?>
+                                            <button type="submit" class="button button-small button-primary" onclick="return confirm('<?php esc_attr_e('Approve and publish this listing to live marketplace?', 'propvendor-marketplace'); ?>');"><?php esc_html_e('Approve', 'propvendor-marketplace'); ?></button>
+                                        </form>
+                                    <?php endif; ?>
+
+                                    <?php if ('Rejected' !== $status): ?>
+                                        <button type="button" class="button button-small" style="color: #b91c1c; border-color: #fca5a5;" onclick="var box = document.getElementById('pv-reject-drawer-<?php echo esc_attr($post_id); ?>'); box.style.display = (box.style.display === 'none' ? 'block' : 'none');"><?php esc_html_e('Reject', 'propvendor-marketplace'); ?></button>
+                                    <?php endif; ?>
+
+                                    <button type="button" class="button button-small" title="<?php esc_attr_e('View Audit Trail', 'propvendor-marketplace'); ?>" onclick="var box = document.getElementById('pv-audit-drawer-<?php echo esc_attr($post_id); ?>'); box.style.display = (box.style.display === 'none' ? 'table-row' : 'none');">&#128337;</button>
+                                </div>
+
+                                <!-- Inline Reject Modal / Drawer -->
+                                <?php if ('Rejected' !== $status): ?>
+                                    <div id="pv-reject-drawer-<?php echo esc_attr($post_id); ?>" style="display: none; margin-top: 10px; padding: 12px; background: #fff5f5; border: 1px solid #fca5a5; border-radius: 6px; text-align: left;">
+                                        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                                            <input type="hidden" name="action" value="propvendor_quick_moderation" />
+                                            <input type="hidden" name="listing_id" value="<?php echo esc_attr($post_id); ?>" />
+                                            <input type="hidden" name="moderation_decision" value="reject" />
+                                            <?php wp_nonce_field('propvendor_moderation_queue_action', 'propvendor_mod_nonce'); ?>
+
+                                            <label style="font-weight: 600; font-size: 12px; display: block; margin-bottom: 4px;"><?php esc_html_e('Rejection Reason:', 'propvendor-marketplace'); ?></label>
+                                            <select name="propvendor_rejection_reason" class="widefat" style="margin-bottom: 8px;">
+                                                <?php foreach (propvendor_marketplace_get_rejection_reasons() as $r_code => $r_label): ?>
+                                                    <option value="<?php echo esc_attr($r_code); ?>"><?php echo esc_html($r_label); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+
+                                            <label style="font-weight: 600; font-size: 12px; display: block; margin-bottom: 4px;"><?php esc_html_e('Corrective Instructions for Vendor:', 'propvendor-marketplace'); ?></label>
+                                            <textarea name="propvendor_rejection_notes" rows="2" class="widefat" placeholder="<?php esc_attr_e('What does the vendor need to update?', 'propvendor-marketplace'); ?>" style="margin-bottom: 8px;"></textarea>
+
+                                            <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                                                <button type="button" class="button button-small" onclick="document.getElementById('pv-reject-drawer-<?php echo esc_attr($post_id); ?>').style.display='none';"><?php esc_html_e('Cancel', 'propvendor-marketplace'); ?></button>
+                                                <button type="submit" class="button button-small" style="background:#dc2626; color:#fff; border-color:#b91c1c;"><?php esc_html_e('Confirm Rejection', 'propvendor-marketplace'); ?></button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+
+                        <!-- Expandable Audit History Row -->
+                        <tr id="pv-audit-drawer-<?php echo esc_attr($post_id); ?>" style="display: none; background: #f8fafc;">
+                            <td colspan="8" style="padding: 12px 18px;">
+                                <div style="font-weight: 600; font-size: 12px; color: #1e3a8a; margin-bottom: 6px;">
+                                    <?php printf(esc_html__('Moderation Audit Trail for Listing #%d (%s):', 'propvendor-marketplace'), $post_id, esc_html(get_the_title())); ?>
+                                </div>
+                                <?php
+                                $history = propvendor_marketplace_get_moderation_audit_trail($post_id);
+                                if (empty($history)):
+                                ?>
+                                    <p style="font-style: italic; color: #64748b; font-size: 12px; margin: 0;"><?php esc_html_e('No moderation events recorded yet.', 'propvendor-marketplace'); ?></p>
+                                <?php else: ?>
+                                    <table style="width: 100%; border-collapse: collapse; font-size: 11px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 4px;">
+                                        <thead>
+                                            <tr style="background: #f1f5f9; text-align: left;">
+                                                <th style="padding: 6px 10px;"><?php esc_html_e('Timestamp', 'propvendor-marketplace'); ?></th>
+                                                <th style="padding: 6px 10px;"><?php esc_html_e('Actor', 'propvendor-marketplace'); ?></th>
+                                                <th style="padding: 6px 10px;"><?php esc_html_e('Role', 'propvendor-marketplace'); ?></th>
+                                                <th style="padding: 6px 10px;"><?php esc_html_e('Transition', 'propvendor-marketplace'); ?></th>
+                                                <th style="padding: 6px 10px;"><?php esc_html_e('Decision', 'propvendor-marketplace'); ?></th>
+                                                <th style="padding: 6px 10px;"><?php esc_html_e('Reason / Notes', 'propvendor-marketplace'); ?></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach (array_reverse($history) as $h_item): ?>
+                                                <tr style="border-top: 1px solid #e2e8f0;">
+                                                    <td style="padding: 6px 10px; color: #475569;"><?php echo esc_html($h_item['timestamp']); ?></td>
+                                                    <td style="padding: 6px 10px; font-weight: 600;"><?php echo esc_html($h_item['actor_name'] ?: 'System'); ?></td>
+                                                    <td style="padding: 6px 10px;"><?php echo esc_html($h_item['actor_role'] ?: 'admin'); ?></td>
+                                                    <td style="padding: 6px 10px;"><?php echo esc_html($h_item['from_status'] ?: 'None'); ?> &rarr; <strong><?php echo esc_html($h_item['to_status']); ?></strong></td>
+                                                    <td style="padding: 6px 10px;"><span style="background: #e2e8f0; padding: 2px 6px; border-radius: 3px; font-weight: 600;"><?php echo esc_html(strtoupper($h_item['decision'])); ?></span></td>
+                                                    <td style="padding: 6px 10px; color: #334155;">
+                                                        <?php if (!empty($h_item['reason_code'])): ?>
+                                                            <strong style="color:#b91c1c;"><?php echo esc_html(propvendor_marketplace_get_rejection_reason_label($h_item['reason_code'])); ?>:</strong>
+                                                        <?php endif; ?>
+                                                        <?php echo esc_html($h_item['notes']); ?>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endwhile; wp_reset_postdata(); ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php
+}
+
+/**
+ * Handle quick moderation actions (Approve, Reject) from Moderation Queue.
+ */
+function propvendor_marketplace_handle_admin_quick_moderation() {
+    if (!current_user_can('manage_options')) {
+        wp_die(__('Unauthorized access.', 'propvendor-marketplace'), '', array('response' => 403));
+    }
+
+    if (!isset($_POST['propvendor_mod_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['propvendor_mod_nonce'])), 'propvendor_moderation_queue_action')) {
+        wp_die(__('Security verification failed.', 'propvendor-marketplace'), '', array('response' => 403));
+    }
+
+    $listing_id = isset($_POST['listing_id']) ? absint($_POST['listing_id']) : 0;
+    $post = get_post($listing_id);
+    if (!$post || !in_array($post->post_type, propvendor_marketplace_get_listing_post_types(), true)) {
+        wp_die(__('Invalid listing ID.', 'propvendor-marketplace'));
+    }
+
+    $decision = isset($_POST['moderation_decision']) ? sanitize_key($_POST['moderation_decision']) : '';
+    $prior_status = get_post_meta($listing_id, 'propvendor_listing_status', true);
+    if (empty($prior_status)) {
+        $prior_status = propvendor_marketplace_get_canonical_listing_status($listing_id);
+    }
+
+    $acting_admin = wp_get_current_user();
+    $admin_name   = $acting_admin ? $acting_admin->display_name : 'Admin';
+
+    if ('approve' === $decision) {
+        wp_update_post(array('ID' => $listing_id, 'post_status' => 'publish'));
+        update_post_meta($listing_id, 'propvendor_listing_status', 'Published');
+        update_post_meta($listing_id, 'propvendor_status', 'Published');
+        delete_post_meta($listing_id, '_propvendor_rejection_reason');
+        delete_post_meta($listing_id, '_propvendor_rejection_notes');
+
+        propvendor_marketplace_record_moderation_event($listing_id, array(
+            'actor_id'    => get_current_user_id(),
+            'actor_name'  => $admin_name,
+            'actor_role'  => 'admin',
+            'from_status' => $prior_status,
+            'to_status'   => 'Published',
+            'decision'    => 'approved',
+            'reason_code' => '',
+            'notes'       => __('Approved via Moderation Queue.', 'propvendor-marketplace'),
+        ));
+
+        try {
+            if (function_exists('propvendor_marketplace_send_listing_approved_notification')) {
+                propvendor_marketplace_send_listing_approved_notification($listing_id);
+            }
+        } catch (Throwable $e) {
+            error_log('PropVendor approved notification failure: ' . $e->getMessage());
+        }
+
+        wp_safe_redirect(add_query_arg('pv_mod_notice', 'approved', admin_url('admin.php?page=propvendor-moderation-queue')));
+        exit;
+    } elseif ('reject' === $decision) {
+        $reason_code = isset($_POST['propvendor_rejection_reason']) ? sanitize_key($_POST['propvendor_rejection_reason']) : 'other';
+        $allowed_reasons = array_keys(propvendor_marketplace_get_rejection_reasons());
+        if (!in_array($reason_code, $allowed_reasons, true)) {
+            $reason_code = 'other';
+        }
+        $notes = isset($_POST['propvendor_rejection_notes']) ? sanitize_textarea_field(wp_unslash($_POST['propvendor_rejection_notes'])) : '';
+
+        wp_update_post(array('ID' => $listing_id, 'post_status' => 'draft'));
+        update_post_meta($listing_id, 'propvendor_listing_status', 'Rejected');
+        update_post_meta($listing_id, 'propvendor_status', 'Rejected');
+        update_post_meta($listing_id, '_propvendor_rejection_reason', $reason_code);
+        update_post_meta($listing_id, '_propvendor_rejection_notes', $notes);
+
+        propvendor_marketplace_record_moderation_event($listing_id, array(
+            'actor_id'    => get_current_user_id(),
+            'actor_name'  => $admin_name,
+            'actor_role'  => 'admin',
+            'from_status' => $prior_status,
+            'to_status'   => 'Rejected',
+            'decision'    => 'rejected',
+            'reason_code' => $reason_code,
+            'notes'       => $notes ?: __('Rejected via Moderation Queue.', 'propvendor-marketplace'),
+        ));
+
+        try {
+            if (function_exists('propvendor_marketplace_send_listing_rejected_notification')) {
+                propvendor_marketplace_send_listing_rejected_notification($listing_id, $reason_code, $notes);
+            }
+        } catch (Throwable $e) {
+            error_log('PropVendor rejection notification failure: ' . $e->getMessage());
+        }
+
+        wp_safe_redirect(add_query_arg('pv_mod_notice', 'rejected', admin_url('admin.php?page=propvendor-moderation-queue')));
+        exit;
+    }
+
+    wp_safe_redirect(admin_url('admin.php?page=propvendor-moderation-queue'));
+    exit;
+}
+add_action('admin_post_propvendor_quick_moderation', 'propvendor_marketplace_handle_admin_quick_moderation');
 
 function propvendor_marketplace_render_admin_enquiries_page() {
     if (!current_user_can('manage_options')) {
@@ -12711,6 +13446,234 @@ function propvendor_marketplace_send_vendor_reply_notification($message_id, $thr
         'related_object_type' => 'thread_message',
         'related_object_id'   => $message_id,
         'force_retry'         => $is_retry,
+    ));
+}
+
+/**
+ * 7b. Phase 19.2: Moderation Event Notifications
+ */
+
+/**
+ * Dispatch notification to administrator when a listing is submitted or resubmitted.
+ *
+ * @param int  $post_id Listing Post ID.
+ * @param bool $is_update True if this is an edit/resubmission; false if new.
+ * @return array
+ */
+function propvendor_marketplace_send_listing_submitted_notification($post_id, $is_update = false) {
+    $post_id = absint($post_id);
+    if ($post_id <= 0) {
+        return array('success' => false, 'status' => 'failed', 'reason' => 'invalid_post_id');
+    }
+
+    $post = get_post($post_id);
+    if (!$post || !in_array($post->post_type, propvendor_marketplace_get_listing_post_types(), true)) {
+        return array('success' => false, 'status' => 'failed', 'reason' => 'invalid_post');
+    }
+
+    $admin_email = get_option('admin_email');
+    if (empty($admin_email) || !is_email($admin_email)) {
+        $admin_email = 'support@propvendor.com.ng';
+    }
+
+    $listing_title = get_the_title($post) ?: ('Listing #' . $post_id);
+    $vendor_user   = get_user_by('id', $post->post_author);
+    $vendor_name   = $vendor_user ? $vendor_user->display_name : 'Unknown Vendor';
+    $vendor_email  = $vendor_user ? $vendor_user->user_email : '';
+    $vendor_biz    = get_user_meta($post->post_author, 'propvendor_business_name', true) ?: $vendor_name;
+
+    $type_labels = array(
+        'property_listing' => 'Property',
+        'land_listing'     => 'Land',
+        'vehicle_listing'  => 'Vehicle',
+    );
+    $category_label = isset($type_labels[$post->post_type]) ? $type_labels[$post->post_type] : 'Marketplace Listing';
+    $price    = get_post_meta($post_id, 'propvendor_price', true);
+    $location = get_post_meta($post_id, 'propvendor_location', true);
+
+    $review_url  = admin_url('admin.php?page=propvendor-moderation-queue');
+    $action_type = $is_update ? __('Updated Listing Resubmitted', 'propvendor-marketplace') : __('New Listing Submitted', 'propvendor-marketplace');
+    $subject     = sprintf('[PropVendor Moderation] %s: %s', $action_type, $listing_title);
+
+    $content_html  = '<p>' . esc_html__('Hello Administrator,', 'propvendor-marketplace') . '</p>';
+    $content_html .= '<p>' . sprintf(
+        esc_html__('A vendor has submitted a %s listing for marketplace review and approval.', 'propvendor-marketplace'),
+        '<strong>' . esc_html($category_label) . '</strong>'
+    ) . '</p>';
+    $content_html .= '<div class="pv-preview-card" style="font-style: normal;">';
+    $content_html .= '<strong>' . esc_html__('Title:', 'propvendor-marketplace') . '</strong> ' . esc_html($listing_title) . '<br />';
+    $content_html .= '<strong>' . esc_html__('Category:', 'propvendor-marketplace') . '</strong> ' . esc_html($category_label) . '<br />';
+    $content_html .= '<strong>' . esc_html__('Vendor / Agency:', 'propvendor-marketplace') . '</strong> ' . esc_html($vendor_biz) . ' (' . esc_html($vendor_email) . ')<br />';
+    if ($price) {
+        $content_html .= '<strong>' . esc_html__('Price:', 'propvendor-marketplace') . '</strong> ₦ ' . number_format_i18n((float) $price, 2) . '<br />';
+    }
+    if ($location) {
+        $content_html .= '<strong>' . esc_html__('Location:', 'propvendor-marketplace') . '</strong> ' . esc_html($location) . '<br />';
+    }
+    $content_html .= '<strong>' . esc_html__('Status:', 'propvendor-marketplace') . '</strong> <span style="color:#d97706; font-weight:600;">Pending review</span>';
+    $content_html .= '</div>';
+    $content_html .= '<div class="pv-notice-box">';
+    $content_html .= '<strong>' . esc_html__('Moderation Responsibility:', 'propvendor-marketplace') . '</strong> ';
+    $content_html .= esc_html__('Please inspect this listing for completeness, proper imagery, valid pricing, and compliance with Nigerian marketplace guidelines.', 'propvendor-marketplace');
+    $content_html .= '</div>';
+
+    $html_body = propvendor_marketplace_render_email_layout(
+        $subject,
+        $action_type,
+        $content_html,
+        __('Open Moderation Queue', 'propvendor-marketplace'),
+        $review_url
+    );
+
+    $modified_ts = (int) get_post_modified_time('U', false, $post_id);
+    if ($modified_ts <= 0) {
+        $modified_ts = current_time('timestamp');
+    }
+    $event_key = sprintf('listing_submitted:%d:%d', $post_id, $modified_ts);
+
+    return propvendor_marketplace_dispatch_notification(array(
+        'event_key'           => $event_key,
+        'notification_type'   => 'listing_submitted',
+        'recipient_user_id'   => 0,
+        'recipient_email'     => $admin_email,
+        'subject'             => $subject,
+        'html_body'           => $html_body,
+        'related_object_type' => 'listing',
+        'related_object_id'   => $post_id,
+    ));
+}
+
+/**
+ * Dispatch notification to listing owner when their listing is approved and published.
+ *
+ * @param int $post_id Listing Post ID.
+ * @return array
+ */
+function propvendor_marketplace_send_listing_approved_notification($post_id) {
+    $post_id = absint($post_id);
+    if ($post_id <= 0) {
+        return array('success' => false, 'status' => 'failed', 'reason' => 'invalid_post_id');
+    }
+
+    $post = get_post($post_id);
+    if (!$post) {
+        return array('success' => false, 'status' => 'failed', 'reason' => 'invalid_post');
+    }
+
+    $vendor_user = get_user_by('id', $post->post_author);
+    if (!$vendor_user || empty($vendor_user->user_email)) {
+        return array('success' => false, 'status' => 'failed', 'reason' => 'missing_recipient_email');
+    }
+
+    $listing_title = get_the_title($post) ?: ('Listing #' . $post_id);
+    $vendor_name   = $vendor_user->display_name;
+    $permalink     = get_permalink($post_id);
+    $subject       = sprintf('[PropVendor] Your listing "%s" has been approved and published!', $listing_title);
+
+    $content_html  = '<p>' . sprintf(esc_html__('Hello %s,', 'propvendor-marketplace'), '<strong>' . esc_html($vendor_name) . '</strong>') . '</p>';
+    $content_html .= '<p>' . sprintf(
+        esc_html__('Great news! Your marketplace listing %s has passed moderation review and is now live on the PropVendor marketplace.', 'propvendor-marketplace'),
+        '<strong>' . esc_html($listing_title) . '</strong>'
+    ) . '</p>';
+    $content_html .= '<p>' . esc_html__('Prospective buyers and clients can now view your listing, inspect details, and contact you directly through your Customer Lead Inbox.', 'propvendor-marketplace') . '</p>';
+    $content_html .= '<div class="pv-notice-box">';
+    $content_html .= '<strong>' . esc_html__('Standard Compliance Reminder:', 'propvendor-marketplace') . '</strong> ';
+    $content_html .= esc_html__('PropVendor moderation checks formatting, image standards, and platform safety rules. Approval does not constitute official legal title verification, physical asset certification, or vehicle ownership authentication.', 'propvendor-marketplace');
+    $content_html .= '</div>';
+
+    $html_body = propvendor_marketplace_render_email_layout(
+        $subject,
+        __('Listing Approved & Live', 'propvendor-marketplace'),
+        $content_html,
+        __('View Public Listing', 'propvendor-marketplace'),
+        $permalink
+    );
+
+    $now_ts    = current_time('timestamp');
+    $event_key = sprintf('listing_approved:%d:%d', $post_id, $now_ts);
+
+    return propvendor_marketplace_dispatch_notification(array(
+        'event_key'           => $event_key,
+        'notification_type'   => 'listing_approved',
+        'recipient_user_id'   => $vendor_user->ID,
+        'recipient_email'     => $vendor_user->user_email,
+        'subject'             => $subject,
+        'html_body'           => $html_body,
+        'related_object_type' => 'listing',
+        'related_object_id'   => $post_id,
+    ));
+}
+
+/**
+ * Dispatch notification to listing owner when their listing is rejected with corrective instructions.
+ *
+ * @param int    $post_id Listing Post ID.
+ * @param string $reason_code Canonical rejection reason code.
+ * @param string $rejection_notes Specific corrective instructions from moderator.
+ * @return array
+ */
+function propvendor_marketplace_send_listing_rejected_notification($post_id, $reason_code, $rejection_notes = '') {
+    $post_id = absint($post_id);
+    if ($post_id <= 0) {
+        return array('success' => false, 'status' => 'failed', 'reason' => 'invalid_post_id');
+    }
+
+    $post = get_post($post_id);
+    if (!$post) {
+        return array('success' => false, 'status' => 'failed', 'reason' => 'invalid_post');
+    }
+
+    $vendor_user = get_user_by('id', $post->post_author);
+    if (!$vendor_user || empty($vendor_user->user_email)) {
+        return array('success' => false, 'status' => 'failed', 'reason' => 'missing_recipient_email');
+    }
+
+    $listing_title = get_the_title($post) ?: ('Listing #' . $post_id);
+    $vendor_name   = $vendor_user->display_name;
+    $reason_label  = propvendor_marketplace_get_rejection_reason_label($reason_code);
+    $edit_url      = add_query_arg('propvendor_edit_listing', $post_id, home_url('/vendor-dashboard/'));
+    $subject       = sprintf('[PropVendor] Action required: Your listing "%s" requires corrections', $listing_title);
+
+    $content_html  = '<p>' . sprintf(esc_html__('Hello %s,', 'propvendor-marketplace'), '<strong>' . esc_html($vendor_name) . '</strong>') . '</p>';
+    $content_html .= '<p>' . sprintf(
+        esc_html__('Thank you for submitting %s. Our moderation team reviewed your listing and found that corrections are required before it can be published.', 'propvendor-marketplace'),
+        '<strong>' . esc_html($listing_title) . '</strong>'
+    ) . '</p>';
+    $content_html .= '<div class="pv-preview-card" style="font-style: normal; border-left-color: #dc2626;">';
+    $content_html .= '<strong>' . esc_html__('Reason for Rejection:', 'propvendor-marketplace') . '</strong><br />';
+    $content_html .= '<span style="color:#b91c1c; font-weight:600;">' . esc_html($reason_label) . '</span><br /><br />';
+    if (!empty($rejection_notes)) {
+        $content_html .= '<strong>' . esc_html__('Moderator Instructions:', 'propvendor-marketplace') . '</strong><br />';
+        $content_html .= '<em>"' . esc_html($rejection_notes) . '"</em>';
+    } else {
+        $content_html .= '<em>' . esc_html__('Please review our listing guidelines and update your details to meet marketplace standards.', 'propvendor-marketplace') . '</em>';
+    }
+    $content_html .= '</div>';
+    $content_html .= '<div class="pv-notice-box">';
+    $content_html .= '<strong>' . esc_html__('How to Resubmit:', 'propvendor-marketplace') . '</strong> ';
+    $content_html .= esc_html__('Click the button below to edit your listing. Once you make the requested updates and submit, your listing will automatically return to Pending Review for priority moderation.', 'propvendor-marketplace');
+    $content_html .= '</div>';
+
+    $html_body = propvendor_marketplace_render_email_layout(
+        $subject,
+        __('Corrections Required for Listing', 'propvendor-marketplace'),
+        $content_html,
+        __('Edit & Resubmit Listing', 'propvendor-marketplace'),
+        $edit_url
+    );
+
+    $now_ts    = current_time('timestamp');
+    $event_key = sprintf('listing_rejected:%d:%d', $post_id, $now_ts);
+
+    return propvendor_marketplace_dispatch_notification(array(
+        'event_key'           => $event_key,
+        'notification_type'   => 'listing_rejected',
+        'recipient_user_id'   => $vendor_user->ID,
+        'recipient_email'     => $vendor_user->user_email,
+        'subject'             => $subject,
+        'html_body'           => $html_body,
+        'related_object_type' => 'listing',
+        'related_object_id'   => $post_id,
     ));
 }
 
