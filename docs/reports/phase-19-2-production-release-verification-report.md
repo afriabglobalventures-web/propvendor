@@ -115,3 +115,4 @@ In the event of an unforeseen operational defect:
    ```
 2. **Database Invariants:**
    The Phase 19.2 implementation is strictly additive. All metadata keys (`_propvendor_moderation_audit_trail`, `_propvendor_rejection_reason`, `_propvendor_rejection_notes`) can remain in `wp_postmeta` without breaking core functions if the prior codebase is restored.
+

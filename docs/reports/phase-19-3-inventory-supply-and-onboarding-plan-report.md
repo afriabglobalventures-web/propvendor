@@ -181,3 +181,4 @@ PropVendor does not claim ownership or custody of any asset. All listing detail 
 * [ ] First 20 genuine listings submitted, moderated via Unified Moderation Queue, and audited in `_propvendor_moderation_audit_trail`.
 * [ ] Zero public listings published without prior administrator approval.
 * [ ] Paystack strictly maintained in **TEST mode** throughout pilot.
+
