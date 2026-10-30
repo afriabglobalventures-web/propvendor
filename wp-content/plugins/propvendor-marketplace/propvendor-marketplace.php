@@ -723,7 +723,7 @@ function propvendor_marketplace_get_vehicle_fuel_types() {
 }
 
 /**
- * Return allowlist of all 37 Nigerian States (including FCT - Abuja).
+ * Return allowlist of all 36 Nigerian States and the Federal Capital Territory (FCT - Abuja).
  *
  * @return string[]
  */
@@ -1451,7 +1451,7 @@ function propvendor_render_mobile_drawer() {
         <div class="pv-drawer-inner">
             <div class="pv-drawer-header">
                 <a href="<?php echo esc_url(home_url('/')); ?>" class="pv-drawer-brand" aria-label="<?php esc_attr_e('PropVendor Home', 'propvendor-marketplace'); ?>">
-                    <span class="pv-drawer-brand-name">propvendor</span><span class="pv-drawer-brand-domain">.com.ng</span>
+                    <img class="pv-drawer-logo" src="<?php echo esc_url(plugins_url('assets/images/branding/logo-horizontal-drawer.png', __FILE__)); ?>" alt="<?php esc_attr_e('PropVendor Technologies', 'propvendor-marketplace'); ?>" width="180" height="42" />
                 </a>
                 <button type="button" class="pv-drawer-close" aria-label="<?php esc_attr_e('Close menu', 'propvendor-marketplace'); ?>">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1515,6 +1515,63 @@ function propvendor_marketplace_defer_frontend_script($tag, $handle, $src) {
     return $tag;
 }
 add_filter('script_loader_tag', 'propvendor_marketplace_defer_frontend_script', 10, 3);
+
+/**
+ * Phase 19.3: Official Brand Identity & Logo Integration.
+ * Renders the approved horizontal logo in the Astra site-identity / logo area
+ * with proper responsive dimensions, crispness, and alternative text.
+ */
+function propvendor_filter_site_logo_output($html, $display_site_title = true, $display_site_tagline = false) {
+    $logo_url = plugins_url('assets/images/branding/logo-horizontal.png', __FILE__);
+    $home_url = esc_url(home_url('/'));
+    $site_name = esc_attr(get_bloginfo('name', 'display'));
+    if (empty($site_name) || strtolower($site_name) === 'propvendor') {
+        $site_name = 'PropVendor Technologies';
+    }
+
+    $logo_img = sprintf(
+        '<a href="%1$s" class="custom-logo-link pv-custom-logo-link" rel="home" aria-current="page"><img src="%2$s" class="custom-logo pv-site-logo" alt="%3$s" decoding="async" fetchpriority="high" width="200" height="47" /></a>',
+        $home_url,
+        esc_url($logo_url),
+        esc_attr($site_name)
+    );
+
+    // If an Astra custom logo wrapper exists, insert or replace within .site-branding
+    return '<span class="site-logo-img pv-site-logo-wrap">' . $logo_img . '</span>';
+}
+add_filter('astra_logo', 'propvendor_filter_site_logo_output', 20, 3);
+
+/**
+ * Fallback filter for standard get_custom_logo if invoked directly by theme
+ */
+function propvendor_filter_get_custom_logo($html) {
+    if (empty($html) || !has_custom_logo()) {
+        $logo_url = plugins_url('assets/images/branding/logo-horizontal.png', __FILE__);
+        $home_url = esc_url(home_url('/'));
+        $site_name = 'PropVendor Technologies';
+
+        return sprintf(
+            '<a href="%1$s" class="custom-logo-link pv-custom-logo-link" rel="home" aria-current="page"><img src="%2$s" class="custom-logo pv-site-logo" alt="%3$s" decoding="async" fetchpriority="high" width="200" height="47" /></a>',
+            $home_url,
+            esc_url($logo_url),
+            esc_attr($site_name)
+        );
+    }
+    return $html;
+}
+add_filter('get_custom_logo', 'propvendor_filter_get_custom_logo', 20);
+
+/**
+ * Phase 19.3: Brand Favicon & Mobile Web App Icons Suite.
+ * Emits standard browser tab icons and Apple Touch Icon into <head>.
+ */
+function propvendor_render_brand_favicons() {
+    $branding_base = plugins_url('assets/images/branding/', __FILE__);
+    echo '<link rel="icon" type="image/png" sizes="32x32" href="' . esc_url($branding_base . 'favicon-32.png') . '">' . "\n";
+    echo '<link rel="icon" type="image/png" sizes="192x192" href="' . esc_url($branding_base . 'favicon-192.png') . '">' . "\n";
+    echo '<link rel="apple-touch-icon" sizes="180x180" href="' . esc_url($branding_base . 'apple-touch-icon.png') . '">' . "\n";
+}
+add_action('wp_head', 'propvendor_render_brand_favicons', 2);
 
 /**
  * Phase 18.4A.1: Preload high-priority hero background WebP on front page for optimized LCP
@@ -1731,7 +1788,7 @@ function propvendor_marketplace_get_about_us_content() {
     return <<<'HTML'
 <div class="propvendor-about-content">
     <div class="propvendor-about-hero-lead">
-        <p class="pv-lead-text">PropVendor Technologies Ltd. is a modern, trust-anchored marketplace engineered to democratize real estate, land acquisition, and vehicle commerce across Nigeria. Founded with roots in <strong>Ilorin, Kwara State</strong>, PropVendor was created to bridge the critical integrity gap between property owners, certified dealerships, and prospective buyers across all 37 Nigerian states.</p>
+        <p class="pv-lead-text">PropVendor Technologies Ltd. is a modern, trust-anchored marketplace engineered to democratize real estate, land acquisition, and vehicle commerce across Nigeria. Founded with roots in <strong>Ilorin, Kwara State</strong>, PropVendor was created to bridge the critical integrity gap between property owners, certified dealerships, and prospective buyers across all 36 Nigerian states and the FCT.</p>
     </div>
 
     <hr class="pv-divider" />
@@ -3665,20 +3722,9 @@ function propvendor_marketplace_render_search_filters($atts = array()) {
     $output .= '<label for="pv_state">State</label>';
     $output .= '<select id="pv_state" name="pv_state">';
     $output .= '<option value="">All States</option>';
-    $output .= '<optgroup label="Top Commercial Hubs">';
-    $commercial_hubs = array('Lagos', 'FCT - Abuja', 'Rivers', 'Ogun', 'Oyo', 'Kano', 'Enugu');
-    $hub_matched = false;
-    foreach ($commercial_hubs as $hub) {
-        $is_sel = ($p_state_norm === $hub);
-        if ($is_sel) {
-            $hub_matched = true;
-        }
-        $output .= '<option value="' . esc_attr($hub) . '"' . ($is_sel ? ' selected="selected"' : '') . '>' . esc_html($hub) . '</option>';
-    }
-    $output .= '</optgroup>';
-    $output .= '<optgroup label="All 37 States (A–Z)">';
+    $output .= '<optgroup label="All 36 States & FCT (A–Z)">';
     foreach (propvendor_marketplace_get_nigerian_states() as $st) {
-        $is_sel = (!$hub_matched && $p_state_norm === $st);
+        $is_sel = ($p_state_norm === $st);
         $output .= '<option value="' . esc_attr($st) . '"' . ($is_sel ? ' selected="selected"' : '') . '>' . esc_html($st) . '</option>';
     }
     $output .= '</optgroup>';
@@ -4005,7 +4051,7 @@ function propvendor_marketplace_browse_shortcode() {
                 </div>
             </div>
             <h1 class="propvendor-browse-hero-title">' . esc_html__('Browse Verified Listings', 'propvendor-marketplace') . '</h1>
-            <p class="propvendor-browse-hero-subtitle">' . esc_html__('Explore properties, land, and vehicles across all 37 Nigerian states.', 'propvendor-marketplace') . '</p>
+            <p class="propvendor-browse-hero-subtitle">' . esc_html__('Explore properties, land, and vehicles across all 36 Nigerian states and the FCT.', 'propvendor-marketplace') . '</p>
         </div>
     </div>';
 
@@ -5019,7 +5065,7 @@ function propvendor_marketplace_about_shortcode() {
     $output .= '<div class="pv-card propvendor-pillar-card">';
     $output .= '<div class="propvendor-pillar-icon">&#128506;</div>';
     $output .= '<h3>' . esc_html__('Pan-Nigerian Marketplace Coverage', 'propvendor-marketplace') . '</h3>';
-    $output .= '<p>' . esc_html__('From residential apartments in Lagos, Ibadan, and Abuja to commercial plots in Rivers, agricultural lands in Ogun, and inspected vehicles nationwide, PropVendor connects buyers with inventory across all 37 Nigerian administrative territories.', 'propvendor-marketplace') . '</p>';
+    $output .= '<p>' . esc_html__('From residential apartments in Lagos, Ibadan, and Abuja to commercial plots in Rivers, agricultural lands in Ogun, and inspected vehicles nationwide, PropVendor connects buyers with inventory across all 36 Nigerian states and the FCT.', 'propvendor-marketplace') . '</p>';
     $output .= '</div>';
 
     $output .= '</div>'; // propvendor-pillars-grid
@@ -5328,7 +5374,7 @@ function propvendor_marketplace_login_account_shortcode() {
             $output .= '<a href="' . esc_url(home_url('/browse-listings/')) . '" class="pv-card propvendor-account-card">';
             $output .= '<div class="propvendor-account-icon">&#128269;</div>';
             $output .= '<h3>' . esc_html__('Browse Marketplace', 'propvendor-marketplace') . '</h3>';
-            $output .= '<p>' . esc_html__('Discover verified properties, surveyed land, and vehicles across all 37 Nigerian states.', 'propvendor-marketplace') . '</p>';
+            $output .= '<p>' . esc_html__('Discover verified properties, surveyed land, and vehicles across all 36 Nigerian states and the FCT.', 'propvendor-marketplace') . '</p>';
             $output .= '<span class="propvendor-card-link">' . esc_html__('Explore Listings', 'propvendor-marketplace') . ' &rarr;</span>';
             $output .= '</a>';
 
@@ -6016,6 +6062,55 @@ function propvendor_marketplace_filter_nav_menu_objects($items, $args = null) {
         $obj->status = 'publish';
         return wp_setup_nav_menu_item($obj);
     };
+
+    // Ensure canonical public navigation links exist in the primary menu:
+    // Home | Browse Listings | About PropVendor | Safety Guidelines | Help & FAQs | Contact Us
+    $canonical_public_nav = array(
+        array(
+            'slug'  => 'browse-listings',
+            'title' => __('Browse Listings', 'propvendor-marketplace'),
+            'url'   => home_url('/browse-listings/'),
+            'class' => 'pv-nav-browse',
+        ),
+        array(
+            'slug'  => 'about-propvendor',
+            'title' => __('About PropVendor', 'propvendor-marketplace'),
+            'url'   => home_url('/about-propvendor/'),
+            'class' => 'pv-nav-about',
+        ),
+        array(
+            'slug'  => 'listing-and-transaction-safety-guidelines',
+            'title' => __('Safety Guidelines', 'propvendor-marketplace'),
+            'url'   => home_url('/listing-and-transaction-safety-guidelines/'),
+            'class' => 'pv-nav-safety',
+        ),
+        array(
+            'slug'  => 'help-and-faqs',
+            'title' => __('Help & FAQs', 'propvendor-marketplace'),
+            'url'   => home_url('/help-and-faqs/'),
+            'class' => 'pv-nav-faqs',
+        ),
+        array(
+            'slug'  => 'contact-us',
+            'title' => __('Contact Us', 'propvendor-marketplace'),
+            'url'   => home_url('/contact-us/'),
+            'class' => 'pv-nav-contact',
+        ),
+    );
+
+    $existing_slugs = array();
+    foreach ($filtered as $f_item) {
+        $p = trim((string) wp_parse_url($f_item->url, PHP_URL_PATH), '/');
+        $segs = explode('/', $p);
+        $existing_slugs[] = end($segs);
+    }
+
+    $public_base_id = 998100;
+    foreach ($canonical_public_nav as $c_nav) {
+        if (!in_array($c_nav['slug'], $existing_slugs, true)) {
+            $filtered[] = $helper_build($public_base_id++, $c_nav['title'], $c_nav['url'], array($c_nav['class']));
+        }
+    }
 
     if (!$is_logged_in) {
         $filtered[] = $helper_build($base_id + 1, __('Login', 'propvendor-marketplace'), home_url('/login-and-my-account/?tab=login'), array('pv-nav-login'));
@@ -14736,7 +14831,7 @@ function propvendor_marketplace_hero_search_shortcode($atts = array()) {
     $slide2_webp = plugins_url('assets/images/hero-vehicles.webp', __FILE__);
     $slide3_webp = plugins_url('assets/images/hero-land.webp', __FILE__);
     ?>
-    <section class="propvendor-hero" aria-label="Marketplace Hero Search">
+    <section class="propvendor-hero propvendor-hero-section" aria-label="Marketplace Hero Search">
         <div class="propvendor-hero-slides" aria-hidden="true">
             <!-- Slide 1: Modern Real Estate (Optimized Local WebP) -->
             <div class="propvendor-slide active" style="background-image: url('<?php echo esc_url($slide1_webp); ?>');"></div>
@@ -14749,7 +14844,7 @@ function propvendor_marketplace_hero_search_shortcode($atts = array()) {
         <div class="propvendor-hero-content">
             <span class="propvendor-hero-badge">NIGERIA'S TRUSTED VERIFIED MARKETPLACE</span>
             <h1 class="propvendor-hero-title">Find Verified Properties, Land &amp; Vehicles <span class="highlight">in Nigeria</span></h1>
-            <p class="propvendor-hero-subtitle">Buy, rent, or inspect thousands of verified homes, plots, and cars directly from trusted sellers across all 37 states.</p>
+            <p class="propvendor-hero-subtitle">Buy, rent, or inspect thousands of verified homes, plots, and cars directly from trusted sellers across all 36 states and the FCT.</p>
 
             <!-- Floating Pill Search Form submitting GET to /browse-listings/ -->
             <div class="propvendor-pill-search-container">
@@ -14769,34 +14864,14 @@ function propvendor_marketplace_hero_search_shortcode($atts = array()) {
                             <svg class="propvendor-state-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
                         </button>
                         <select name="pv_state" id="pv-hero-state-select" class="propvendor-hero-state-select" aria-label="Nigerian State">
-                            <option value="">All States</option>
-                            <optgroup label="Top Commercial Hubs">
-                                <option value="Lagos">Lagos</option>
-                                <option value="Abuja (FCT)">Abuja (FCT)</option>
-                                <option value="Rivers">Rivers</option>
-                                <option value="Ogun">Ogun</option>
-                                <option value="Oyo">Oyo</option>
-                                <option value="Kano">Kano</option>
-                                <option value="Enugu">Enugu</option>
-                            </optgroup>
-                            <optgroup label="All 37 States (A–Z)">
-                                <?php foreach ($states as $state): ?>
-                                    <option value="<?php echo esc_attr($state); ?>"><?php echo esc_html($state); ?></option>
-                                <?php endforeach; ?>
-                            </optgroup>
+                            <option value="">All States (Nigeria)</option>
+                            <?php foreach ($states as $state): ?>
+                                <option value="<?php echo esc_attr($state); ?>"><?php echo esc_html($state); ?></option>
+                            <?php endforeach; ?>
                         </select>
                         <div class="propvendor-state-menu" id="propvendor-state-menu" role="listbox" aria-label="Nigerian States" tabindex="-1">
                             <div class="propvendor-state-menu-scroll">
-                                <div class="propvendor-state-group-label">Top Commercial Hubs</div>
                                 <div role="option" class="propvendor-state-option is-selected" data-value="" aria-selected="true">All States (Nigeria)</div>
-                                <div role="option" class="propvendor-state-option" data-value="Lagos">Lagos</div>
-                                <div role="option" class="propvendor-state-option" data-value="Abuja (FCT)">Abuja (FCT)</div>
-                                <div role="option" class="propvendor-state-option" data-value="Rivers">Rivers</div>
-                                <div role="option" class="propvendor-state-option" data-value="Ogun">Ogun</div>
-                                <div role="option" class="propvendor-state-option" data-value="Oyo">Oyo</div>
-                                <div role="option" class="propvendor-state-option" data-value="Kano">Kano</div>
-                                <div role="option" class="propvendor-state-option" data-value="Enugu">Enugu</div>
-                                <div class="propvendor-state-group-label">All 37 States (A–Z)</div>
                                 <?php foreach ($states as $state): ?>
                                     <div role="option" class="propvendor-state-option" data-value="<?php echo esc_attr($state); ?>"><?php echo esc_html($state); ?></div>
                                 <?php endforeach; ?>
