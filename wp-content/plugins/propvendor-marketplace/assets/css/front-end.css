@@ -4864,23 +4864,55 @@ body.home .ast-archive-description {
    PHASE 8A & 8B.1: ASTRA PRIMARY NAVIGATION & HEADER SINGLE-LINE LAYOUT
    ====================================================================== */
 
-/* Fix logo squishing and maintain site branding width */
+/* Anchor site branding strictly to far left and prevent logo overlap/inversion */
+.site-header-primary-section-left {
+    order: 1 !important;
+    display: flex !important;
+    align-items: center !important;
+    flex-shrink: 0 !important;
+    margin-right: 24px !important;
+    margin-left: 0 !important;
+    min-width: max-content !important;
+    white-space: nowrap !important;
+}
+
+.site-header-primary-section-right {
+    order: 2 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    flex-grow: 1 !important;
+    flex-shrink: 1 !important;
+    min-width: 0 !important;
+}
+
 .site-branding,
 .ast-site-identity,
-.site-title,
-.site-title a,
-.site-header-primary-section-left {
-    white-space: nowrap !important;
+.pv-site-logo-wrap,
+.custom-logo-link.pv-custom-logo-link {
+    display: inline-flex !important;
+    align-items: center !important;
     flex-shrink: 0 !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
     min-width: max-content !important;
     letter-spacing: normal !important;
 }
 
-.main-header-bar,
-.ast-primary-header-bar {
+#masthead .ast-builder-grid-row,
+#masthead .site-primary-header-wrap,
+#masthead .ast-primary-header-bar,
+#masthead .main-header-bar,
+.home #masthead .ast-builder-grid-row,
+.home #masthead .site-primary-header-wrap,
+.home #masthead .ast-primary-header-bar,
+.home #masthead .main-header-bar {
     display: flex !important;
+    flex-direction: row !important;
     align-items: center !important;
     justify-content: space-between !important;
+    flex-wrap: nowrap !important;
+    width: 100% !important;
 }
 
 /* ======================================================================
@@ -4974,6 +5006,7 @@ body.home .ast-archive-description {
     .main-header-bar-navigation {
         display: flex !important;
         align-items: center !important;
+        justify-content: flex-end !important;
         flex-shrink: 1 !important;
         min-width: 0 !important;
     }
@@ -4981,11 +5014,16 @@ body.home .ast-archive-description {
     .main-navigation .main-header-menu {
         display: flex !important;
         align-items: center !important;
+        justify-content: flex-end !important;
         flex-wrap: nowrap !important;
-        gap: 4px;
+        gap: 12px !important;
         margin: 0 !important;
         padding: 0 !important;
         list-style: none !important;
+    }
+
+    .main-navigation .main-header-menu > .menu-item {
+        flex-shrink: 0 !important;
     }
 
     /* Standard Navigation Links (All Pages) */
@@ -4993,10 +5031,10 @@ body.home .ast-archive-description {
     .home .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a {
         color: var(--pv-text-secondary, #475569) !important;
         font-family: var(--pv-font-sans);
-        font-size: 13.5px !important;
+        font-size: 14px !important;
         font-weight: 500 !important;
         white-space: nowrap !important;
-        padding: 6px 9px !important;
+        padding: 6px 10px !important;
         border-radius: var(--pv-radius-md, 8px) !important;
         text-decoration: none !important;
         background: transparent !important;
@@ -5030,7 +5068,7 @@ body.home .ast-archive-description {
 
     /* Distinct 'Submit a Listing' High-Conversion Action Button */
     .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta {
-        margin-left: 8px !important;
+        margin-left: 6px !important;
         flex-shrink: 0 !important;
     }
 
@@ -5044,7 +5082,7 @@ body.home .ast-archive-description {
         padding: 7px 15px !important;
         font-family: var(--pv-font-sans);
         font-weight: 700 !important;
-        font-size: 13.5px !important;
+        font-size: 14px !important;
         line-height: 1.4 !important;
         white-space: nowrap !important;
         text-decoration: none !important;
@@ -5080,27 +5118,113 @@ body.home .ast-archive-description {
         outline: none !important;
         box-shadow: var(--pv-shadow-focus-gold) !important;
     }
+
+    /* Consolidated 'Account' Parent Dropdown Styling */
+    .main-navigation .main-header-menu > .menu-item.pv-nav-account-parent {
+        position: relative !important;
+        flex-shrink: 0 !important;
+    }
+
+    .main-navigation .main-header-menu > .menu-item.pv-nav-account-parent > a::after {
+        content: " ▾";
+        display: inline-block;
+        font-size: 11px;
+        margin-left: 4px;
+        vertical-align: middle;
+        transition: transform var(--pv-transition-fast);
+    }
+
+    .main-navigation .main-header-menu > .menu-item.pv-nav-account-parent:hover > a::after {
+        transform: rotate(180deg);
+    }
+
+    /* Sub-menu Dropdown Overlay for Account Management Links */
+    .main-navigation .main-header-menu .sub-menu {
+        display: none;
+        position: absolute !important;
+        top: 100% !important;
+        right: 0 !important;
+        left: auto !important;
+        min-width: 200px !important;
+        background: #ffffff !important;
+        border: 1px solid var(--pv-color-border, #e2e8f0) !important;
+        border-radius: var(--pv-radius-md, 8px) !important;
+        box-shadow: 0 10px 25px rgba(20, 43, 59, 0.12) !important;
+        padding: 6px 0 !important;
+        margin: 4px 0 0 0 !important;
+        list-style: none !important;
+        z-index: 1000 !important;
+    }
+
+    .main-navigation .main-header-menu .menu-item:hover > .sub-menu,
+    .main-navigation .main-header-menu .menu-item.focus > .sub-menu,
+    .main-navigation .main-header-menu .menu-item:focus-within > .sub-menu {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+
+    .main-navigation .main-header-menu .sub-menu .menu-item {
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        flex-shrink: 0 !important;
+    }
+
+    .main-navigation .main-header-menu .sub-menu .menu-item > a {
+        display: block !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        padding: 8px 16px !important;
+        font-family: var(--pv-font-sans);
+        font-size: 13.5px !important;
+        font-weight: 500 !important;
+        color: var(--pv-text-primary, #1e293b) !important;
+        white-space: nowrap !important;
+        text-decoration: none !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        transition: background-color var(--pv-transition-fast), color var(--pv-transition-fast) !important;
+    }
+
+    .main-navigation .main-header-menu .sub-menu .menu-item > a:hover,
+    .main-navigation .main-header-menu .sub-menu .menu-item > a:focus {
+        background-color: var(--pv-color-teal-subtle, #e6f4f6) !important;
+        color: var(--pv-color-teal, #087f8c) !important;
+    }
+
+    .main-navigation .main-header-menu .sub-menu .menu-item.pv-nav-logout > a {
+        border-top: 1px solid var(--pv-color-border, #f1f5f9) !important;
+        margin-top: 4px !important;
+        padding-top: 9px !important;
+        color: #dc2626 !important;
+    }
+
+    .main-navigation .main-header-menu .sub-menu .menu-item.pv-nav-logout > a:hover {
+        background-color: #fef2f2 !important;
+        color: #b91c1c !important;
+    }
 }
 
 /* Compact Desktop Navigation (922px - 1199px) */
 @media (min-width: 922px) and (max-width: 1199px) {
     .main-navigation .main-header-menu {
-        gap: 3px !important;
+        gap: 8px !important;
     }
     .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a {
-        font-size: 12.5px !important;
-        padding: 5px 6px !important;
+        font-size: 13px !important;
+        padding: 5px 7px !important;
     }
     .main-navigation .main-header-menu > .menu-item.propvendor-nav-cta > a {
-        padding: 6px 10px !important;
-        font-size: 12.5px !important;
+        padding: 6px 12px !important;
+        font-size: 13px !important;
     }
 }
 
 /* Widescreen Desktop Adjustments (1200px+) */
 @media (min-width: 1200px) {
     .main-navigation .main-header-menu {
-        gap: 8px;
+        gap: 14px !important;
     }
 
     .main-navigation .main-header-menu > .menu-item:not(.propvendor-nav-cta) > a {
@@ -5231,6 +5355,32 @@ body.home .ast-archive-description {
         font-weight: 700 !important;
         background-color: var(--pv-color-teal-subtle, #e6f4f6) !important;
         border-left: 4px solid var(--pv-color-teal, #087f8c) !important;
+    }
+
+    /* Mobile Drawer Sub-Menu for Logged-In Account Links */
+    .ast-mobile-header-content .main-navigation .main-header-menu .sub-menu {
+        display: block !important;
+        position: static !important;
+        background-color: var(--pv-color-surface-alt, #f8fafc) !important;
+        box-shadow: none !important;
+        border: none !important;
+        border-radius: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        list-style: none !important;
+    }
+
+    .ast-mobile-header-content .main-navigation .main-header-menu .sub-menu .menu-item > a {
+        display: block !important;
+        padding: 0.75rem 1.25rem 0.75rem 2.25rem !important;
+        font-size: 0.9rem !important;
+        color: var(--pv-text-secondary, #475569) !important;
+        border-bottom: 1px solid var(--pv-color-border-subtle, #eef2f6) !important;
+    }
+
+    .ast-mobile-header-content .main-navigation .main-header-menu .sub-menu .menu-item.pv-nav-logout > a {
+        color: #dc2626 !important;
     }
 
     /* Defect 1 Fix — Intentional, Readable Gold Pill Action Button */
@@ -8252,35 +8402,40 @@ body.page-id-19 .propvendor-static-title {
     line-height: 1;
 }
 
-.custom-logo.pv-site-logo {
-    display: block;
-    height: 40px;
-    max-height: 40px;
-    width: auto;
-    max-width: 220px;
-    object-fit: contain;
+.custom-logo.pv-site-logo,
+.pv-header-logo-img {
+    display: block !important;
+    height: 40px !important;
+    max-height: 40px !important;
+    width: auto !important;
+    max-width: 220px !important;
+    object-fit: contain !important;
+    flex-shrink: 0 !important;
     image-rendering: auto;
     transition: opacity 0.2s ease;
 }
 
-.custom-logo.pv-site-logo:hover {
+.custom-logo.pv-site-logo:hover,
+.pv-header-logo-img:hover {
     opacity: 0.92;
 }
 
 /* Ensure mobile header logo scales appropriately without overflow */
 @media (max-width: 921px) {
-    .custom-logo.pv-site-logo {
-        height: 34px;
-        max-height: 34px;
-        max-width: 175px;
+    .custom-logo.pv-site-logo,
+    .pv-header-logo-img {
+        height: 34px !important;
+        max-height: 34px !important;
+        max-width: 175px !important;
     }
 }
 
 @media (max-width: 480px) {
-    .custom-logo.pv-site-logo {
-        height: 30px;
-        max-height: 30px;
-        max-width: 155px;
+    .custom-logo.pv-site-logo,
+    .pv-header-logo-img {
+        height: 30px !important;
+        max-height: 30px !important;
+        max-width: 155px !important;
     }
 }
 

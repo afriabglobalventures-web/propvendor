@@ -1530,7 +1530,7 @@ function propvendor_filter_site_logo_output($html, $display_site_title = true, $
     }
 
     $logo_img = sprintf(
-        '<a href="%1$s" class="custom-logo-link pv-custom-logo-link" rel="home" aria-current="page"><img src="%2$s" class="custom-logo pv-site-logo" alt="%3$s" decoding="async" fetchpriority="high" width="200" height="47" /></a>',
+        '<a href="%1$s" class="custom-logo-link pv-custom-logo-link" rel="home" aria-current="page"><img src="%2$s" class="custom-logo pv-site-logo pv-header-logo-img" alt="%3$s" decoding="async" fetchpriority="high" width="200" height="47" /></a>',
         $home_url,
         esc_url($logo_url),
         esc_attr($site_name)
@@ -1551,7 +1551,7 @@ function propvendor_filter_get_custom_logo($html) {
         $site_name = 'PropVendor Technologies';
 
         return sprintf(
-            '<a href="%1$s" class="custom-logo-link pv-custom-logo-link" rel="home" aria-current="page"><img src="%2$s" class="custom-logo pv-site-logo" alt="%3$s" decoding="async" fetchpriority="high" width="200" height="47" /></a>',
+            '<a href="%1$s" class="custom-logo-link pv-custom-logo-link" rel="home" aria-current="page"><img src="%2$s" class="custom-logo pv-site-logo pv-header-logo-img" alt="%3$s" decoding="async" fetchpriority="high" width="200" height="47" /></a>',
             $home_url,
             esc_url($logo_url),
             esc_attr($site_name)
@@ -6021,21 +6021,24 @@ function propvendor_marketplace_filter_nav_menu_objects($items, $args = null) {
     $is_vendor = in_array('vendor', $roles, true);
     $is_customer = $is_logged_in && !$is_vendor && !$is_admin;
 
-    $vendor_only_slugs = array('vendor-dashboard', 'vendor-wallet', 'submit-a-listing');
-    $filtered = array();
+    // Slugs to exclude from initial raw DB items so they don't break desktop navbar flow
+    $exclude_slugs = array(
+        'vendor-dashboard',
+        'vendor-wallet',
+        'submit-a-listing',
+        'login',
+        'register',
+        'customer-inbox',
+        'login-and-my-account'
+    );
 
+    $filtered = array();
     foreach ($items as $item) {
         $path = trim((string) wp_parse_url($item->url, PHP_URL_PATH), '/');
         $segments = explode('/', $path);
         $slug = end($segments);
 
-        // Filter out vendor-only links for logged-out visitors and customers
-        if ((!$is_logged_in || $is_customer) && in_array($slug, $vendor_only_slugs, true)) {
-            continue;
-        }
-
-        // Avoid duplicating Login / Register if somehow already in DB menu
-        if ($is_logged_in && in_array($slug, array('login', 'register'), true)) {
+        if (in_array($slug, $exclude_slugs, true)) {
             continue;
         }
 
@@ -6043,14 +6046,14 @@ function propvendor_marketplace_filter_nav_menu_objects($items, $args = null) {
     }
 
     $base_id = 999100;
-    $helper_build = function($id, $title, $url, $classes = array()) {
+    $helper_build = function($id, $title, $url, $classes = array(), $parent_id = 0) {
         $obj = new stdClass();
         $obj->ID = $id;
         $obj->db_id = $id;
         $obj->title = $title;
         $obj->url = $url;
         $obj->menu_order = 999;
-        $obj->menu_item_parent = 0;
+        $obj->menu_item_parent = (int) $parent_id;
         $obj->type = 'custom';
         $obj->object = 'custom';
         $obj->object_id = 0;
@@ -6112,20 +6115,46 @@ function propvendor_marketplace_filter_nav_menu_objects($items, $args = null) {
         }
     }
 
+    // Role-based actions & segmentation:
+    // Logged-in vendors and administrators get right-aligned high-conversion CTA button "Submit a Listing"
+    if ($is_vendor || $is_admin) {
+        $filtered[] = $helper_build(
+            $base_id + 1,
+            __('Submit a Listing', 'propvendor-marketplace'),
+            home_url('/submit-a-listing/'),
+            array('propvendor-nav-cta', 'pv-nav-cta', 'pv-nav-submit')
+        );
+    }
+
     if (!$is_logged_in) {
-        $filtered[] = $helper_build($base_id + 1, __('Login', 'propvendor-marketplace'), home_url('/login-and-my-account/?tab=login'), array('pv-nav-login'));
-        $filtered[] = $helper_build($base_id + 2, __('Register', 'propvendor-marketplace'), home_url('/login-and-my-account/?tab=register'), array('pv-nav-register'));
-    } elseif ($is_customer) {
-        $filtered[] = $helper_build($base_id + 3, __('Customer Dashboard', 'propvendor-marketplace'), home_url('/customer-inbox/'), array('pv-nav-dashboard'));
-        $filtered[] = $helper_build($base_id + 4, __('Account', 'propvendor-marketplace'), home_url('/login-and-my-account/'), array('pv-nav-account'));
-        $filtered[] = $helper_build($base_id + 5, __('Logout', 'propvendor-marketplace'), wp_logout_url(home_url('/login-and-my-account/')), array('pv-nav-logout'));
-    } elseif ($is_vendor) {
-        $filtered[] = $helper_build($base_id + 6, __('Account', 'propvendor-marketplace'), home_url('/login-and-my-account/'), array('pv-nav-account'));
-        $filtered[] = $helper_build($base_id + 7, __('Logout', 'propvendor-marketplace'), wp_logout_url(home_url('/login-and-my-account/')), array('pv-nav-logout'));
-    } elseif ($is_admin) {
-        $filtered[] = $helper_build($base_id + 8, __('Admin', 'propvendor-marketplace'), admin_url(), array('pv-nav-admin'));
-        $filtered[] = $helper_build($base_id + 9, __('Account', 'propvendor-marketplace'), home_url('/login-and-my-account/'), array('pv-nav-account'));
-        $filtered[] = $helper_build($base_id + 10, __('Logout', 'propvendor-marketplace'), wp_logout_url(home_url('/login-and-my-account/')), array('pv-nav-logout'));
+        $filtered[] = $helper_build($base_id + 2, __('Login', 'propvendor-marketplace'), home_url('/login-and-my-account/?tab=login'), array('pv-nav-login'));
+        $filtered[] = $helper_build($base_id + 3, __('Register', 'propvendor-marketplace'), home_url('/login-and-my-account/?tab=register'), array('pv-nav-register'));
+    } else {
+        // Consolidated "Account" parent dropdown for logged-in management
+        $parent_id = 999200;
+        $filtered[] = $helper_build(
+            $parent_id,
+            __('Account', 'propvendor-marketplace'),
+            home_url('/login-and-my-account/'),
+            array('menu-item-has-children', 'pv-nav-account-parent')
+        );
+
+        if ($is_customer) {
+            $filtered[] = $helper_build($parent_id + 1, __('Customer Dashboard', 'propvendor-marketplace'), home_url('/customer-inbox/'), array('pv-nav-child', 'pv-nav-dashboard'), $parent_id);
+            $filtered[] = $helper_build($parent_id + 2, __('Account', 'propvendor-marketplace'), home_url('/login-and-my-account/'), array('pv-nav-child', 'pv-nav-account'), $parent_id);
+            $filtered[] = $helper_build($parent_id + 3, __('Logout', 'propvendor-marketplace'), wp_logout_url(home_url('/login-and-my-account/')), array('pv-nav-child', 'pv-nav-logout'), $parent_id);
+        } elseif ($is_vendor) {
+            $filtered[] = $helper_build($parent_id + 1, __('Vendor Dashboard', 'propvendor-marketplace'), home_url('/vendor-dashboard/'), array('pv-nav-child', 'pv-nav-dashboard'), $parent_id);
+            $filtered[] = $helper_build($parent_id + 2, __('Vendor Wallet', 'propvendor-marketplace'), home_url('/vendor-wallet/'), array('pv-nav-child', 'pv-nav-wallet'), $parent_id);
+            $filtered[] = $helper_build($parent_id + 3, __('Account', 'propvendor-marketplace'), home_url('/login-and-my-account/'), array('pv-nav-child', 'pv-nav-account'), $parent_id);
+            $filtered[] = $helper_build($parent_id + 4, __('Logout', 'propvendor-marketplace'), wp_logout_url(home_url('/login-and-my-account/')), array('pv-nav-child', 'pv-nav-logout'), $parent_id);
+        } elseif ($is_admin) {
+            $filtered[] = $helper_build($parent_id + 1, __('Admin', 'propvendor-marketplace'), admin_url(), array('pv-nav-child', 'pv-nav-admin'), $parent_id);
+            $filtered[] = $helper_build($parent_id + 2, __('Vendor Dashboard', 'propvendor-marketplace'), home_url('/vendor-dashboard/'), array('pv-nav-child', 'pv-nav-dashboard'), $parent_id);
+            $filtered[] = $helper_build($parent_id + 3, __('Vendor Wallet', 'propvendor-marketplace'), home_url('/vendor-wallet/'), array('pv-nav-child', 'pv-nav-wallet'), $parent_id);
+            $filtered[] = $helper_build($parent_id + 4, __('Account', 'propvendor-marketplace'), home_url('/login-and-my-account/'), array('pv-nav-child', 'pv-nav-account'), $parent_id);
+            $filtered[] = $helper_build($parent_id + 5, __('Logout', 'propvendor-marketplace'), wp_logout_url(home_url('/login-and-my-account/')), array('pv-nav-child', 'pv-nav-logout'), $parent_id);
+        }
     }
 
     return $filtered;
