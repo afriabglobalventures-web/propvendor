@@ -50,6 +50,11 @@ function propvendor_marketplace_invalidate_listing_count_cache($user_id = 0) {
     } else {
         $propvendor_listing_count_cache = array();
     }
+
+    delete_transient('pv_category_counts');
+    delete_transient('pv_public_listings_6');
+    delete_transient('pv_public_listings_8');
+    delete_transient('pv_public_listings_12');
 }
 add_action('save_post', 'propvendor_marketplace_invalidate_listing_count_cache', 5);
 add_action('deleted_post', 'propvendor_marketplace_invalidate_listing_count_cache', 5);
@@ -728,7 +733,12 @@ function propvendor_marketplace_get_vehicle_fuel_types() {
  * @return string[]
  */
 function propvendor_marketplace_get_nigerian_states() {
-    return array(
+    $cached = get_transient('pv_nigerian_states');
+    if (false !== $cached && is_array($cached) && !empty($cached)) {
+        return $cached;
+    }
+
+    $states = array(
         'Abia',
         'Adamawa',
         'Akwa Ibom',
@@ -767,6 +777,9 @@ function propvendor_marketplace_get_nigerian_states() {
         'Yobe',
         'Zamfara',
     );
+
+    set_transient('pv_nigerian_states', $states, WEEK_IN_SECONDS);
+    return $states;
 }
 
 /**
@@ -1339,7 +1352,20 @@ function propvendor_marketplace_enqueue_assets() {
         'https://js.paystack.co/v1/inline.js',
         array(),
         null,
-        true
+        array(
+            'strategy'  => 'defer',
+            'in_footer' => true,
+        )
+    );
+    wp_enqueue_script(
+        'propvendor-instant-page',
+        plugins_url('assets/js/instantpage.min.js', __FILE__),
+        array(),
+        '5.2.0',
+        array(
+            'strategy'  => 'defer',
+            'in_footer' => true,
+        )
     );
     wp_enqueue_script(
         'propvendor-marketplace-frontend',
@@ -1366,6 +1392,130 @@ function propvendor_marketplace_enqueue_assets() {
     );
 }
 add_action('wp_enqueue_scripts', 'propvendor_marketplace_enqueue_assets');
+
+/**
+ * Resource hints: Preconnect and DNS prefetch for external payment gateway.
+ *
+ * @param array  $urls
+ * @param string $relation_type
+ * @return array
+ */
+function propvendor_marketplace_resource_hints($urls, $relation_type) {
+    if ('preconnect' === $relation_type || 'dns-prefetch' === $relation_type) {
+        $urls[] = 'https://js.paystack.co';
+    }
+    return $urls;
+}
+add_filter('wp_resource_hints', 'propvendor_marketplace_resource_hints', 10, 2);
+
+/**
+ * Guarantee the defer attribute on critical marketplace scripts.
+ *
+ * @param string $tag
+ * @param string $handle
+ * @param string $src
+ * @return string
+ */
+function propvendor_marketplace_defer_scripts($tag, $handle, $src) {
+    if (is_admin()) {
+        return $tag;
+    }
+
+    $deferred_handles = array(
+        'paystack-inline',
+        'propvendor-instant-page',
+        'propvendor-marketplace-frontend',
+    );
+
+    if (in_array($handle, $deferred_handles, true)) {
+        if (false === strpos($tag, ' defer')) {
+            $tag = str_replace(' src=', ' defer src=', $tag);
+        }
+    }
+
+    return $tag;
+}
+add_filter('script_loader_tag', 'propvendor_marketplace_defer_scripts', 10, 3);
+
+/**
+ * Configure WordPress Core Speculation Rules to use 'moderate' eagerness (hover prefetching).
+ *
+ * @param array<string, string>|null $config
+ * @return array<string, string>|null
+ */
+function propvendor_marketplace_configure_speculation_rules($config) {
+    if (null === $config) {
+        return null;
+    }
+
+    return array(
+        'mode'      => 'prefetch',
+        'eagerness' => 'moderate',
+    );
+}
+add_filter('wp_speculation_rules_configuration', 'propvendor_marketplace_configure_speculation_rules');
+
+/**
+ * Exclude transaction, administrative, and private account endpoints from Speculation Rules.
+ *
+ * @param string[] $href_exclude_paths
+ * @param string   $mode
+ * @return string[]
+ */
+function propvendor_marketplace_exclude_speculation_paths($href_exclude_paths, $mode = 'prefetch') {
+    $custom_excludes = array(
+        '/vendor-wallet*',
+        '/vendor-dashboard*',
+        '/checkout*',
+        '/wp-admin*',
+        '/wp-login.php*',
+    );
+
+    return array_values(array_unique(array_merge((array) $href_exclude_paths, $custom_excludes)));
+}
+add_filter('wp_speculation_rules_href_exclude_paths', 'propvendor_marketplace_exclude_speculation_paths', 10, 2);
+
+/**
+ * Render Speculation Rules fallback for legacy WordPress environments without core speculative loading.
+ */
+function propvendor_marketplace_render_speculation_rules_fallback() {
+    if (function_exists('wp_get_speculation_rules_configuration')) {
+        return;
+    }
+
+    if (is_admin()) {
+        return;
+    }
+
+    $rules = array(
+        'prefetch' => array(
+            array(
+                'source'    => 'document',
+                'where'     => array(
+                    'and' => array(
+                        array('href_matches' => '/*'),
+                        array(
+                            'not' => array(
+                                'href_matches' => array(
+                                    '/wp-*.php*',
+                                    '/wp-admin/*',
+                                    '/vendor-wallet*',
+                                    '/vendor-dashboard*',
+                                    '/checkout*',
+                                    '/*\\?*action=logout*',
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+                'eagerness' => 'moderate',
+            ),
+        ),
+    );
+
+    echo "\n<script type=\"speculationrules\">\n" . wp_json_encode($rules, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) . "\n</script>\n";
+}
+add_action('wp_head', 'propvendor_marketplace_render_speculation_rules_fallback', 3);
 
 /**
  * Modern Mobile Off-Canvas Navigation Drawer (Phase 18.5 / Phase 2).
@@ -2458,19 +2608,81 @@ function propvendor_marketplace_get_public_locations() {
 }
 
 function propvendor_marketplace_listings_query($count = 6) {
+    $count = max(1, absint($count));
+    $transient_key = 'pv_public_listings_' . $count;
+    $cached_ids = get_transient($transient_key);
+
+    if (false !== $cached_ids && is_array($cached_ids)) {
+        $posts = array();
+        foreach ($cached_ids as $pid) {
+            $p = get_post($pid);
+            if ($p && 'publish' === $p->post_status && propvendor_marketplace_is_public_listing($p)) {
+                $posts[] = $p;
+            }
+        }
+        if (count($posts) === count($cached_ids)) {
+            return $posts;
+        }
+    }
+
     $query = new WP_Query(
         array(
-            'post_type' => propvendor_marketplace_get_listing_post_types(),
-            'post_status' => 'publish',
-            'posts_per_page' => max(1, absint($count)),
-            'orderby' => 'date',
-            'order' => 'DESC',
-            'meta_query' => propvendor_marketplace_public_listing_meta_query(),
-            'no_found_rows' => true,
+            'post_type'      => propvendor_marketplace_get_listing_post_types(),
+            'post_status'    => 'publish',
+            'posts_per_page' => $count,
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+            'meta_query'     => propvendor_marketplace_public_listing_meta_query(),
+            'no_found_rows'  => true,
+            'fields'         => 'ids',
         )
     );
 
-    return $query->posts;
+    $ids = !empty($query->posts) ? $query->posts : array();
+    set_transient($transient_key, $ids, HOUR_IN_SECONDS);
+
+    $posts = array();
+    foreach ($ids as $pid) {
+        $p = get_post($pid);
+        if ($p) {
+            $posts[] = $p;
+        }
+    }
+
+    return $posts;
+}
+
+/**
+ * Retrieve verified public listing counts by category with transient caching.
+ *
+ * @return array<string, int>
+ */
+function propvendor_marketplace_get_category_counts() {
+    $cached = get_transient('pv_category_counts');
+    if (false !== $cached && is_array($cached)) {
+        return $cached;
+    }
+
+    $counts = array(
+        'property_listing' => 0,
+        'land_listing'     => 0,
+        'vehicle_listing'  => 0,
+    );
+
+    foreach (array_keys($counts) as $post_type) {
+        $query = new WP_Query(array(
+            'post_type'      => $post_type,
+            'post_status'    => 'publish',
+            'posts_per_page' => 1,
+            'meta_query'     => propvendor_marketplace_public_listing_meta_query(),
+            'no_found_rows'  => false,
+            'fields'         => 'ids',
+        ));
+        $counts[$post_type] = (int) $query->found_posts;
+    }
+
+    set_transient('pv_category_counts', $counts, HOUR_IN_SECONDS);
+    return $counts;
 }
 
 /**
@@ -3567,6 +3779,10 @@ function propvendor_marketplace_get_search_query_args($params = array()) {
         'paged'          => $paged,
         'meta_query'     => $meta_query,
     );
+
+    if (isset($params['no_found_rows'])) {
+        $query_args['no_found_rows'] = (bool) $params['no_found_rows'];
+    }
 
     // Sorting
     switch ($sort) {
