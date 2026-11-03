@@ -357,7 +357,7 @@
             }
             processedForms.push(form);
 
-            var typeSelect = form.querySelector('select[name="pv_type"]');
+            var typeSelect = form.querySelector('select[name="category"], select[name="pv_type"]');
             if (typeSelect) {
                 var propRows     = form.querySelectorAll('.propvendor-filter-property-row');
                 var landRows     = form.querySelectorAll('.propvendor-filter-land-row');
@@ -366,9 +366,9 @@
 
                 function updateSearchFilterVisibility() {
                     var val = typeSelect.value;
-                    var isProp = (val === 'property_listing' || val === 'property');
+                    var isProp = (val === 'property_listing' || val === 'property' || val === 'properties');
                     var isLand = (val === 'land_listing' || val === 'land');
-                    var isVeh  = (val === 'vehicle_listing' || val === 'vehicle');
+                    var isVeh  = (val === 'vehicle_listing' || val === 'vehicle' || val === 'vehicles');
                     var isAll  = (!val || val === '');
 
                     // Property fields

@@ -493,7 +493,15 @@ try {
     $form_markup = propvendor_marketplace_render_search_filters(array('action_url' => 'http://example.com/browse/'));
 
     run_test(strpos($form_markup, 'value="Lekki Duplex"') !== false, 'Form persists keyword input');
-    run_test(strpos($form_markup, "selected='selected'>Property</option>") !== false || strpos($form_markup, 'selected="selected">Property</option>') !== false || strpos($form_markup, 'selected>Property</option>') !== false, 'Form persists selected category');
+    run_test(
+        strpos($form_markup, "selected='selected'>Property</option>") !== false ||
+        strpos($form_markup, 'selected="selected">Property</option>') !== false ||
+        strpos($form_markup, 'selected>Property</option>') !== false ||
+        strpos($form_markup, "selected='selected'>Properties & Apartments</option>") !== false ||
+        strpos($form_markup, 'selected="selected">Properties & Apartments</option>') !== false ||
+        strpos($form_markup, 'selected>Properties & Apartments</option>') !== false,
+        'Form persists selected category'
+    );
     run_test(strpos($form_markup, 'value="Lagos" selected') !== false || strpos($form_markup, 'selected="selected">Lagos</option>') !== false, 'Form persists selected state');
     run_test(strpos($form_markup, 'value="20000000"') !== false, 'Form persists min price');
     run_test(strpos($form_markup, 'value="80000000"') !== false, 'Form persists max price');

@@ -1347,16 +1347,18 @@ function propvendor_marketplace_enqueue_assets() {
         array(),
         time()
     );
-    wp_enqueue_script(
-        'paystack-inline',
-        'https://js.paystack.co/v1/inline.js',
-        array(),
-        null,
-        array(
-            'strategy'  => 'defer',
-            'in_footer' => true,
-        )
-    );
+    if (function_exists('is_page') && is_page(array('checkout', 'vendor-wallet'))) {
+        wp_enqueue_script(
+            'paystack-inline',
+            'https://js.paystack.co/v1/inline.js',
+            array(),
+            null,
+            array(
+                'strategy'  => 'defer',
+                'in_footer' => true,
+            )
+        );
+    }
     wp_enqueue_script(
         'propvendor-instant-page',
         plugins_url('assets/js/instantpage.min.js', __FILE__),
@@ -1402,7 +1404,9 @@ add_action('wp_enqueue_scripts', 'propvendor_marketplace_enqueue_assets');
  */
 function propvendor_marketplace_resource_hints($urls, $relation_type) {
     if ('preconnect' === $relation_type || 'dns-prefetch' === $relation_type) {
-        $urls[] = 'https://js.paystack.co';
+        if (function_exists('is_page') && is_page(array('checkout', 'vendor-wallet'))) {
+            $urls[] = 'https://js.paystack.co';
+        }
     }
     return $urls;
 }
@@ -3350,11 +3354,19 @@ function propvendor_marketplace_get_search_query_args($params = array()) {
     $keyword = trim(substr($keyword, 0, 150));
 
     // 2. Listing Type / Category
-    $raw_type = isset($params['pv_type']) ? sanitize_key(wp_unslash($params['pv_type'])) : '';
+    $raw_type = isset($params['category']) ? sanitize_key(wp_unslash($params['category'])) : '';
+    if (empty($raw_type) && isset($params['pv_type'])) {
+        $raw_type = sanitize_key(wp_unslash($params['pv_type']));
+    }
     $type_aliases = array(
-        'property' => 'property_listing',
-        'land'     => 'land_listing',
-        'vehicle'  => 'vehicle_listing',
+        'property'         => 'property_listing',
+        'properties'       => 'property_listing',
+        'property_listing' => 'property_listing',
+        'land'             => 'land_listing',
+        'land_listing'     => 'land_listing',
+        'vehicle'          => 'vehicle_listing',
+        'vehicles'         => 'vehicle_listing',
+        'vehicle_listing'  => 'vehicle_listing',
     );
     if (isset($type_aliases[$raw_type])) {
         $raw_type = $type_aliases[$raw_type];
@@ -3873,7 +3885,20 @@ function propvendor_marketplace_render_search_filters($atts = array()) {
 
     // Extract current GET params to persist in form
     $p_keyword       = isset($_GET['pv_keyword']) ? sanitize_text_field(wp_unslash($_GET['pv_keyword'])) : '';
-    $p_type          = isset($_GET['pv_type']) ? sanitize_key(wp_unslash($_GET['pv_type'])) : '';
+    $p_cat_raw       = isset($_GET['category']) ? sanitize_key(wp_unslash($_GET['category'])) : (isset($_GET['pv_type']) ? sanitize_key(wp_unslash($_GET['pv_type'])) : '');
+    $selected_cat    = '';
+    if (in_array($p_cat_raw, array('properties', 'property', 'property_listing'), true)) {
+        $selected_cat = 'properties';
+        $p_type       = 'property_listing';
+    } elseif (in_array($p_cat_raw, array('land', 'land_listing'), true)) {
+        $selected_cat = 'land';
+        $p_type       = 'land_listing';
+    } elseif (in_array($p_cat_raw, array('vehicles', 'vehicle', 'vehicle_listing'), true)) {
+        $selected_cat = 'vehicles';
+        $p_type       = 'vehicle_listing';
+    } else {
+        $p_type       = '';
+    }
     $p_state         = isset($_GET['pv_state']) ? sanitize_text_field(wp_unslash($_GET['pv_state'])) : (isset($_GET['pv_location']) ? sanitize_text_field(wp_unslash($_GET['pv_location'])) : '');
     $p_state_norm    = propvendor_marketplace_normalize_nigerian_state($p_state);
     $p_min_price     = isset($_GET['pv_min_price']) ? sanitize_text_field(wp_unslash($_GET['pv_min_price'])) : '';
@@ -3895,11 +3920,6 @@ function propvendor_marketplace_render_search_filters($atts = array()) {
     $p_condition     = isset($_GET['pv_condition']) ? sanitize_text_field(wp_unslash($_GET['pv_condition'])) : '';
     $p_transmission  = isset($_GET['pv_transmission']) ? sanitize_text_field(wp_unslash($_GET['pv_transmission'])) : '';
     $p_sort          = isset($_GET['pv_sort']) ? sanitize_key(wp_unslash($_GET['pv_sort'])) : 'date_desc';
-
-    // Normalize category alias if user passed 'property', 'land', 'vehicle'
-    if ('property' === $p_type) $p_type = 'property_listing';
-    if ('land' === $p_type)     $p_type = 'land_listing';
-    if ('vehicle' === $p_type)  $p_type = 'vehicle_listing';
 
     // Determine initial visibility
     $is_prop = ('property_listing' === $p_type);
@@ -3925,11 +3945,11 @@ function propvendor_marketplace_render_search_filters($atts = array()) {
     // Category / Listing Type
     $output .= '<div class="propvendor-filter-group propvendor-filter-type">';
     $output .= '<label for="pv_type">Category</label>';
-    $output .= '<select id="pv_type" name="pv_type" class="propvendor-search-type-select">';
+    $output .= '<select id="pv_type" name="category" class="propvendor-search-type-select">';
     $output .= '<option value="">All Categories</option>';
-    $output .= '<option value="property_listing"' . selected($p_type, 'property_listing', false) . '>Property</option>';
-    $output .= '<option value="land_listing"' . selected($p_type, 'land_listing', false) . '>Land</option>';
-    $output .= '<option value="vehicle_listing"' . selected($p_type, 'vehicle_listing', false) . '>Vehicle</option>';
+    $output .= '<option value="properties"' . selected($selected_cat, 'properties', false) . '>Properties & Apartments</option>';
+    $output .= '<option value="land"' . selected($selected_cat, 'land', false) . '>Land & Plots</option>';
+    $output .= '<option value="vehicles"' . selected($selected_cat, 'vehicles', false) . '>Vehicles & Automotives</option>';
     $output .= '</select>';
     $output .= '</div>';
 
@@ -4192,7 +4212,7 @@ function propvendor_marketplace_render_search_filters($atts = array()) {
 
     // Action Buttons
     $reset_url = esc_url(remove_query_arg(array(
-        'pv_keyword', 'pv_type', 'pv_state', 'pv_location', 'pv_min_price', 'pv_max_price',
+        'pv_keyword', 'pv_type', 'category', 'pv_state', 'pv_location', 'pv_min_price', 'pv_max_price',
         'pv_title_doc', 'pv_property_subtype', 'pv_min_bedrooms', 'pv_min_bathrooms',
         'pv_furnishing', 'pv_land_use', 'pv_min_plot_size', 'pv_max_plot_size',
         'pv_plot_unit', 'pv_vehicle_type', 'pv_make', 'pv_model', 'pv_min_year',
@@ -4228,13 +4248,19 @@ function propvendor_marketplace_browse_shortcode() {
 
     // Active filter summary for status pill
     $active_filter_parts = array();
-    if (!empty($_GET['pv_type'])) {
+    $browse_type = !empty($_GET['category']) ? sanitize_key($_GET['category']) : (!empty($_GET['pv_type']) ? sanitize_key($_GET['pv_type']) : '');
+    if (!empty($browse_type)) {
         $type_labels = array(
             'property_listing' => __('Property', 'propvendor-marketplace'),
+            'properties'       => __('Property', 'propvendor-marketplace'),
+            'property'         => __('Property', 'propvendor-marketplace'),
             'land_listing'     => __('Land', 'propvendor-marketplace'),
+            'land'             => __('Land', 'propvendor-marketplace'),
             'vehicle_listing'  => __('Vehicles', 'propvendor-marketplace'),
+            'vehicles'         => __('Vehicles', 'propvendor-marketplace'),
+            'vehicle'          => __('Vehicles', 'propvendor-marketplace'),
         );
-        $type_key = sanitize_key($_GET['pv_type']);
+        $type_key = $browse_type;
         $active_filter_parts[] = isset($type_labels[$type_key]) ? $type_labels[$type_key] : ucfirst(str_replace('_listing', '', $type_key));
     }
     if (!empty($_GET['pv_state'])) {
